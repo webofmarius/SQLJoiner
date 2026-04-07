@@ -144,6 +144,7 @@
             <div class="config-section" id="section-groupby">
                 <h3>
                     GROUP BY
+                    <button id="btn-groupby-to-raw" class="btn-copy-to-raw" title="Copy visual GROUP BY columns to raw SQL">↳ Raw</button>
                     <button class="btn-toggle-mode" data-mode="visual" data-section="groupby">Visual</button>
                 </h3>
                 <div id="groupby-drop-zone" class="drop-zone" data-accepts="column" data-section="groupby">
@@ -158,6 +159,7 @@
             <div class="config-section" id="section-having">
                 <h3>
                     HAVING
+                    <button id="btn-having-to-raw" class="btn-copy-to-raw" title="Copy visual HAVING conditions to raw SQL">↳ Raw</button>
                     <button class="btn-toggle-mode" data-mode="visual" data-section="having">Visual</button>
                 </h3>
                 <div id="having-drop-zone" class="drop-zone" data-accepts="column" data-section="having">
@@ -172,6 +174,7 @@
             <div class="config-section" id="section-orderby">
                 <h3>
                     ORDER BY
+                    <button id="btn-orderby-to-raw" class="btn-copy-to-raw" title="Copy visual ORDER BY columns to raw SQL">↳ Raw</button>
                     <button class="btn-toggle-mode" data-mode="visual" data-section="orderby">Visual</button>
                 </h3>
                 <div id="orderby-drop-zone" class="drop-zone" data-accepts="column" data-section="orderby">

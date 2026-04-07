@@ -117,9 +117,12 @@ const QueryPanel = (() => {
         document.getElementById('select-schema-alias-toggle').checked = State.selectSchemaAlias  ?? true;
         document.getElementById('select-distinct-toggle').checked     = State.selectDistinct      ?? false;
 
-        // Copy Visual SELECT/WHERE to Raw
-        document.getElementById('btn-select-to-raw').addEventListener('click', _copySelectVisualToRaw);
-        document.getElementById('btn-where-to-raw').addEventListener('click', _copyWhereVisualToRaw);
+        // Copy Visual SELECT/WHERE/GROUP BY/HAVING/ORDER BY to Raw
+        document.getElementById('btn-select-to-raw') .addEventListener('click', _copySelectVisualToRaw);
+        document.getElementById('btn-where-to-raw')  .addEventListener('click', _copyWhereVisualToRaw);
+        document.getElementById('btn-groupby-to-raw').addEventListener('click', _copyGroupByVisualToRaw);
+        document.getElementById('btn-having-to-raw') .addEventListener('click', _copyHavingVisualToRaw);
+        document.getElementById('btn-orderby-to-raw').addEventListener('click', _copyOrderByVisualToRaw);
 
         // WHERE from JSON
         const _whereJsonModal = document.getElementById('modal-where-from-json');
@@ -1852,19 +1855,22 @@ const QueryPanel = (() => {
             document.getElementById('btn-where-from-json').classList.toggle('hidden', !isRaw);
             if (isRaw) document.getElementById('where-raw-input').value = State.whereRaw ?? '';
         } else if (section === 'groupby') {
+            document.getElementById('btn-groupby-to-raw').classList.toggle('hidden', isRaw);
             document.getElementById('groupby-drop-zone') .classList.toggle('hidden', isRaw);
             document.getElementById('groupby-columns')   .classList.toggle('hidden', isRaw);
             document.getElementById('groupby-raw')       .classList.toggle('hidden', !isRaw);
             if (isRaw) document.getElementById('groupby-raw-input').value = State.groupByRaw ?? '';
         } else if (section === 'having') {
+            document.getElementById('btn-having-to-raw').classList.toggle('hidden', isRaw);
             document.getElementById('having-drop-zone') .classList.toggle('hidden', isRaw);
             document.getElementById('having-conditions').classList.toggle('hidden', isRaw);
             document.getElementById('having-raw')       .classList.toggle('hidden', !isRaw);
             if (isRaw) document.getElementById('having-raw-input').value = State.havingRaw ?? '';
         } else {
-            document.getElementById('orderby-drop-zone').classList.toggle('hidden', isRaw);
-            document.getElementById('orderby-columns')  .classList.toggle('hidden', isRaw);
-            document.getElementById('orderby-raw')       .classList.toggle('hidden', !isRaw);
+            document.getElementById('btn-orderby-to-raw').classList.toggle('hidden', isRaw);
+            document.getElementById('orderby-drop-zone') .classList.toggle('hidden', isRaw);
+            document.getElementById('orderby-columns')   .classList.toggle('hidden', isRaw);
+            document.getElementById('orderby-raw')        .classList.toggle('hidden', !isRaw);
             if (isRaw) document.getElementById('orderby-raw-input').value = State.orderByRaw ?? '';
         }
     }
@@ -1990,7 +1996,9 @@ const QueryPanel = (() => {
         }
 
         State.selectRaw = rawText;
-        document.getElementById('select-raw-input').value = rawText;
+        const _selTa = document.getElementById('select-raw-input');
+        _selTa.value = rawText;
+        if (typeof SqlBackdrop !== 'undefined') SqlBackdrop.refresh(_selTa);
 
         App.notify?.('SELECT columns copied to Raw mode.', 'success');
 
@@ -2037,12 +2045,76 @@ const QueryPanel = (() => {
 
         const rawText = parts.join('\n');
         State.whereRaw = rawText;
-        document.getElementById('where-raw-input').value = rawText;
+        const _whereTa = document.getElementById('where-raw-input');
+        _whereTa.value = rawText;
+        if (typeof SqlBackdrop !== 'undefined') SqlBackdrop.refresh(_whereTa);
 
         App.notify?.('WHERE filters copied to Raw mode.', 'success');
 
         // Toggle the view to Raw mode
         _toggleMode('where');
+    }
+
+    function _copyGroupByVisualToRaw() {
+        if (!State.groupBy || State.groupBy.length === 0) {
+            App.notify?.('No GROUP BY columns to copy.', 'warn');
+            return;
+        }
+        if (typeof UndoRedo !== 'undefined') UndoRedo.snapshot();
+        const rawText = State.groupBy.join(', ');
+        State.groupByRaw = rawText;
+        const _gbTa = document.getElementById('groupby-raw-input');
+        _gbTa.value = rawText;
+        if (typeof SqlBackdrop !== 'undefined') SqlBackdrop.refresh(_gbTa);
+        App.notify?.('GROUP BY columns copied to Raw mode.', 'success');
+        _toggleMode('groupby');
+    }
+
+    function _copyHavingVisualToRaw() {
+        if (!State.having || State.having.length === 0) {
+            App.notify?.('No HAVING conditions to copy.', 'warn');
+            return;
+        }
+        if (typeof UndoRedo !== 'undefined') UndoRedo.snapshot();
+        const parts = [];
+        State.having.forEach(c => {
+            let part = '';
+            if (c.op === 'IS NULL')        { part = `${c.col} IS NULL`; }
+            else if (c.op === 'IS NOT NULL') { part = `${c.col} IS NOT NULL`; }
+            else if (c.op === 'IN' || c.op === 'NOT IN') {
+                const vals = String(c.val ?? '').split(',').map(v => v.trim()).filter(v => v !== '');
+                part = `${c.col} ${c.op} (${vals.join(', ')})`;
+            } else {
+                part = `${c.col} ${c.op} ${String(c.val ?? '')}`;
+            }
+            if (parts.length === 0) {
+                parts.push(part);
+            } else {
+                parts.push(`    AND ${part}`);
+            }
+        });
+        const rawText = parts.join('\n');
+        State.havingRaw = rawText;
+        const _havTa = document.getElementById('having-raw-input');
+        _havTa.value = rawText;
+        if (typeof SqlBackdrop !== 'undefined') SqlBackdrop.refresh(_havTa);
+        App.notify?.('HAVING conditions copied to Raw mode.', 'success');
+        _toggleMode('having');
+    }
+
+    function _copyOrderByVisualToRaw() {
+        if (!State.orderBy || State.orderBy.length === 0) {
+            App.notify?.('No ORDER BY columns to copy.', 'warn');
+            return;
+        }
+        if (typeof UndoRedo !== 'undefined') UndoRedo.snapshot();
+        const rawText = State.orderBy.map(o => `${o.col} ${o.dir}`).join(', ');
+        State.orderByRaw = rawText;
+        const _obTa = document.getElementById('orderby-raw-input');
+        _obTa.value = rawText;
+        if (typeof SqlBackdrop !== 'undefined') SqlBackdrop.refresh(_obTa);
+        App.notify?.('ORDER BY columns copied to Raw mode.', 'success');
+        _toggleMode('orderby');
     }
 
     /**
