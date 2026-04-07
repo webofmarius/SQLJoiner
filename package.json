@@ -69,7 +69,7 @@
       ]
     }
   },
-  "dependencies": {
+  "optionalDependencies": {
     "dmg-license": "^1.0.11"
   }
 }
