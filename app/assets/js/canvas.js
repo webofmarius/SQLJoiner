@@ -155,13 +155,13 @@ const Canvas = (() => {
         document.getElementById('btn-screenshot-canvas')
             ?.addEventListener('click', _screenshotCanvas);
 
-        // Bind background pan on the canvas wrapper itself
+        // Bind background pan on the canvas wrapper itself (right-click drag)
         const wrapper = document.getElementById('canvas-wrapper');
+        wrapper.addEventListener('contextmenu', e => e.preventDefault());
         wrapper.addEventListener('mousedown', (e) => {
-            // Only left-click on the wrapper / scale sleeve / bare canvas (not a card or line)
+            // Only right-click on the wrapper / scale sleeve / bare canvas (not a card or line)
             const scaleWrap = document.getElementById('canvas-scale-wrap');
             const canvasEl  = document.getElementById('canvas');
-            if (e.button !== 0) return;
             if (e.target !== wrapper && e.target !== canvasEl && e.target !== scaleWrap) return;
 
             _pan.active  = true;
@@ -1312,7 +1312,7 @@ const Canvas = (() => {
 
         if (_pan.active) {
             _pan.active = false;
-            document.getElementById('canvas-wrapper').style.cursor = 'grab';
+            document.getElementById('canvas-wrapper').style.cursor = '';
         }
     }
 
@@ -2687,6 +2687,16 @@ const Canvas = (() => {
         setOverviewZoom,
         toggleOverviewZoom,
         scrollToLogicalBoundingBox,
+        startPan(e) {
+            const wrapper   = document.getElementById('canvas-wrapper');
+            _pan.active  = true;
+            _pan.startX  = e.clientX;
+            _pan.startY  = e.clientY;
+            _pan.scrollX = wrapper.scrollLeft;
+            _pan.scrollY = wrapper.scrollTop;
+            wrapper.style.cursor = 'grabbing';
+            e.preventDefault();
+        },
     };
 
 })();

@@ -413,8 +413,19 @@ const Islands = (() => {
             rect.appendChild(header);
             _applyIslandColor(rect, key);
 
+            // Right-click on island background pans the canvas instead of dragging the island
+            rect.addEventListener('contextmenu', e => {
+                e.preventDefault();
+                e.stopPropagation();
+            });
+
             // Mousedown: select island + begin drag tracking
             rect.addEventListener('mousedown', e => {
+                if (e.button === 2) {
+                    e.stopPropagation();
+                    if (typeof Canvas !== 'undefined') Canvas.startPan(e);
+                    return;
+                }
                 if (e.button !== 0) return;
                 // Cut-and-place completes on document click (canvas.js). This handler's
                 // preventDefault() suppresses the synthetic click on island backgrounds in
