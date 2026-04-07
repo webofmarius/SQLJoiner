@@ -1,0 +1,10 @@
+.idea/
+.claude/
+storage/
+Archive.7z
+
+planning/features/
+
+node_modules/
+dist/
+php-bin/

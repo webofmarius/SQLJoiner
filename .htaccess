@@ -1,0 +1,6 @@
+Options -Indexes
+
+# Block direct access to internals — only index.php and api.php are public
+<FilesMatch "^(bootstrap\.php)$">
+    Require all denied
+</FilesMatch>

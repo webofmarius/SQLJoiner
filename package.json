@@ -1,0 +1,75 @@
+{
+  "name": "sql-joiner",
+  "version": "1.0.0",
+  "description": "SQL visual query builder",
+  "main": "electron/main.js",
+  "scripts": {
+    "start": "electron .",
+    "build:mac": "electron-builder --mac",
+    "build:win": "electron-builder --win",
+    "build:linux": "electron-builder --linux"
+  },
+  "devDependencies": {
+    "electron": "^32.0.0",
+    "electron-builder": "^25.0.0"
+  },
+  "build": {
+    "appId": "com.sqljoiner.app",
+    "productName": "SQL Joiner",
+    "directories": {
+      "output": "dist"
+    },
+    "asar": false,
+    "files": [
+      "electron/**/*",
+      "app/**/*"
+    ],
+    "mac": {
+      "target": "dmg",
+      "category": "public.app-category.developer-tools",
+      "icon": "build/logo.icns",
+      "extraResources": [
+        {
+          "from": "php-bin/mac",
+          "to": "php-bin",
+          "filter": [
+            "**/*"
+          ]
+        }
+      ]
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "app/assets/img/logo.png",
+      "extraResources": [
+        {
+          "from": "php-bin/win",
+          "to": "php-bin",
+          "filter": [
+            "**/*"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "linux": {
+      "target": "AppImage",
+      "icon": "app/assets/img/logo.png",
+      "extraResources": [
+        {
+          "from": "php-bin/linux",
+          "to": "php-bin",
+          "filter": [
+            "**/*"
+          ]
+        }
+      ]
+    }
+  },
+  "dependencies": {
+    "dmg-license": "^1.0.11"
+  }
+}
