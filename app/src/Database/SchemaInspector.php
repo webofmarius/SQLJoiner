@@ -200,6 +200,17 @@ class SchemaInspector
             // MySQL returns the DDL in the second column ("Create Table")
             $ddl = $row['Create Table'] ?? $row[array_keys($row)[1]] ?? '';
 
+            // MySQL omits the schema from the output — inject it when known.
+            // Turns:  CREATE TABLE `users` (…)
+            // Into:   CREATE TABLE `info`.`users` (…)
+            if ($database !== '' && $ddl !== '') {
+                $ddl = preg_replace(
+                    '/^(CREATE TABLE\s+)`/',
+                    '$1`' . $database . '`.`',
+                    $ddl
+                );
+            }
+
             Response::success(['ddl' => $ddl]);
         } catch (\PDOException $e) {
             Response::error('Failed to fetch CREATE statement: ' . $e->getMessage());
