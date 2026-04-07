@@ -1648,6 +1648,14 @@ const QueryPanel = (() => {
         colSpan.className = 'col-name';
         colSpan.textContent = col;
         colSpan.title = col;
+        colSpan.addEventListener('contextmenu', e => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (col.includes('.')) {
+                const [alias, colName] = col.split('.');
+                Canvas.focusColumn(alias, colName);
+            }
+        });
         row.appendChild(colSpan);
 
         const rmBtn = document.createElement('button');
@@ -1690,6 +1698,14 @@ const QueryPanel = (() => {
         colSpan.className = 'col-name';
         colSpan.textContent = cond.col;
         colSpan.title = cond.col;
+        colSpan.addEventListener('contextmenu', e => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (cond.col.includes('.')) {
+                const [alias, colName] = cond.col.split('.');
+                Canvas.focusColumn(alias, colName);
+            }
+        });
         row.appendChild(colSpan);
 
         // Operator dropdown
@@ -1770,6 +1786,14 @@ const QueryPanel = (() => {
         colSpan.className = 'col-name';
         colSpan.textContent = item.col;
         colSpan.title = item.col;
+        colSpan.addEventListener('contextmenu', e => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (item.col.includes('.')) {
+                const [alias, colName] = item.col.split('.');
+                Canvas.focusColumn(alias, colName);
+            }
+        });
         row.appendChild(colSpan);
 
         // ASC / DESC toggle
