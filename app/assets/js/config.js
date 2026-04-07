@@ -215,6 +215,11 @@ const QueryPanel = (() => {
             star.className = 'select-star-note';
             star.textContent = 'All columns selected (SELECT *)';
             container.appendChild(star);
+        } else {
+            const star = document.createElement('div');
+            star.className = 'select-star-note';
+            star.textContent = 'Columns filtered';
+            container.appendChild(star);
         }
 
         const listHeader = document.createElement('div');
@@ -331,6 +336,7 @@ const QueryPanel = (() => {
                 State.select.sort((a, b) => State.columnOrder.indexOf(a) - State.columnOrder.indexOf(b));
                 _refreshSelect();
                 App.updateSQLPreview();
+                group.columns.forEach(k => Results.syncColDeselected?.(k, !chkHdr.checked));
             });
             lblHdr.appendChild(chkHdr);
 
@@ -494,6 +500,7 @@ const QueryPanel = (() => {
                     }
                     _refreshSelect();
                     App.updateSQLPreview();
+                    Results.syncColDeselected?.(key, !chk.checked);
                 });
                 lbl.appendChild(chk);
 

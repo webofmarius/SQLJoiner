@@ -2654,6 +2654,16 @@ body.is-resizing-results #resizer-results {
     background: color-mix(in srgb, var(--surface3) 86%, #0078d4 14%);
     color: #5ab4f5;
 }
+#results-table th.col-deselected {
+    background: color-mix(in srgb, var(--surface3) 60%, #000 40%);
+    color: var(--text-muted, #888);
+    font-style: italic;
+}
+#results-table td.col-deselected {
+    background: color-mix(in srgb, var(--surface1, #1a1a1a) 70%, #000 30%);
+    color: var(--text-muted, #888);
+    font-style: italic;
+}
 
 #results-table td {
     padding: 4px 10px;

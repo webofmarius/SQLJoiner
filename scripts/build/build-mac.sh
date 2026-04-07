@@ -27,6 +27,7 @@ fi
 
 echo ""
 echo "Building..."
+npm install dmg-license --save-optional
 npm run build:mac
 
 echo ""

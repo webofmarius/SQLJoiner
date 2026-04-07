@@ -1192,6 +1192,36 @@ const Results = (() => {
     }
 
     /** Apply or remove the highlight class on a result column by its select key. */
+    /** Apply or remove col-deselected styling on a result column by its select key. */
+    function _applyColDeselected(key, isDeselected) {
+        const thead = document.querySelector('#results-table thead');
+        const tbody = document.querySelector('#results-table tbody');
+        if (!thead || !tbody) return;
+
+        const ths = Array.from(thead.querySelectorAll('th'));
+        let colIdx = -1;
+
+        // Strategy 1: exact colKey match
+        ths.forEach((th, i) => { if (th.dataset.colKey === key) colIdx = i; });
+
+        // Strategy 2: bare column name fallback (only when unambiguous)
+        if (colIdx === -1) {
+            const bare = key.split('.').pop().toLowerCase();
+            let matches = 0;
+            ths.forEach((th, i) => {
+                if ((th.dataset.raw || '').toLowerCase() === bare) { colIdx = i; matches++; }
+            });
+            if (matches > 1) colIdx = -1; // ambiguous — skip
+        }
+
+        if (colIdx === -1) return;
+
+        ths[colIdx].classList.toggle('col-deselected', isDeselected);
+        tbody.querySelectorAll(`tr td:nth-child(${colIdx + 1})`).forEach(td => {
+            td.classList.toggle('col-deselected', isDeselected);
+        });
+    }
+
     function _applyColHighlight(colKey, on, scrollTo = false) {
         const thead = document.querySelector('#results-table thead');
         const tbody = document.querySelector('#results-table tbody');
@@ -1345,40 +1375,158 @@ const Results = (() => {
                 th.classList.add(_colThemes[colIdx]);
             }
 
-            // Alt+right-click to toggle column color
+            // Right-click: toggle SELECT checkbox · Alt+right-click: cycle column color
             th.addEventListener('contextmenu', e => {
                 e.preventDefault();
-                const currentTheme = _colThemes[colIdx];
-                const currentIndex = THEMES.indexOf(currentTheme);
-                const nextIndex = currentIndex + 1; // -1 -> 0, 0 -> 1, ..., 3 -> 4 (undefined)
 
-                // Remove old
-                if (currentTheme) {
-                    th.classList.remove(currentTheme);
-                    tbody.querySelectorAll(`tr td:nth-child(${colIdx + 1})`).forEach(td => {
-                        td.classList.remove(currentTheme);
-                    });
+                // Normal right-click: find the matching SELECT panel checkbox, toggle it,
+                // scroll the config panel to that row, and flash it.
+                const colKey = th.dataset.colKey;
+                const rawCol = (th.dataset.raw || '').toLowerCase();
+                const rows = document.querySelectorAll('#select-columns .select-col-row');
+                let targetRow = null;
+                let fallbackRow = null;
+                let fallbackCount = 0;
+                rows.forEach(row => {
+                    const idx = parseInt(row.dataset.idx, 10);
+                    if (isNaN(idx) || !Array.isArray(State.columnOrder)) return;
+                    const key = State.columnOrder[idx];
+                    if (!key) return;
+                    if (key === colKey) {
+                        targetRow = row; // exact match wins
+                    } else if (rawCol && key.split('.').pop().toLowerCase() === rawCol) {
+                        fallbackRow = row; // bare column name match as fallback
+                        fallbackCount++;
+                    }
+                });
+                // Use fallback only when there's exactly one match (avoids ambiguity)
+                if (!targetRow && fallbackCount === 1) targetRow = fallbackRow;
+                if (!targetRow) {
+                    App.notify?.('Column not found in SELECT panel', 'warn');
+                    return;
                 }
 
-                const nextTheme = THEMES[nextIndex];
-                if (nextTheme) {
-                    _colThemes[colIdx] = nextTheme;
-                    th.classList.add(nextTheme);
-                    tbody.querySelectorAll(`tr td:nth-child(${colIdx + 1})`).forEach(td => {
-                        td.classList.add(nextTheme);
-                    });
-                    _dimPinCol(colIdx);
-                } else {
-                    delete _colThemes[colIdx];
-                }
-                _applyDimVisibility();
+                // Re-query after re-render so we animate the live DOM node
+                const rowIdx = targetRow.dataset.idx; // save before potential re-render
+                const freshRow = document.querySelector(`.select-col-row[data-idx="${rowIdx}"]`) || targetRow;
+                freshRow.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                freshRow.classList.remove('is-highlighted');
+                void freshRow.offsetWidth; // force reflow to restart animation
+                freshRow.classList.add('is-highlighted');
+                setTimeout(() => freshRow.classList.remove('is-highlighted'), 7000);
+
+                return;
             });
 
-            // Click: in compare/duplicate mode act on the whole column; otherwise select header cell
-            th.addEventListener('click', () => {
-                if (_compareMode)   _compareColumn(colIdx, tbody);
-                else if (_duplicateMode) _duplicateColumn(colIdx, tbody);
-                else _selectCell(th);
+            // Click: in compare/duplicate mode act on the whole column (header click still applies there)
+            let _thClickTimer = null;
+            th.addEventListener('click', e => {
+                // Alt+click: copy `alias`.`column` to clipboard
+                if (e.altKey) {
+                    const colKey  = th.dataset.colKey || '';
+                    const raw     = th.dataset.raw    || '';
+                    const hasDot  = colKey.includes('.');
+                    let   alias   = hasDot ? colKey.split('.')[0] : '';
+                    // Fallback: extract alias from the visible header label (e.g. "t.country")
+                    if (!alias) {
+                        const label = _thGetLabel(th);
+                        if (label.includes('.')) alias = label.split('.')[0];
+                    }
+                    const col  = raw || (hasDot ? colKey.split('.')[1] : colKey);
+                    const text = alias ? `${alias}.\`${col}\`` : `\`${col}\``;
+                    navigator.clipboard.writeText(text)
+                        .then(() => App.notify?.(`Copied ${text}`, 'success'))
+                        .catch(() => App.notify?.('Copy failed', 'error'));
+                    return;
+                }
+                if (_compareMode) {
+                    _compareColumn(colIdx, tbody);
+                } else if (_duplicateMode) {
+                    _duplicateColumn(colIdx, tbody);
+                } else {
+                    clearTimeout(_thClickTimer);
+                    _thClickTimer = setTimeout(() => {
+                    e.preventDefault();
+
+                    // Click: find the matching SELECT panel checkbox, toggle it,
+                    // scroll the config panel to that row, and flash it.
+                    const colKey = th.dataset.colKey;
+                    const rawCol = (th.dataset.raw || '').toLowerCase();
+                    const rows = document.querySelectorAll('#select-columns .select-col-row');
+                    let targetRow = null;
+                    let fallbackRow = null;
+                    let fallbackCount = 0;
+                    rows.forEach(row => {
+                        const idx = parseInt(row.dataset.idx, 10);
+                        if (isNaN(idx) || !Array.isArray(State.columnOrder)) return;
+                        const key = State.columnOrder[idx];
+                        if (!key) return;
+                        if (key === colKey) {
+                            targetRow = row; // exact match wins
+                        } else if (rawCol && key.split('.').pop().toLowerCase() === rawCol) {
+                            fallbackRow = row; // bare column name match as fallback
+                            fallbackCount++;
+                        }
+                    });
+                    // Use fallback only when there's exactly one match (avoids ambiguity)
+                    if (!targetRow && fallbackCount === 1) targetRow = fallbackRow;
+                    if (!targetRow) {
+                        App.notify?.('Column not found in SELECT panel', 'warn');
+                        return;
+                    }
+
+                    const rowIdx = targetRow.dataset.idx; // save before potential re-render
+                    const chk = targetRow.querySelector('input[type="checkbox"]:not(.col-highlight-chk)');
+                    if (chk) {
+                        chk.checked = !chk.checked;
+                        chk.dispatchEvent(new Event('change')); // may re-render the SELECT panel
+                    }
+                    const deselected = chk && !chk.checked;
+                    th.classList.toggle('col-deselected', deselected);
+                    tbody.querySelectorAll(`tr td:nth-child(${colIdx + 1})`).forEach(td => {
+                        td.classList.toggle('col-deselected', deselected);
+                    });
+
+                    // Re-query after re-render so we animate the live DOM node
+                    const freshRow = document.querySelector(`.select-col-row[data-idx="${rowIdx}"]`) || targetRow;
+                    freshRow.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                    freshRow.classList.remove('is-highlighted');
+                    void freshRow.offsetWidth; // force reflow to restart animation
+                    freshRow.classList.add('is-highlighted');
+                    setTimeout(() => freshRow.classList.remove('is-highlighted'), 7000);
+                    }, 220); // debounce — cancelled if dblclick fires first
+                    return;
+                }
+                // no action for normal mode — use double-click to add to WHERE
+            });
+
+            // Double-click: add column to WHERE as a new visual condition
+            th.addEventListener('dblclick', e => {
+                clearTimeout(_thClickTimer); // cancel pending single-click
+                e.preventDefault();
+                const colKey = th.dataset.colKey;
+                if (!colKey) {
+                    App.notify?.('Cannot add expression column to WHERE', 'warn');
+                    return;
+                }
+                if (!State.where) State.where = [];
+                State.where.push({ col: colKey, op: '=', val: '', operator: 'AND' });
+                QueryPanel.refresh();
+                App.updateSQLPreview?.();
+                App.notify?.(`Added ${colKey} to WHERE`, 'success');
+                const configPanel = document.getElementById('config-panel');
+                if (configPanel) configPanel.scrollTop = 0;
+                requestAnimationFrame(() => {
+                    const container = document.getElementById('where-conditions');
+                    if (!container) return;
+                    const newRow = container.lastElementChild;
+                    if (newRow) {
+                        newRow.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                        newRow.classList.add('where-row-calculus-flash');
+                        setTimeout(() => newRow.classList.remove('where-row-calculus-flash'), 2000);
+                        newRow.querySelector('input[type="text"], select')?.focus();
+                    }
+                });
             });
 
             trHead.appendChild(th);
@@ -5391,6 +5539,8 @@ async function _copyAsSqlSelect() {
         rerender,
         clear,
         toggle: _toggleCollapsed,
+        /** Apply or remove col-deselected styling on a result column by its select key. */
+        syncColDeselected: _applyColDeselected,
         /** Toggle highlight on a result column. scrollTo=true scrolls to the column. */
         highlightColumn(colKey, on, scrollTo = false) {
             if (on) _highlightedCols.add(colKey);

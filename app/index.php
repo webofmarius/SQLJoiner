@@ -280,7 +280,7 @@
             </div>
         </div>
         <div class="results-legend">
-            <span class="legend-default">Click to select · Right-click to cycle cell color · Right-click to highlight/unhighlight row · Double-click a number to add to Calculus · Alt+J to copy row as JSON · Alt+click to copy cell as JSON</span>
+            <span class="legend-default">Click to select · Right-click to cycle cell color · Alt+Right-click to highlight/unhighlight row · Double-click a number to add to Calculus · Alt+J to copy row as JSON · Alt+click to copy cell as JSON · <strong>Header:</strong> Double-click to add to WHERE · Click to toggle SELECT checkbox · Right-click highlight SELECT checkbox · Alt+click to copy `alias`.`column`</span>
             <span id="legend-compare" class="hidden"> · <strong>Compare mode:</strong> click header to compare column · right-click cell to compare row</span>
             <span id="legend-duplicates" class="hidden"> · <strong>Duplicates mode:</strong> click header to scan column for duplicates · right-click cell to scan row for duplicates</span>
         </div>
