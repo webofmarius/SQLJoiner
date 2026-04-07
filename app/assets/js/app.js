@@ -638,10 +638,10 @@ const App = (() => {
                         return;
                     }
 
-                    const trimmed = input.trim();
+                    const trimmed = input.trim().replace(/`/g, '');
                     const match   = trimmed.match(/^([\w$]+)\.([\w$]+)$/);
                     if (!match) {
-                        _notify('Invalid format. Expected: schema.table', 'error');
+                        _notify('Invalid format. Expected: schema.table or `schema`.`table`', 'error');
                         if (shouldRestore) prevFocused.focus();
                         return;
                     }
