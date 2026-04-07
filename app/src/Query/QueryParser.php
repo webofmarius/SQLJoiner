@@ -961,6 +961,13 @@ class QueryParser
                 return null;
             }
 
+            // If the column reference is not in alias.col format (e.g. a computed
+            // alias like _counter, or an aggregate like COUNT(id)), this condition
+            // cannot be represented in the visual HAVING builder — force raw mode.
+            if (!isset($cond['col']) || !preg_match('/^\w+\.\w+$/', $cond['col'])) {
+                return null;
+            }
+
             $cond['operator'] = $connector ?? 'AND';
             $conditions[]     = $cond;
         }

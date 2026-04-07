@@ -1839,6 +1839,13 @@ const QueryPanel = (() => {
         App.updateSQLPreview();
     }
 
+    function _setRawTextarea(id, text) {
+        const ta = document.getElementById(id);
+        if (!ta) return;
+        ta.value = text;
+        if (typeof SqlBackdrop !== 'undefined') SqlBackdrop.refresh(ta);
+    }
+
     function _applyModeUI(section) {
         const mode  = section === 'select'  ? State.selectMode
                     : section === 'where'   ? State.whereMode
@@ -1870,32 +1877,32 @@ const QueryPanel = (() => {
             document.getElementById('select-schema-alias-toggle').closest('label').classList.toggle('hidden', isRaw);
             document.getElementById('select-delimiter-toggle').closest('label').classList.toggle('hidden', isRaw);
             document.getElementById('select-distinct-toggle').closest('label').classList.toggle('hidden', isRaw);
-            if (isRaw) document.getElementById('select-raw-input').value = State.selectRaw ?? '';
+            if (isRaw) _setRawTextarea('select-raw-input',  State.selectRaw  ?? '');
         } else if (section === 'where') {
             document.getElementById('btn-where-to-raw')   .classList.toggle('hidden', isRaw);
             document.getElementById('where-drop-zone')    .classList.toggle('hidden', isRaw);
             document.getElementById('where-conditions')   .classList.toggle('hidden', isRaw);
             document.getElementById('where-raw')          .classList.toggle('hidden', !isRaw);
             document.getElementById('btn-where-from-json').classList.toggle('hidden', !isRaw);
-            if (isRaw) document.getElementById('where-raw-input').value = State.whereRaw ?? '';
+            if (isRaw) _setRawTextarea('where-raw-input',   State.whereRaw   ?? '');
         } else if (section === 'groupby') {
             document.getElementById('btn-groupby-to-raw').classList.toggle('hidden', isRaw);
             document.getElementById('groupby-drop-zone') .classList.toggle('hidden', isRaw);
             document.getElementById('groupby-columns')   .classList.toggle('hidden', isRaw);
             document.getElementById('groupby-raw')       .classList.toggle('hidden', !isRaw);
-            if (isRaw) document.getElementById('groupby-raw-input').value = State.groupByRaw ?? '';
+            if (isRaw) _setRawTextarea('groupby-raw-input', State.groupByRaw ?? '');
         } else if (section === 'having') {
             document.getElementById('btn-having-to-raw').classList.toggle('hidden', isRaw);
             document.getElementById('having-drop-zone') .classList.toggle('hidden', isRaw);
             document.getElementById('having-conditions').classList.toggle('hidden', isRaw);
             document.getElementById('having-raw')       .classList.toggle('hidden', !isRaw);
-            if (isRaw) document.getElementById('having-raw-input').value = State.havingRaw ?? '';
+            if (isRaw) _setRawTextarea('having-raw-input',  State.havingRaw  ?? '');
         } else {
             document.getElementById('btn-orderby-to-raw').classList.toggle('hidden', isRaw);
             document.getElementById('orderby-drop-zone') .classList.toggle('hidden', isRaw);
             document.getElementById('orderby-columns')   .classList.toggle('hidden', isRaw);
             document.getElementById('orderby-raw')        .classList.toggle('hidden', !isRaw);
-            if (isRaw) document.getElementById('orderby-raw-input').value = State.orderByRaw ?? '';
+            if (isRaw) _setRawTextarea('orderby-raw-input', State.orderByRaw ?? '');
         }
     }
 
