@@ -2786,13 +2786,16 @@ tr.calculus-hl > td {
 #btn-filter-json:hover { color: #90caf9; border-color: #90caf9; }
 
 
-.modal-box--filter-json { width: 560px; max-width: 92vw; resize: both; overflow: hidden; display: flex; flex-direction: column; }
-.modal-box--filter-json .modal-body { display: flex; flex-direction: column; gap: 10px; }
+.modal-box--filter-json { width: 560px; max-width: 92vw; height: 380px; min-height: 260px; resize: both; overflow: hidden; display: flex; flex-direction: column; }
+.modal-box--filter-json .modal-body { display: flex; flex-direction: column; gap: 10px; overflow: hidden; }
+.modal-box--filter-json .modal-body .modal-hint { flex-shrink: 0; }
+.modal-box--filter-json .modal-body .form-actions { flex-shrink: 0; }
 .modal-box--filter-json #filter-json-textarea {
     width: 100%;
     box-sizing: border-box;
-    resize: vertical;
+    flex: 1;
     min-height: 120px;
+    resize: none;
     background: var(--bg);
     color: var(--text);
     border: 1px solid var(--border);
@@ -2833,7 +2836,8 @@ tr.calculus-hl > td {
 
 #create-statement-output {
     width: 100%;
-    height: 60vh;
+    flex: 1;
+    min-height: 0;
     background: var(--bg);
     color: var(--text);
     border: 1px solid var(--border);
@@ -4166,8 +4170,10 @@ th.calc-nop { opacity: 0.1; font-weight: bold; }
 .modal-box--notes .modal-body { display: flex; flex-direction: column; overflow: hidden; flex: 1; min-height: 0; }
 .modal-box--calculus-note { width: 660px; max-width: 90vw; height: 560px; min-width: 320px; min-height: 220px; resize: both; overflow: hidden; display: flex; flex-direction: column; }
 .modal-box--calculus-note .modal-body { display: flex; flex-direction: column; overflow: hidden; flex: 1; min-height: 0; }
-.modal-box--where-from-json { width: 560px; max-width: 92vw; resize: both; overflow: hidden; display: flex; flex-direction: column; }
-.modal-box--where-from-json .modal-body { display: flex; flex-direction: column; gap: 10px; }
+.modal-box--where-from-json { width: 560px; max-width: 92vw; height: 380px; min-height: 260px; resize: both; overflow: hidden; display: flex; flex-direction: column; }
+.modal-box--where-from-json .modal-body { display: flex; flex-direction: column; gap: 10px; overflow: hidden; }
+.modal-box--where-from-json .modal-body .modal-hint { flex-shrink: 0; }
+.modal-box--where-from-json .modal-body .form-actions { flex-shrink: 0; }
 .modal-box--custom-query { width: 720px; max-width: 92vw; height: 75vh; resize: both; min-width: 420px; min-height: 260px; position: relative; }
 .modal-box--context { width: 80vw; max-width: 80vw; max-height: 80vh; }
 .modal-box--large .modal-body,
@@ -4350,8 +4356,9 @@ th.calc-nop { opacity: 0.1; font-weight: bold; }
 .modal-box--where-from-json #where-from-json-textarea {
     width: 100%;
     box-sizing: border-box;
-    resize: vertical;
+    flex: 1;
     min-height: 120px;
+    resize: none;
     background: var(--bg);
     color: var(--text);
     border: 1px solid var(--border);
