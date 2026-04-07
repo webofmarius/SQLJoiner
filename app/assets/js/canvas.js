@@ -586,6 +586,10 @@ const Canvas = (() => {
             if (zone) {
                 QueryPanel.onColumnDrop(zone, tableId, col.name);
                 document.getElementById('section-where')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                requestAnimationFrame(() => {
+                    const rows = document.getElementById('where-conditions')?.querySelectorAll('.condition-row');
+                    if (rows?.length) rows[rows.length - 1].querySelector('input[placeholder="value"]')?.focus();
+                });
             }
         });
 
@@ -655,6 +659,10 @@ const Canvas = (() => {
             if (zone) {
                 QueryPanel.onColumnDrop(zone, tableData.id, col.name);
                 document.getElementById('section-where')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                requestAnimationFrame(() => {
+                    const rows = document.getElementById('where-conditions')?.querySelectorAll('.condition-row');
+                    if (rows?.length) rows[rows.length - 1].querySelector('input[placeholder="value"]')?.focus();
+                });
             }
         });
 

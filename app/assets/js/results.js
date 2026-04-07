@@ -1519,13 +1519,13 @@ const Results = (() => {
                 requestAnimationFrame(() => {
                     const container = document.getElementById('where-conditions');
                     if (!container) return;
-                    const newRow = container.lastElementChild;
-                    if (newRow) {
-                        newRow.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                        newRow.classList.add('where-row-calculus-flash');
-                        setTimeout(() => newRow.classList.remove('where-row-calculus-flash'), 2000);
-                        newRow.querySelector('input[type="text"], select')?.focus();
-                    }
+                    const rows = container.querySelectorAll('.condition-row');
+                    if (!rows.length) return;
+                    const newRow = rows[rows.length - 1];
+                    newRow.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                    newRow.classList.add('where-row-calculus-flash');
+                    setTimeout(() => newRow.classList.remove('where-row-calculus-flash'), 2000);
+                    newRow.querySelector('input[placeholder="value"]')?.focus();
                 });
             });
 

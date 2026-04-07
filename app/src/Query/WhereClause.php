@@ -84,8 +84,8 @@ class WhereClause
                 // Operator must be in the whitelist
                 if (!in_array($op, self::ALLOWED_OPS, true)) continue;
 
-                // Column reference must be alias.colname
-                if (!preg_match('/^\w+\.\w+$/', $col)) continue;
+                // Column reference must be alias.colname or bare colname (word chars only)
+                if (!preg_match('/^\w+(\.\w+)?$/', $col)) continue;
 
                 if ($op === 'IS NULL' || $op === 'IS NOT NULL') {
                     $part = "$col $op";
