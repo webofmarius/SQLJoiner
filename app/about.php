@@ -13,5 +13,7 @@ enabling the user to focus on their essentials,
 while the app performs all the joining, filtering, etc.
 in the background.
 
+https://github.com/webofmarius/SQLJoiner
+
 Powered by Claude, Junie and Cursor AI
 

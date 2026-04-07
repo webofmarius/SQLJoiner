@@ -13,7 +13,7 @@ Build SELECT queries by dragging tables onto a canvas, connecting them with join
 - **SELECT builder** — pick columns visually or switch to raw SQL mode; supports column aliases, DISTINCT, custom expressions, and alpha sort
 - **WHERE / GROUP BY / HAVING / ORDER BY** — visual or raw SQL mode for each clause
 - **Subqueries** — add a subquery as a named table on the canvas
-- **Import SQL** — paste an existing query to reverse-engineer it onto the canvas
+- **Import SQL** — **paste an existing query to reverse-engineer it onto the canvas**
 - **Contexts** — save and restore canvas states (tables, joins, conditions)
 - **Notes** — attach freeform notes to a context
 - **Connection profiles** — store multiple MySQL connection profiles; switch between them from the top bar
@@ -23,29 +23,41 @@ Build SELECT queries by dragging tables onto a canvas, connecting them with join
 
 ## Tech stack
 
-| Layer | Technology |
-|-------|-----------|
-| Desktop shell | Electron |
-| Backend | PHP (built-in CLI server) |
-| Frontend | Vanilla JS + Canvas API |
-| Database | MySQL (via PDO) |
+| Layer | Technology                 |
+|-------|----------------------------|
+| Desktop shell | Electron (**optional**)    |
+| Backend | PHP (built-in CLI server)  |
+| Frontend | Vanilla JS + Canvas API    |
 
 ## Requirements
 
-- **Development:** Node.js, PHP 8+ on `$PATH`
+- **PHP 8+** — required (the only hard dependency)
+- **Node.js + Electron** — optional, only needed if you want the desktop app wrapper or to build installers
 - **Packaged app:** PHP binary is bundled (Windows & Mac builds include it under `php-bin/`)
 
 ## Getting started
 
-```bash
-# Install Electron dependencies
-npm install
+### Without Electron (PHP only)
 
-# Run in development mode
+The simplest way to run the app — just PHP:
+
+```bash
+cd app
+php -S localhost:8080
+```
+
+Then open `http://localhost:8080` in your browser.
+
+### With Electron (desktop app)
+
+```bash
+npm install
 npm start
 ```
 
-## Building
+## Building installers
+
+Requires Node.js.
 
 ```bash
 npm run build:mac    # macOS DMG

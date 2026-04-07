@@ -2,6 +2,17 @@
 
 SQL Joiner is a visual MySQL query builder. The backend is vanilla PHP with PSR-4 autoloading and PDO; the frontend is vanilla JavaScript with no frameworks.
 
+## Running the app
+
+The only hard requirement is **PHP 8+**. Electron is optional.
+
+```bash
+# From this directory
+php -S localhost:8080
+```
+
+Then open `http://localhost:8080` in your browser. The Electron wrapper (in `../electron/`) is only needed for the packaged desktop app.
+
 ---
 
 ## Entry Points
