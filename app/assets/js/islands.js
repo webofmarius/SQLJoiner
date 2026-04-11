@@ -38,12 +38,29 @@ const Islands = (() => {
     ];
 
     let _container     = null;  // #island-rects div, first child of #canvas
+    let _pinLayer      = null;  // #plot-pin-layer div, sibling of #island-rects
     let _prevIslandKeys = new Set(); // island keys from last recompute (for transition detection)
     let _recomputing    = false;     // reentrance guard
 
     // Singleton color popup state
     let _islandColorPopup    = null;
     let _islandColorPopupKey = null;
+
+    // Pin container constants
+    const PIN_CONTAINER_WIDTH          = 220; // px, wide enough for all header buttons + thumb
+    const PIN_CONTAINER_COLLAPSED_WIDTH = 24;  // px when collapsed horizontally (just the toggle button)
+    const PIN_CONTAINER_GAP            = 10;  // px between island left edge and container right edge
+
+    // Pin color popup singleton (separate from island color popup)
+    let _pinColorPopup    = null;
+    let _pinColorPopupEl  = null;    // the .plot-pin element that owns the open popup
+
+    // Collapsed state for each pin container (keyed by island key); ephemeral UI state
+    const _pinContainerCollapsed = {};
+    const _PIN_COLORS = [
+        '#e74c3c', '#e67e22', '#f1c40f', '#2ecc71',
+        '#1abc9c', '#3498db', '#9b59b6', '#e91e63',
+    ];
 
     // Island drag state — moves all tables in an island together
     const _drag = {
@@ -62,10 +79,14 @@ const Islands = (() => {
         _container = document.createElement('div');
         _container.id = 'island-rects';
 
+        _pinLayer = document.createElement('div');
+        _pinLayer.id = 'plot-pin-layer';
+
         // Insert as first child of canvas so it sits below the SVG join lines
         // and all table cards (DOM order determines stacking for z-index: auto).
         const canvas = document.getElementById('canvas');
-        canvas.insertBefore(_container, canvas.firstChild);
+        canvas.insertBefore(_pinLayer, canvas.firstChild);
+        canvas.insertBefore(_container, _pinLayer);
 
         document.addEventListener('mousemove', _onDragMove);
         document.addEventListener('mouseup',   _onDragUp);
@@ -108,6 +129,7 @@ const Islands = (() => {
             _renderRects(islands);
             _applyOpacity(State.selectedIslandKey, islands);
             _applyMinimizedVisibility(islands);
+            _renderPinContainers(islands);
         } finally {
             _recomputing = false;
         }
@@ -136,10 +158,14 @@ const Islands = (() => {
             const bbox = _boundingBox(islandIds);
             if (!bbox) return;
             const isMinimized = State.islandMinimized?.[key];
+            const rectH = isMinimized ? MINIMIZED_HEIGHT : (bbox.h + PADDING_TOP + PADDING);
             rect.style.left   = (bbox.x - PADDING) + 'px';
             rect.style.top    = (bbox.y - PADDING_TOP) + 'px';
             rect.style.width  = (bbox.w + PADDING * 2) + 'px';
-            rect.style.height = isMinimized ? MINIMIZED_HEIGHT + 'px' : (bbox.h + PADDING_TOP + PADDING) + 'px';
+            rect.style.height = rectH + 'px';
+
+            // Keep pin container in sync
+            _updatePinContainerGeometry(key, bbox.x - PADDING, bbox.y - PADDING_TOP, rectH);
         });
     }
 
@@ -670,6 +696,359 @@ const Islands = (() => {
     }
 
     // =========================================================================
+    // Pin containers — full management
+    // =========================================================================
+
+    /** Fast-path geometry update for one island's pin container (called during drag). */
+    function _updatePinContainerGeometry(key, islandLeft, islandTop, islandHeight) {
+        if (!_pinLayer) return;
+        const container = _pinLayer.querySelector(`.plot-pin-container[data-island-key="${CSS.escape(key)}"]`);
+        if (!container) return;
+        const w = _pinContainerCollapsed[key] ? PIN_CONTAINER_COLLAPSED_WIDTH : PIN_CONTAINER_WIDTH;
+        container.style.left   = (islandLeft - w - PIN_CONTAINER_GAP) + 'px';
+        container.style.top    = islandTop + 'px';
+        container.style.height = islandHeight + 'px';
+    }
+
+    /**
+     * Called from recompute() — creates, updates geometry and content of all pin containers.
+     * Containers for keys that no longer exist as islands are removed.
+     */
+    function _renderPinContainers(islands) {
+        if (!_pinLayer) return;
+
+        const activeKeys = new Set(islands.map(_islandKey));
+
+        // Remove containers for islands that no longer exist
+        _pinLayer.querySelectorAll('.plot-pin-container').forEach(el => {
+            if (!activeKeys.has(el.dataset.islandKey)) el.remove();
+        });
+
+        islands.forEach(islandIds => {
+            const key  = _islandKey(islandIds);
+            const pins = State.islandPinnedPlots?.[key];
+
+            if (!pins || pins.length === 0) {
+                _pinLayer.querySelector(`.plot-pin-container[data-island-key="${CSS.escape(key)}"]`)?.remove();
+                return;
+            }
+
+            const bbox        = _boundingBox(islandIds);
+            if (!bbox) return;
+
+            const isMinimized = State.islandMinimized?.[key];
+            const islandLeft  = bbox.x - PADDING;
+            const islandTop   = bbox.y - PADDING_TOP;
+            const islandH     = isMinimized ? MINIMIZED_HEIGHT : (bbox.h + PADDING_TOP + PADDING);
+
+            let container = _pinLayer.querySelector(`.plot-pin-container[data-island-key="${CSS.escape(key)}"]`);
+            if (!container) {
+                container = _buildPinContainer(key);
+                _pinLayer.appendChild(container);
+            }
+
+            // Geometry — width depends on collapsed state
+            const cw = _pinContainerCollapsed[key] ? PIN_CONTAINER_COLLAPSED_WIDTH : PIN_CONTAINER_WIDTH;
+            container.style.left   = (islandLeft - cw - PIN_CONTAINER_GAP) + 'px';
+            container.style.top    = islandTop + 'px';
+            container.style.width  = cw + 'px';
+            container.style.height = islandH + 'px';
+
+            // Rebuild scroll area content (cheap; only invoked on full recompute)
+            _rebuildPinScrollArea(container, key);
+        });
+    }
+
+    /** Build the outer container element with header controls (sort + close-all). */
+    function _buildPinContainer(key) {
+        const container = document.createElement('div');
+        container.className = 'plot-pin-container';
+        container.dataset.islandKey = key;
+        container.style.width = PIN_CONTAINER_WIDTH + 'px';
+
+        // Header
+        const header = document.createElement('div');
+        header.className = 'plot-pin-container-header';
+
+        const isCollapsed = !!_pinContainerCollapsed[key];
+        if (isCollapsed) container.classList.add('collapsed');
+
+        const collapseBtn = document.createElement('button');
+        collapseBtn.className   = 'plot-pin-collapse-btn';
+        collapseBtn.textContent = isCollapsed ? '◀' : '▶';
+        collapseBtn.title       = isCollapsed ? 'Restore container' : 'Collapse container';
+        collapseBtn.addEventListener('click', e => {
+            e.stopPropagation();
+            const nowCollapsed = container.classList.toggle('collapsed');
+            _pinContainerCollapsed[key] = nowCollapsed;
+            collapseBtn.textContent = nowCollapsed ? '◀' : '▶';
+            collapseBtn.title       = nowCollapsed ? 'Restore container' : 'Collapse container';
+            // Reposition immediately so the container right-edge stays flush with the island
+            const islandRect = _container.querySelector(`.island-rect[data-island-key="${CSS.escape(key)}"]`);
+            if (islandRect) {
+                const islandLeft = parseInt(islandRect.style.left, 10) || 0;
+                const w = nowCollapsed ? PIN_CONTAINER_COLLAPSED_WIDTH : PIN_CONTAINER_WIDTH;
+                container.style.left  = (islandLeft - w - PIN_CONTAINER_GAP) + 'px';
+                container.style.width = w + 'px';
+            }
+        });
+
+        const sortBtn = document.createElement('button');
+        sortBtn.className = 'plot-pin-sort-btn';
+        const _sortLabel = o => o === 'asc' ? '↑ Oldest first' : o === 'custom' ? '↕ Manual' : '↓ Newest first';
+        const order = State.islandPinSortOrder?.[key] ?? 'desc';
+        sortBtn.textContent = _sortLabel(order);
+        sortBtn.title = 'Toggle sort order';
+        sortBtn.addEventListener('click', e => {
+            e.stopPropagation();
+            if (!State.islandPinSortOrder) State.islandPinSortOrder = {};
+            const cur = State.islandPinSortOrder[key] ?? 'desc';
+            // custom → desc → asc → desc …
+            State.islandPinSortOrder[key] = cur === 'asc' ? 'desc' : 'asc';
+            sortBtn.textContent = _sortLabel(State.islandPinSortOrder[key]);
+            _rebuildPinScrollArea(container, key);
+        });
+
+        const closeAllBtn = document.createElement('button');
+        closeAllBtn.className = 'plot-pin-close-all-btn';
+        closeAllBtn.textContent = '✕ All';
+        closeAllBtn.title = 'Close all pinned plots for this island';
+        closeAllBtn.addEventListener('click', async e => {
+            e.stopPropagation();
+            if (!await Dialog.confirm('Close all plots pinned to this island?')) return;
+            if (State.islandPinnedPlots) delete State.islandPinnedPlots[key];
+            delete _pinContainerCollapsed[key];
+            container.remove();
+        });
+
+        const popupBtn = document.createElement('button');
+        popupBtn.className   = 'plot-pin-popup-btn';
+        popupBtn.textContent = '⤢';
+        popupBtn.title       = 'Open in popup';
+        popupBtn.addEventListener('click', e => {
+            e.stopPropagation();
+            if (typeof Modals !== 'undefined' && Modals.openPinContainer) {
+                Modals.openPinContainer(key);
+            }
+        });
+
+        header.appendChild(collapseBtn);
+        header.appendChild(popupBtn);
+        header.appendChild(sortBtn);
+        header.appendChild(closeAllBtn);
+        container.appendChild(header);
+
+        // Scroll area (content filled by _rebuildPinScrollArea)
+        const scrollArea = document.createElement('div');
+        scrollArea.className = 'plot-pin-scroll-area';
+        container.appendChild(scrollArea);
+
+        return container;
+    }
+
+    /** Rebuild the pins DOM inside a container's scroll area from state. */
+    function _rebuildPinScrollArea(container, key) {
+        const scrollArea = container.querySelector('.plot-pin-scroll-area');
+        if (!scrollArea) return;
+        scrollArea.innerHTML = '';
+
+        const pins  = State.islandPinnedPlots?.[key] ?? [];
+        const order = State.islandPinSortOrder?.[key] ?? 'desc';
+        const sorted = order === 'custom'
+            ? [...pins]
+            : [...pins].sort((a, b) =>
+                order === 'asc' ? a.createdAt - b.createdAt : b.createdAt - a.createdAt
+            );
+
+        sorted.forEach(pinData => {
+            const pinEl = _buildPinEl(pinData, key);
+            scrollArea.appendChild(pinEl);
+        });
+    }
+
+    /** Build one .plot-pin element for a given pin data object. */
+    function _buildPinEl(pinData, islandKey) {
+        const pinEl = document.createElement('div');
+        pinEl.className = 'plot-pin';
+        if (pinData.minimized) pinEl.classList.add('minimized');
+        if (pinData.borderColor) {
+            pinEl.style.border = `3px solid ${pinData.borderColor}`;
+        }
+
+        // --- Header ---
+        const hdr = document.createElement('div');
+        hdr.className = 'plot-pin-header';
+
+        const titleSpan = document.createElement('span');
+        titleSpan.className = 'plot-pin-title';
+        titleSpan.textContent = pinData.title || 'Plot';
+        titleSpan.title = pinData.title || 'Plot';
+
+        const colorBtn = document.createElement('button');
+        colorBtn.className = 'plot-pin-color-btn';
+        colorBtn.title = 'Set border colour';
+        colorBtn.innerHTML = '&#11044;'; // ⬤
+        if (pinData.borderColor) colorBtn.style.color = pinData.borderColor;
+        colorBtn.addEventListener('click', e => {
+            e.stopPropagation();
+            _openPinColorPopup(pinEl, pinData, colorBtn);
+        });
+
+        const minimizeBtn = document.createElement('button');
+        minimizeBtn.className = 'plot-pin-minimize-btn';
+        minimizeBtn.textContent = '–';
+        minimizeBtn.title = pinData.minimized ? 'Restore' : 'Minimize';
+        minimizeBtn.addEventListener('click', e => {
+            e.stopPropagation();
+            pinData.minimized = !pinData.minimized;
+            pinEl.classList.toggle('minimized', pinData.minimized);
+            minimizeBtn.title = pinData.minimized ? 'Restore' : 'Minimize';
+        });
+
+        const closeBtn = document.createElement('button');
+        closeBtn.className = 'plot-pin-close-btn';
+        closeBtn.textContent = '✕';
+        closeBtn.title = 'Close this plot';
+        closeBtn.addEventListener('click', e => {
+            e.stopPropagation();
+            if (!State.islandPinnedPlots?.[islandKey]) return;
+            const idx = State.islandPinnedPlots[islandKey].indexOf(pinData);
+            if (idx !== -1) State.islandPinnedPlots[islandKey].splice(idx, 1);
+            pinEl.remove();
+            // Remove container if no pins left
+            if (State.islandPinnedPlots[islandKey].length === 0) {
+                delete State.islandPinnedPlots[islandKey];
+                pinEl.closest('.plot-pin-container')?.remove();
+            }
+        });
+
+        hdr.appendChild(titleSpan);
+        hdr.appendChild(colorBtn);
+        hdr.appendChild(minimizeBtn);
+        hdr.appendChild(closeBtn);
+        pinEl.appendChild(hdr);
+
+        // --- Body (thumbnail) ---
+        const body = document.createElement('div');
+        body.className = 'plot-pin-body';
+
+        const thumb = document.createElement('img');
+        thumb.className = 'plot-pin-thumb';
+        thumb.src = pinData.dataUrl;
+        thumb.alt = pinData.title || 'Plot';
+        thumb.width  = 160;
+        thumb.height = 120;
+        thumb.title  = 'Click to view full plot';
+        thumb.addEventListener('click', e => {
+            e.stopPropagation();
+            if (typeof Modals !== 'undefined' && Modals.openPlotFromDataUrl) {
+                Modals.openPlotFromDataUrl(pinData.dataUrl, pinData.title);
+            }
+        });
+
+        body.appendChild(thumb);
+        pinEl.appendChild(body);
+
+        return pinEl;
+    }
+
+    // =========================================================================
+    // Pin color popup
+    // =========================================================================
+    function _openPinColorPopup(pinEl, pinData, colorBtnEl) {
+        // Toggle off if already open for this pin
+        if (_pinColorPopup && _pinColorPopupEl === pinEl) {
+            _closePinColorPopup();
+            return;
+        }
+        _closePinColorPopup();
+        _pinColorPopupEl = pinEl;
+
+        _pinColorPopup = document.createElement('div');
+        _pinColorPopup.className = 'island-color-popup'; // reuse same styles
+
+        const swatchWrap = document.createElement('div');
+        swatchWrap.className = 'island-color-swatches';
+
+        _PIN_COLORS.forEach(hex => {
+            const swatch = document.createElement('button');
+            swatch.className = 'island-color-swatch';
+            swatch.style.background = hex;
+            if (pinData.borderColor === hex) swatch.classList.add('is-active');
+            swatch.addEventListener('click', e => {
+                e.stopPropagation();
+                pinData.borderColor = hex;
+                pinEl.style.border = `3px solid ${hex}`;
+                colorBtnEl.style.color = hex;
+                _closePinColorPopup();
+            });
+            swatchWrap.appendChild(swatch);
+        });
+
+        const resetBtn = document.createElement('button');
+        resetBtn.className = 'island-color-reset-bg';
+        resetBtn.textContent = '✕ No border';
+        resetBtn.addEventListener('click', e => {
+            e.stopPropagation();
+            pinData.borderColor = null;
+            pinEl.style.border = '';
+            colorBtnEl.style.color = '';
+            _closePinColorPopup();
+        });
+
+        _pinColorPopup.appendChild(swatchWrap);
+        _pinColorPopup.appendChild(resetBtn);
+        document.body.appendChild(_pinColorPopup);
+
+        const r    = colorBtnEl.getBoundingClientRect();
+        const popW = 118;
+        let left = r.left + r.width / 2 - popW / 2;
+        let top  = r.bottom + 6;
+        if (left + popW > window.innerWidth - 8) left = window.innerWidth - popW - 8;
+        if (left < 8) left = 8;
+        _pinColorPopup.style.left = left + 'px';
+        _pinColorPopup.style.top  = top  + 'px';
+
+        setTimeout(() => {
+            document.addEventListener('click', _closePinColorPopup, { once: true });
+        }, 0);
+    }
+
+    function _closePinColorPopup() {
+        if (_pinColorPopup) {
+            _pinColorPopup.remove();
+            _pinColorPopup   = null;
+            _pinColorPopupEl = null;
+        }
+    }
+
+    // =========================================================================
+    // Public: add a new pin to an island
+    // =========================================================================
+    function pinPlot(islandKey, dataUrl, title) {
+        if (!State.islandPinnedPlots) State.islandPinnedPlots = {};
+        if (!State.islandPinnedPlots[islandKey]) State.islandPinnedPlots[islandKey] = [];
+        State.islandPinnedPlots[islandKey].push({
+            dataUrl,
+            title:       title || 'Plot',
+            minimized:   false,
+            createdAt:   Date.now(),
+            borderColor: null,
+        });
+        recompute();
+    }
+
+    // =========================================================================
+    // Public: rebuild all pin containers from state (called after applyContext)
+    // =========================================================================
+    function renderAllPinContainers() {
+        if (!_pinLayer || !_container) return;
+        const enabledJoins = State.joins.filter(j => j.enabled !== false);
+        const islands      = App.computeIslands(State.tables, enabledJoins);
+        _renderPinContainers(islands);
+    }
+
+    // =========================================================================
     // Public surface
     // =========================================================================
     return {
@@ -679,6 +1058,8 @@ const Islands = (() => {
         selectIsland,
         onTableMousedown,
         onJoinInteract,
+        pinPlot,
+        renderAllPinContainers,
     };
 
 })();

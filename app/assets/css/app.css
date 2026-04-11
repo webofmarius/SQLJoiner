@@ -1197,6 +1197,274 @@ body.is-canvas-overview-zoom {
 }
 
 /* =============================================================================
+   7b. Plot button + Named checkbox (bottom bar)
+   ============================================================================= */
+#btn-plot-query {
+    /* Matches .btn-outline-blue sizing */
+}
+
+#lbl-plot-named {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    color: var(--text-muted);
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+}
+#lbl-plot-named input[type="checkbox"] {
+    cursor: pointer;
+    margin: 0;
+}
+
+/* =============================================================================
+   7c. Plot modal
+   ============================================================================= */
+.modal-plot-box {
+    width: auto;
+    max-width: 96vw;
+}
+.modal-plot-body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    padding: 16px;
+}
+#plot-canvas {
+    display: block;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    max-width: 100%;
+    height: auto;
+}
+#plot-pin-title {
+    width: 340px;
+    max-width: 100%;
+    padding: 5px 8px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-size: 13px;
+    background: var(--bg);
+    color: var(--text);
+}
+.plot-modal-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+/* =============================================================================
+   7d. Plot pin layer + containers
+   ============================================================================= */
+#plot-pin-layer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 0;        /* doesn't take up space; children overflow left */
+    height: 0;
+    overflow: visible;
+    pointer-events: none;   /* layer itself is transparent; children re-enable */
+    z-index: 15;            /* above island rects (z≈auto≈0) but below table cards (z=10) */
+}
+
+.plot-pin-container {
+    position: absolute;
+    pointer-events: all;
+    display: flex;
+    flex-direction: column;
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    border-radius: 6px;
+    box-shadow: 0 4px 18px rgba(0,0,0,0.45);
+    overflow: hidden;        /* clip children; scroll area handles overflow-y */
+}
+
+.plot-pin-container-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    padding: 4px 6px;
+    background: var(--surface2);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+}
+
+.plot-pin-collapse-btn,
+.plot-pin-popup-btn,
+.plot-pin-sort-btn,
+.plot-pin-close-all-btn {
+    font-size: 11px;
+    padding: 2px 6px;
+    border-radius: 3px;
+    border: 1px solid var(--border2);
+    background: var(--surface3);
+    color: var(--text-muted);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: color 0.12s, border-color 0.12s;
+}
+.plot-pin-collapse-btn:hover   { color: var(--text); border-color: var(--accent); }
+.plot-pin-popup-btn:hover      { color: var(--text); border-color: var(--accent); }
+.plot-pin-sort-btn:hover       { color: var(--text); border-color: var(--accent); }
+.plot-pin-close-all-btn:hover  { color: var(--error); border-color: var(--error); }
+
+.plot-pin-scroll-area {
+    flex: 1 1 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 6px;
+}
+
+/* =============================================================================
+   7e. Individual pin card
+   ============================================================================= */
+.plot-pin {
+    border: 1px solid var(--border2);
+    border-radius: 5px;
+    background: var(--surface2);
+    overflow: hidden;
+    flex-shrink: 0;
+    transition: border-color 0.15s;
+}
+
+.plot-pin-header {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    padding: 3px 4px;
+    background: var(--surface3);
+    border-bottom: 1px solid var(--border);
+    min-height: 24px;
+}
+
+.plot-pin-title {
+    flex: 1 1 0;
+    font-size: 11px;
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    cursor: default;
+}
+
+.plot-pin-color-btn,
+.plot-pin-minimize-btn,
+.plot-pin-close-btn {
+    flex-shrink: 0;
+    width: 18px;
+    height: 18px;
+    padding: 0;
+    border: none;
+    border-radius: 3px;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 11px;
+    line-height: 18px;
+    text-align: center;
+    transition: color 0.12s, background 0.12s;
+}
+.plot-pin-color-btn:hover    { color: var(--text); background: var(--surface); }
+.plot-pin-minimize-btn:hover { color: var(--text); background: var(--surface); }
+.plot-pin-close-btn:hover    { color: var(--error); background: var(--error-dim); }
+
+.plot-pin-body {
+    display: block;
+    line-height: 0;   /* kill inline whitespace under img */
+}
+
+.plot-pin-thumb {
+    display: block;
+    width: 100%;
+    height: auto;
+    cursor: pointer;
+    transition: opacity 0.12s;
+}
+.plot-pin-thumb:hover { opacity: 0.88; }
+
+/* Minimized state — hide body, shrink header to just a narrow bar */
+.plot-pin.minimized .plot-pin-body    { display: none; }
+.plot-pin.minimized .plot-pin-header  {
+    border-bottom: none;
+    padding: 2px 4px;
+    min-height: 20px;
+}
+.plot-pin.minimized .plot-pin-title   { font-size: 10px; }
+
+/* Pin container popup modal */
+.modal-pin-container-box {
+    width: 760px;
+    max-width: 95vw;
+}
+.modal-pin-container-body {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 14px;
+    max-height: 70vh;
+    overflow-y: auto;
+}
+#modal-pin-container-toolbar {
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+}
+#modal-pin-container-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+.modal-pin-card {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--border2);
+    border-radius: 5px;
+    overflow: hidden;
+    background: var(--surface2);
+    transition: border-color 0.15s, opacity 0.15s;
+    cursor: grab;
+}
+.modal-pin-card:hover     { border-color: var(--accent); }
+.modal-pin-card.dragging  { opacity: 0.35; cursor: grabbing; }
+.modal-pin-card.drag-over { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+.modal-pin-card-title {
+    font-size: 11px;
+    color: var(--text-muted);
+    padding: 4px 6px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 320px;
+    background: var(--surface3);
+    border-bottom: 1px solid var(--border);
+}
+.modal-pin-card img { display: block; }
+
+/* Also hide popup btn when container is collapsed */
+.plot-pin-container.collapsed .plot-pin-popup-btn { display: none; }
+
+/* Collapsed container — shrink horizontally to just the toggle button strip */
+.plot-pin-container.collapsed .plot-pin-scroll-area   { display: none; }
+.plot-pin-container.collapsed .plot-pin-sort-btn,
+.plot-pin-container.collapsed .plot-pin-close-all-btn { display: none; }
+.plot-pin-container.collapsed .plot-pin-container-header {
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: center;
+    padding: 6px 0;
+    height: 100%;
+    overflow: hidden;
+    border-bottom: none;
+}
+
+/* =============================================================================
    8. Table Cards (injected onto the canvas by canvas.js)
    ============================================================================= */
 .table-card {
@@ -4147,6 +4415,9 @@ th.calc-nop { opacity: 0.1; font-weight: bold; }
 }
 #modal-notes {
     z-index: 400;
+}
+#modal-plot {
+    z-index: 350;  /* above default modals (300) so it layers over the pin container popup */
 }
 
 .modal-box {

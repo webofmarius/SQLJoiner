@@ -139,6 +139,12 @@ const State = {
 
     /** Whether the syntax-highlight backdrop is enabled on the Run Custom Query textarea. */
     customQueryHighlight: false,
+
+    /** Pinned plot images per island. { [islandKey]: [{ dataUrl, title, minimized, createdAt, borderColor }, ...] } */
+    islandPinnedPlots: {},
+
+    /** Sort order for each island's pin container. { [islandKey]: 'asc' | 'desc' } */
+    islandPinSortOrder: {},
 };
 
 /* =============================================================================
@@ -440,13 +446,17 @@ const App = (() => {
             const isMod   = e.metaKey || e.ctrlKey;
             const isAlt   = e.altKey;
 
-            // ESC — close the topmost visible modal
+            // ESC — close the topmost visible modal (highest z-index wins)
             if (e.key === 'Escape') {
                 const visible = [...document.querySelectorAll('.modal:not(.hidden)')];
                 if (visible.length) {
                     e.preventDefault();
-                    const top = visible[visible.length - 1];
-                    if (top.id === 'modal-notes')    { Modals.closeNotes(); }
+                    const top = visible.reduce((best, el) => {
+                        const z = parseInt(getComputedStyle(el).zIndex, 10) || 0;
+                        const zBest = parseInt(getComputedStyle(best).zIndex, 10) || 0;
+                        return z >= zBest ? el : best;
+                    });
+                    if (top.id === 'modal-notes')      { Modals.closeNotes(); }
                     else if (top.id === 'modal-sq-expand') { _sqExpandSyncAndClose(); }
                     else { top.classList.add('hidden'); }
                 }
@@ -487,6 +497,12 @@ const App = (() => {
             if (isMod && e.code === 'KeyE') {
                 e.preventDefault();
                 runExplainQuery();
+            }
+
+            // Plot query: Cmd/Ctrl+P (prevent browser print dialog)
+            if (isMod && e.code === 'KeyP') {
+                e.preventDefault();
+                runPlotQuery();
             }
 
             // AI Knowledge: Cmd/Ctrl+K
@@ -1713,6 +1729,21 @@ const App = (() => {
                 _splitIslandConfig(prevKey, fragments);
             }
         });
+
+    }
+
+    /**
+     * Purge stashed pin data for any island keys that include `tableId`.
+     * Called when a table is permanently removed from the canvas so we don't
+     * accumulate orphaned entries that can never be restored.
+     */
+    function cleanupPinsForRemovedTable(tableId) {
+        ['islandPinnedPlots', 'islandPinSortOrder'].forEach(prop => {
+            if (!State[prop]) return;
+            Object.keys(State[prop]).forEach(key => {
+                if (key.split('|').includes(tableId)) delete State[prop][key];
+            });
+        });
     }
 
     // -------------------------------------------------------------------------
@@ -2015,6 +2046,78 @@ const App = (() => {
             // Restore the preview bar to the SELECT query so it doesn't show the
             // EXPLAIN SQL that Results.render() wrote into it.
             updateSQLPreview();
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Plot Query
+    // -------------------------------------------------------------------------
+    async function runPlotQuery() {
+        if (!State.activeProfileId) {
+            _notify('No connection profile selected.', 'error');
+            return;
+        }
+        if (State.tables.length === 0) {
+            _notify('Add at least one table to the canvas first.', 'warn');
+            return;
+        }
+
+        // Island check — same as runQuery
+        const _enabledJoins = State.joins.filter(j => j.enabled !== false);
+        const _islands      = computeIslands(State.tables, _enabledJoins);
+        if (_islands.length > 1) {
+            const selected = State.selectedIslandKey ?? null;
+            if (!selected) {
+                _notify('Multiple disconnected table groups found. Select one to plot.', 'warn');
+                return;
+            }
+            const selIds = new Set(selected.split('|'));
+            const match  = _islands.find(g => g.length === selIds.size && g.every(id => selIds.has(id)));
+            if (!match) {
+                _notify('Selected island no longer exists. Please select one to plot.', 'warn');
+                return;
+            }
+        }
+
+        const _activeIslandIds = (() => {
+            if (_islands.length <= 1) return _islands[0] ? new Set(_islands[0]) : new Set(State.tables.map(t => t.id));
+            return new Set((State.selectedIslandKey ?? '').split('|'));
+        })();
+        const islandKey      = [..._activeIslandIds].sort().join('|');
+        const _filteredTables = State.tables.filter(t => _activeIslandIds.has(t.id));
+        const _filteredJoins  = _enabledJoins.filter(j => _activeIslandIds.has(j.fromTableId) && _activeIslandIds.has(j.toTableId));
+
+        // Pass island name as title hint; openPlot falls back to "col1 vs col2" if empty
+        const islandName = (State.islandNames?.[islandKey] ?? '').trim() || null;
+
+        const btn = document.getElementById('btn-plot-query');
+        btn.disabled    = true;
+        btn.textContent = '⏳ Plotting…';
+        _queryAbortController = new AbortController();
+        _showCancelBtn();
+        _startMetaSpinner();
+
+        try {
+            const result = await API.query.execute({
+                profileId: State.activeProfileId,
+                ...State,
+                tables: _filteredTables,
+                joins:  _filteredJoins,
+            }, _queryAbortController.signal);
+
+            Modals.openPlot(result, islandKey, islandName);
+        } catch (e) {
+            if (e.name === 'AbortError') {
+                _notify('Query cancelled.', 'warn');
+            } else {
+                _notify('Plot query failed: ' + e.message, 'error');
+            }
+        } finally {
+            _queryAbortController = null;
+            _hideCancelBtn();
+            _stopMetaSpinner();
+            btn.disabled    = false;
+            btn.textContent = '📊 Plot';
         }
     }
 
@@ -3397,6 +3500,8 @@ const App = (() => {
                 backdropAnnotations:  parsed.backdropAnnotations  ?? {},
                 sqExpandScopeMemory:  parsed.sqExpandScopeMemory  ?? false,
                 customQueryHighlight: parsed.customQueryHighlight ?? false,
+                islandPinnedPlots:  (!parsed.islandPinnedPlots  || Array.isArray(parsed.islandPinnedPlots))  ? {} : parsed.islandPinnedPlots,
+                islandPinSortOrder: (!parsed.islandPinSortOrder || Array.isArray(parsed.islandPinSortOrder)) ? {} : parsed.islandPinSortOrder,
             });
 
             // Ensure every table has a join-order value (old contexts won't have it)
@@ -3481,6 +3586,11 @@ const App = (() => {
             _updateContextTitle(contextName);
             if (typeof SqlBackdrop !== 'undefined') SqlBackdrop.refreshAllBookmarks();
             _lastSavedJson = _buildSaveJson();
+
+            // Rebuild any pinned plot thumbnails from restored state
+            if (typeof Islands !== 'undefined' && Islands.renderAllPinContainers) {
+                requestAnimationFrame(() => Islands.renderAllPinContainers());
+            }
 
             // Refresh the sidebar table list for the restored database so that
             // on-canvas markers and the db-select reflect the loaded context.
@@ -3615,6 +3725,9 @@ const App = (() => {
 
         document.getElementById('btn-explain-query')
             .addEventListener('click', runExplainQuery);
+
+        document.getElementById('btn-plot-query')
+            .addEventListener('click', runPlotQuery);
 
         document.getElementById('btn-ai-knowledge')
             .addEventListener('click', runAiKnowledge);
@@ -4174,6 +4287,81 @@ const App = (() => {
                     setTimeout(() => (btn.textContent = orig), 1500);
                 });
             });
+
+        // ---- Plot modal buttons ----
+        document.getElementById('btn-plot-copy').addEventListener('click', () => {
+            const canvas = document.getElementById('plot-canvas');
+            canvas.toBlob(blob => {
+                if (!blob) { _notify('Could not copy image.', 'error'); return; }
+                try {
+                    navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]).then(() => {
+                        const btn = document.getElementById('btn-plot-copy');
+                        const orig = btn.textContent;
+                        btn.textContent = '✓ Copied!';
+                        setTimeout(() => (btn.textContent = orig), 1500);
+                        document.getElementById('plot-pin-title').focus();
+                    }).catch(() => _notify('Clipboard write failed (browser may require HTTPS).', 'error'));
+                } catch {
+                    _notify('ClipboardItem not supported in this browser.', 'error');
+                }
+            });
+        });
+
+        document.getElementById('btn-plot-save').addEventListener('click', () => {
+            const canvas = document.getElementById('plot-canvas');
+            const title  = (document.getElementById('modal-plot-title').textContent || 'plot')
+                .replace(/[^a-z0-9_\-]/gi, '_').toLowerCase();
+            const a = document.createElement('a');
+            a.download = title + '.png';
+            a.href = canvas.toDataURL('image/png');
+            a.click();
+        });
+
+        document.getElementById('btn-plot-flip').addEventListener('click', () => {
+            Modals.flipPlot();
+            document.getElementById('plot-pin-title').focus();
+        });
+
+        document.getElementById('plot-pin-title').addEventListener('keydown', e => {
+            if (e.key === 'Enter') document.getElementById('btn-plot-pin').click();
+        });
+
+        document.getElementById('btn-plot-pin').addEventListener('click', () => {
+            const islandKey = Modals._plotIslandKey;
+            if (!islandKey) return;
+            const canvas = document.getElementById('plot-canvas');
+            const title = document.getElementById('plot-pin-title').value.trim()
+                       || Modals._plotResolvedTitle
+                       || 'Plot';
+            // Redraw with the final pin title so the image matches the pin label.
+            if (Modals._plotResult) {
+                try {
+                    if (Modals._plotFlipped) {
+                        Plot.drawHorizontal(canvas, Modals._plotResult.rows, Modals._plotResult.cols, title);
+                    } else {
+                        Plot.draw(canvas, Modals._plotResult.rows, Modals._plotResult.cols, title);
+                    }
+                } catch (_) { /* ignore — capture whatever is on the canvas */ }
+            }
+            const dataUrl = canvas.toDataURL('image/png');
+            if (typeof Islands !== 'undefined' && Islands.pinPlot) {
+                Islands.pinPlot(islandKey, dataUrl, title);
+                // After pinning, scroll the canvas so the pin container is centred.
+                requestAnimationFrame(() => {
+                    const pinContainer = document.querySelector(
+                        `.plot-pin-container[data-island-key="${CSS.escape(islandKey)}"]`
+                    );
+                    if (pinContainer && typeof Canvas !== 'undefined' && Canvas.scrollToLogicalBoundingBox) {
+                        const left = parseFloat(pinContainer.style.left)   || 0;
+                        const top  = parseFloat(pinContainer.style.top)    || 0;
+                        const w    = parseFloat(pinContainer.style.width)  || 0;
+                        const h    = parseFloat(pinContainer.style.height) || 0;
+                        Canvas.scrollToLogicalBoundingBox(left, top, left + w, top + h);
+                    }
+                });
+            }
+            Modals.closePlot();
+        });
     }
 
     // -------------------------------------------------------------------------
@@ -4700,6 +4888,7 @@ const App = (() => {
         flushCurrentIslandConfig: _flushCurrentIslandConfig,
         captureSnapshot,
         onIslandTransition,
+        cleanupPinsForRemovedTable,
         saveLoadedContext: _saveLoadedContext,
         bindNotePopup: (...args) => QueryPanel.bindNotePopup(...args),
         csvToUnionSql: _csvToUnionSql,
@@ -5677,6 +5866,207 @@ const Modals = {
         document.getElementById('modal-import-query').classList.remove('hidden');
         document.getElementById('import-query-textarea').focus();
     },
+    // ---- Pin container popup ----
+    openPinContainer(islandKey) {
+        const islandName = (State.islandNames?.[islandKey] ?? '').trim();
+
+        // Title
+        document.getElementById('modal-pin-container-title').textContent =
+            islandName ? `Pinned Plots — ${islandName}` : 'Pinned Plots';
+
+        const _sortLabel = o => o === 'asc' ? '↑ Oldest first' : o === 'custom' ? '↕ Manual' : '↓ Newest first';
+
+        // Toolbar: sort toggle
+        const toolbar = document.getElementById('modal-pin-container-toolbar');
+        toolbar.innerHTML = '';
+        const sortBtn = document.createElement('button');
+        sortBtn.className   = 'plot-pin-sort-btn';
+        sortBtn.textContent = _sortLabel(State.islandPinSortOrder?.[islandKey] ?? 'desc');
+        sortBtn.addEventListener('click', () => {
+            if (!State.islandPinSortOrder) State.islandPinSortOrder = {};
+            const cur = State.islandPinSortOrder[islandKey] ?? 'desc';
+            State.islandPinSortOrder[islandKey] = cur === 'asc' ? 'desc' : 'asc';
+            sortBtn.textContent = _sortLabel(State.islandPinSortOrder[islandKey]);
+            _rebuildGrid();
+            if (typeof Islands !== 'undefined' && Islands.renderAllPinContainers) {
+                Islands.renderAllPinContainers();
+            }
+        });
+        toolbar.appendChild(sortBtn);
+
+        // Grid builder — also serves as drop-handler closure scope
+        const grid = document.getElementById('modal-pin-container-grid');
+        let _dragIdx = null;
+
+        const _rebuildGrid = () => {
+            grid.innerHTML = '';
+            const o = State.islandPinSortOrder?.[islandKey] ?? 'desc';
+            const pins = State.islandPinnedPlots?.[islandKey] ?? [];
+            const sorted = o === 'custom'
+                ? [...pins]
+                : [...pins].sort((a, b) =>
+                    o === 'asc' ? a.createdAt - b.createdAt : b.createdAt - a.createdAt
+                );
+
+            sorted.forEach((pinData, i) => {
+                const card = document.createElement('div');
+                card.className   = 'modal-pin-card';
+                card.draggable   = true;
+                if (pinData.borderColor) card.style.borderColor = pinData.borderColor;
+
+                const titleEl = document.createElement('div');
+                titleEl.className   = 'modal-pin-card-title';
+                titleEl.textContent = pinData.title || 'Plot';
+                titleEl.title       = pinData.title || 'Plot';
+
+                const img = document.createElement('img');
+                img.src    = pinData.dataUrl;
+                img.alt    = pinData.title || 'Plot';
+                img.width  = 320;
+                img.height = 240;
+                img.title  = 'Click to view full plot';
+                img.style.cursor = 'pointer';
+                img.addEventListener('click', () => {
+                    Modals.openPlotFromDataUrl(pinData.dataUrl, pinData.title);
+                });
+
+                // ---- Drag-and-drop ----
+                card.addEventListener('dragstart', e => {
+                    _dragIdx = i;
+                    e.dataTransfer.effectAllowed = 'move';
+                    requestAnimationFrame(() => card.classList.add('dragging'));
+                });
+                card.addEventListener('dragend', () => {
+                    card.classList.remove('dragging');
+                    grid.querySelectorAll('.modal-pin-card').forEach(c => c.classList.remove('drag-over'));
+                    _dragIdx = null;
+                });
+                card.addEventListener('dragover', e => {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'move';
+                    if (_dragIdx !== null && _dragIdx !== i) {
+                        grid.querySelectorAll('.modal-pin-card').forEach(c => c.classList.remove('drag-over'));
+                        card.classList.add('drag-over');
+                    }
+                });
+                card.addEventListener('dragleave', () => card.classList.remove('drag-over'));
+                card.addEventListener('drop', e => {
+                    e.preventDefault();
+                    if (_dragIdx === null || _dragIdx === i) return;
+                    // Reorder the sorted array and write back to State
+                    const [moved] = sorted.splice(_dragIdx, 1);
+                    sorted.splice(i, 0, moved);
+                    State.islandPinnedPlots[islandKey] = sorted;
+                    // Switch to manual order
+                    if (!State.islandPinSortOrder) State.islandPinSortOrder = {};
+                    State.islandPinSortOrder[islandKey] = 'custom';
+                    sortBtn.textContent = _sortLabel('custom');
+                    _dragIdx = null;
+                    _rebuildGrid();
+                    if (typeof Islands !== 'undefined' && Islands.renderAllPinContainers) {
+                        Islands.renderAllPinContainers();
+                    }
+                });
+
+                card.appendChild(titleEl);
+                card.appendChild(img);
+                grid.appendChild(card);
+            });
+        };
+        _rebuildGrid();
+
+        const modal = document.getElementById('modal-pin-container');
+        modal.classList.remove('hidden');
+        // Maximize on open if not already maximized
+        const box = modal.querySelector('.modal-box');
+        if (box && box.dataset.maximized !== '1') App.toggleMaximizePopup(box);
+    },
+
+    // ---- Plot modal ----
+    _plotIslandKey:     null,
+    _plotResult:        null,
+    _plotFlipped:       false,
+    _plotResolvedTitle: null,
+
+    openPlot(result, islandKey, title) {
+        // result: { cols: string[], rows: any[][] }
+        // title may be null — fall back to "col1 vs col2" after validation
+        const canvas = document.getElementById('plot-canvas');
+        let resolvedTitle = title || null;
+
+        try {
+            // Validate early so we never open the modal on bad data
+            const extracted = Plot.validateAndExtract(result.rows, result.cols);
+            if (!resolvedTitle) {
+                resolvedTitle = extracted.xColName !== 'Index'
+                    ? `${extracted.xColName} vs ${extracted.yColName}`
+                    : extracted.yColName;
+            }
+            Plot.draw(canvas, result.rows, result.cols, resolvedTitle);
+        } catch (e) {
+            Dialog.alert(e.message);
+            return;
+        }
+
+        this._plotIslandKey     = islandKey;
+        this._plotResult        = result;
+        this._plotFlipped       = false;
+        this._plotResolvedTitle = resolvedTitle;
+        document.getElementById('modal-plot-title').textContent = resolvedTitle;
+        document.getElementById('btn-plot-flip').style.display = '';
+        document.getElementById('btn-plot-pin').style.display = '';
+        const pinTitleInput = document.getElementById('plot-pin-title');
+        pinTitleInput.value       = '';
+        pinTitleInput.placeholder = resolvedTitle;
+        pinTitleInput.style.display = '';
+        requestAnimationFrame(() => pinTitleInput.focus());
+        document.getElementById('modal-plot').classList.remove('hidden');
+    },
+
+    flipPlot() {
+        if (!this._plotResult) return;
+        this._plotFlipped = !this._plotFlipped;
+        const canvas = document.getElementById('plot-canvas');
+        const title  = document.getElementById('modal-plot-title').textContent;
+        try {
+            if (this._plotFlipped) {
+                Plot.drawHorizontal(canvas, this._plotResult.rows, this._plotResult.cols, title);
+            } else {
+                Plot.draw(canvas, this._plotResult.rows, this._plotResult.cols, title);
+            }
+        } catch (e) {
+            Dialog.alert(e.message);
+        }
+    },
+
+    openPlotFromDataUrl(dataUrl, title) {
+        const canvas = document.getElementById('plot-canvas');
+        const ctx    = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        const img = new Image();
+        img.onload = () => ctx.drawImage(img, 0, 0);
+        img.src = dataUrl;
+
+        this._plotIslandKey     = null;
+        this._plotResult        = null;
+        this._plotFlipped       = false;
+        this._plotResolvedTitle = null;
+        document.getElementById('modal-plot-title').textContent = title || 'Plot';
+        document.getElementById('btn-plot-flip').style.display = 'none';
+        document.getElementById('btn-plot-pin').style.display = 'none';
+        document.getElementById('plot-pin-title').style.display = 'none';
+        document.getElementById('modal-plot').classList.remove('hidden');
+    },
+
+    closePlot() {
+        document.getElementById('modal-plot').classList.add('hidden');
+        this._plotIslandKey     = null;
+        this._plotResult        = null;
+        this._plotFlipped       = false;
+        this._plotResolvedTitle = null;
+        document.getElementById('plot-pin-title').value = '';
+    },
+
     async openCreateStatement(tableData) {
         const profileId = State.activeProfileId;
         if (!profileId) {

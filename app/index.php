@@ -250,6 +250,7 @@
             <button id="btn-copy-explain" title="Copy SQL with EXPLAIN prefix to clipboard">Copy EXPLAIN</button>
             <input type="checkbox" id="chk-ai-knowledge-save" title="Save to disk instead of copying to clipboard">
             <button id="btn-ai-knowledge" class="btn-outline-blue" title="Generate SELECT + CREATE TABLE definitions for all tables (Ctrl/Cmd+K)">AI Knowledge</button>
+            <button id="btn-plot-query" class="btn-outline-blue" title="Plot query results as a bar chart">📊 Plot</button>
             <input type="checkbox" id="chk-explain-colors" checked title="Color-code EXPLAIN results">
             <button id="btn-explain-query" class="btn-outline-blue" title="Run EXPLAIN on the current query (Alt+E)">⚙ Explain</button>
             <button id="btn-run-custom-query" class="btn-outline-blue" title="Run a custom SQL query">▶ Run Custom Query</button>
@@ -784,6 +785,7 @@
                 <ul class="shortcuts-list">
                     <li><kbd>Cmd/Ctrl</kbd> + <kbd>Enter</kbd> <span>Run Query</span></li>
                     <li><kbd>Cmd/Ctrl</kbd> + <kbd>E</kbd> <span>Run EXPLAIN on current query</span></li>
+                    <li><kbd>Cmd/Ctrl</kbd> + <kbd>P</kbd> <span>Plot current query results as a bar chart</span></li>
                     <li><kbd>Cmd/Ctrl</kbd> + <kbd>K</kbd> <span>AI Knowledge — build final SELECT query + CREATE TABLE definitions for all tables used (copy to clipboard or save to file)</span></li>
                     <li><kbd>Cmd/Ctrl</kbd> + <kbd>F9</kbd> <span>Open Run Custom Query</span></li>
                     <li><kbd>Cmd/Ctrl</kbd> + <kbd>F8</kbd> <span>Explain custom query (popup must be open)</span></li>
@@ -841,6 +843,40 @@
     </div>
 
 
+    <!-- ==================== MODAL: Plot ==================== -->
+    <div id="modal-plot" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modal-plot-title">
+        <div class="modal-box modal-plot-box">
+            <div class="modal-header">
+                <h2 id="modal-plot-title">Plot</h2>
+                <button class="modal-close" aria-label="Close">✕</button>
+            </div>
+            <div class="modal-body modal-plot-body">
+                <canvas id="plot-canvas" width="640" height="480"></canvas>
+                <input type="text" id="plot-pin-title" placeholder="Pin title (optional)" autocomplete="off">
+                <div class="plot-modal-actions">
+                    <button id="btn-plot-copy">Copy</button>
+                    <button id="btn-plot-save">Save to Disk</button>
+                    <button id="btn-plot-flip">Flip Axis</button>
+                    <button id="btn-plot-pin" class="primary">Pin to Island</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== MODAL: Pin Container popup ==================== -->
+    <div id="modal-pin-container" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modal-pin-container-title">
+        <div class="modal-box modal-pin-container-box">
+            <div class="modal-header">
+                <h2 id="modal-pin-container-title">Pinned Plots</h2>
+                <button class="modal-close" aria-label="Close">✕</button>
+            </div>
+            <div class="modal-body modal-pin-container-body">
+                <div id="modal-pin-container-toolbar"></div>
+                <div id="modal-pin-container-grid"></div>
+            </div>
+        </div>
+    </div>
+
     <!-- ==================== MODAL: About ==================== -->
     <div id="modal-about" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modal-about-title">
         <div class="modal-box">
@@ -879,6 +915,7 @@
     <script src="assets/js/canvas.js"></script>
     <script src="assets/js/joins.js"></script>
     <script src="assets/js/islands.js"></script>
+    <script src="assets/js/plot.js"></script>
     <script src="assets/js/config.js"></script>
     <script src="assets/js/results.js"></script>
     <script src="assets/js/undo.js"></script>

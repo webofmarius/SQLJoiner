@@ -1514,6 +1514,7 @@ const Canvas = (() => {
             if (hint) hint.style.display = '';
         }
 
+        if (typeof App !== 'undefined') App.cleanupPinsForRemovedTable(tableId);
         if (typeof Islands !== 'undefined') Islands.recompute();
         App.updateSQLPreview();
         if (typeof QueryPanel !== 'undefined') QueryPanel.refresh();
