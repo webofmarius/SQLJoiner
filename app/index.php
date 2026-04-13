@@ -250,6 +250,7 @@
             <button id="btn-copy-explain" title="Copy SQL with EXPLAIN prefix to clipboard">Copy EXPLAIN</button>
             <input type="checkbox" id="chk-ai-knowledge-save" title="Save to disk instead of copying to clipboard">
             <button id="btn-ai-knowledge" class="btn-outline-blue" title="Generate SELECT + CREATE TABLE definitions for all tables (Ctrl/Cmd+K)">AI Knowledge</button>
+            <input type="checkbox" id="chk-plot-show-results" title="Also show results table when plotting">
             <button id="btn-plot-query" class="btn-outline-blue" title="Plot query results as a bar chart">📊 Plot</button>
             <input type="checkbox" id="chk-explain-colors" checked title="Color-code EXPLAIN results">
             <button id="btn-explain-query" class="btn-outline-blue" title="Run EXPLAIN on the current query (Alt+E)">⚙ Explain</button>

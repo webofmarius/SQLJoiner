@@ -2115,6 +2115,9 @@ const App = (() => {
             }, _queryAbortController.signal);
 
             Modals.openPlot(result, islandKey, islandName);
+            if (document.getElementById('chk-plot-show-results')?.checked) {
+                Results.render(result);
+            }
         } catch (e) {
             if (e.name === 'AbortError') {
                 _notify('Query cancelled.', 'warn');
