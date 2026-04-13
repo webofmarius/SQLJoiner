@@ -463,6 +463,15 @@ const App = (() => {
                 return;
             }
 
+            // Arrow keys — navigate pinned plot viewer
+            if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') &&
+                !document.getElementById('modal-plot').classList.contains('hidden') &&
+                Modals._plotNavList) {
+                e.preventDefault();
+                Modals._navigatePlot(e.key === 'ArrowLeft' ? -1 : 1);
+                return;
+            }
+
             // Run Query: Cmd+Enter / Ctrl+Enter
             if (isEnter && isMod) {
                 e.preventDefault();
@@ -4288,6 +4297,10 @@ const App = (() => {
                 });
             });
 
+        // ---- Plot modal nav buttons ----
+        document.getElementById('btn-plot-prev').addEventListener('click', () => Modals._navigatePlot(-1));
+        document.getElementById('btn-plot-next').addEventListener('click', () => Modals._navigatePlot(1));
+
         // ---- Plot modal buttons ----
         document.getElementById('btn-plot-copy').addEventListener('click', () => {
             const canvas = document.getElementById('plot-canvas');
@@ -5927,7 +5940,8 @@ const Modals = {
                 img.title  = 'Click to view full plot';
                 img.style.cursor = 'pointer';
                 img.addEventListener('click', () => {
-                    Modals.openPlotFromDataUrl(pinData.dataUrl, pinData.title);
+                    const navList = sorted.map(p => ({ dataUrl: p.dataUrl, title: p.title }));
+                    Modals.openPlotFromDataUrl(pinData.dataUrl, pinData.title, navList, i);
                 });
 
                 // ---- Drag-and-drop ----
@@ -6039,23 +6053,50 @@ const Modals = {
         }
     },
 
-    openPlotFromDataUrl(dataUrl, title) {
-        const canvas = document.getElementById('plot-canvas');
-        const ctx    = canvas.getContext('2d');
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
+    openPlotFromDataUrl(dataUrl, title, navList, navIndex) {
+        const canvas  = document.getElementById('plot-canvas');
+        const ctx     = canvas.getContext('2d');
+        const titleEl = document.getElementById('modal-plot-title');
+
         const img = new Image();
-        img.onload = () => ctx.drawImage(img, 0, 0);
+        img.onload = () => {
+            titleEl.textContent = title || 'Plot';
+            ctx.drawImage(img, 0, 0);
+        };
         img.src = dataUrl;
 
         this._plotIslandKey     = null;
         this._plotResult        = null;
         this._plotFlipped       = false;
         this._plotResolvedTitle = null;
-        document.getElementById('modal-plot-title').textContent = title || 'Plot';
+        this._plotNavList       = navList || null;
+        this._plotNavIndex      = (navList && navIndex != null) ? navIndex : null;
+
         document.getElementById('btn-plot-flip').style.display = 'none';
         document.getElementById('btn-plot-pin').style.display = 'none';
         document.getElementById('plot-pin-title').style.display = 'none';
+
+        const prevBtn = document.getElementById('btn-plot-prev');
+        const nextBtn = document.getElementById('btn-plot-next');
+        if (navList && navList.length > 1) {
+            prevBtn.classList.remove('hidden');
+            nextBtn.classList.remove('hidden');
+            prevBtn.disabled = navIndex <= 0;
+            nextBtn.disabled = navIndex >= navList.length - 1;
+        } else {
+            prevBtn.classList.add('hidden');
+            nextBtn.classList.add('hidden');
+        }
+
         document.getElementById('modal-plot').classList.remove('hidden');
+    },
+
+    _navigatePlot(delta) {
+        if (!this._plotNavList) return;
+        const newIdx = this._plotNavIndex + delta;
+        if (newIdx < 0 || newIdx >= this._plotNavList.length) return;
+        const item = this._plotNavList[newIdx];
+        this.openPlotFromDataUrl(item.dataUrl, item.title, this._plotNavList, newIdx);
     },
 
     closePlot() {
@@ -6064,6 +6105,8 @@ const Modals = {
         this._plotResult        = null;
         this._plotFlipped       = false;
         this._plotResolvedTitle = null;
+        this._plotNavList       = null;
+        this._plotNavIndex      = null;
         document.getElementById('plot-pin-title').value = '';
     },
 

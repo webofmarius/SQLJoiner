@@ -942,7 +942,10 @@ const Islands = (() => {
         thumb.addEventListener('click', e => {
             e.stopPropagation();
             if (typeof Modals !== 'undefined' && Modals.openPlotFromDataUrl) {
-                Modals.openPlotFromDataUrl(pinData.dataUrl, pinData.title);
+                const pins    = State.islandPinnedPlots?.[islandKey] ?? [];
+                const idx     = pins.indexOf(pinData);
+                const navList = pins.map(p => ({ dataUrl: p.dataUrl, title: p.title }));
+                Modals.openPlotFromDataUrl(pinData.dataUrl, pinData.title, navList, idx === -1 ? 0 : idx);
             }
         });
 

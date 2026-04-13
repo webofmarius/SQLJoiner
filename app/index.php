@@ -815,6 +815,7 @@
                     <li><kbd>Cmd/Ctrl</kbd> + <kbd>C</kbd> <span>Copy selected cell text</span></li>
                     <li><kbd>Shift</kbd> + <kbd>Enter</kbd> <span>Close SQL expression / label popup</span></li>
                     <li><kbd>Esc</kbd> <span>Close SQL expression / label popup</span></li>
+                    <li><kbd>←</kbd> / <kbd>→</kbd> <span>Navigate to previous / next pinned plot (when pinned plot popup is open)</span></li>
                     <li>Drag &amp; drop WHERE filters to reorder them</li>
                     <li>Drag &amp; drop SELECT tables or columns to reorder them</li>
                     <li>Right-click a Custom Expression input to edit its label</li>
@@ -851,7 +852,11 @@
                 <button class="modal-close" aria-label="Close">✕</button>
             </div>
             <div class="modal-body modal-plot-body">
-                <canvas id="plot-canvas" width="640" height="480"></canvas>
+                <div class="plot-nav-row">
+                    <button id="btn-plot-prev" class="plot-nav-btn hidden" aria-label="Previous plot">&#8249;</button>
+                    <canvas id="plot-canvas" width="640" height="480"></canvas>
+                    <button id="btn-plot-next" class="plot-nav-btn hidden" aria-label="Next plot">&#8250;</button>
+                </div>
                 <input type="text" id="plot-pin-title" placeholder="Pin title (optional)" autocomplete="off">
                 <div class="plot-modal-actions">
                     <button id="btn-plot-copy">Copy</button>

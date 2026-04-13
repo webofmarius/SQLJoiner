@@ -1223,6 +1223,7 @@ body.is-canvas-overview-zoom {
    ============================================================================= */
 .modal-plot-box {
     width: auto;
+    min-width: 760px;
     max-width: 96vw;
 }
 .modal-plot-body {
@@ -1231,6 +1232,35 @@ body.is-canvas-overview-zoom {
     align-items: center;
     gap: 12px;
     padding: 16px;
+}
+.plot-nav-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.plot-nav-btn {
+    flex-shrink: 0;
+    width: 36px;
+    height: 48px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text);
+    font-size: 30px;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s;
+    user-select: none;
+}
+.plot-nav-btn:hover:not(:disabled) {
+    background: var(--surface3);
+}
+.plot-nav-btn:disabled {
+    opacity: 0.3;
+    cursor: default;
 }
 #plot-canvas {
     display: block;
