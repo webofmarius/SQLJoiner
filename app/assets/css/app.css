@@ -5106,13 +5106,12 @@ kbd {
     padding: 2px 0;
 }
 /* .sq-expand-btn inherits the default button{} styles (same look as btn-add-subquery) */
-.sq-expand-btn, .sq-explain-btn, .sq-run-btn, .sq-bind-btn {
+.sq-expand-btn, .sq-explain-btn, .sq-run-btn, .sq-duplicate-btn {
     flex-shrink: 0;
     height: 40px;
 }
 .sq-file-input { display: none; }
 .sq-controls .btn-tables-trigger { height: 40px; flex-shrink: 0; }
-.sq-bind-chk { cursor: pointer; flex-shrink: 0; }
 
 /* Row for adding a virtual join column */
 .subquery-col-add {

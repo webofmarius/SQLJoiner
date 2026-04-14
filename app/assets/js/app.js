@@ -1207,6 +1207,85 @@ const App = (() => {
     }
 
     // -------------------------------------------------------------------------
+    // Duplicate an existing subquery card, place it to the right, and focus it.
+    // Pinned plots are intentionally NOT copied.
+    // -------------------------------------------------------------------------
+    function duplicateSubquery(tableData) {
+        const inUseNames = State.tables.map(t => t.name);
+        let sqNum = 1;
+        while (inUseNames.includes('sq' + sqNum)) sqNum++;
+        const sqName = 'sq' + sqNum;
+
+        // Derive alias as parentAlias_N
+        const inUseAliases = State.tables.map(t => t.alias);
+        const prefix = tableData.alias + '_';
+        let maxN = 0;
+        inUseAliases.forEach(a => {
+            if (a.startsWith(prefix)) {
+                const n = parseInt(a.slice(prefix.length), 10);
+                if (!isNaN(n) && n > maxN) maxN = n;
+            }
+        });
+        const alias = prefix + (maxN + 1);
+
+        // Place the clone to the right of the source card
+        const sourceCard = document.querySelector(`.table-card[data-table-id="${tableData.id}"]`);
+        const cardWidth  = sourceCard ? sourceCard.offsetWidth : 300;
+        const position   = tableData.position
+            ? { x: tableData.position.x + cardWidth + 120, y: tableData.position.y }
+            : null;
+
+        const tableId = 't_' + Date.now();
+
+        const newTableData = {
+            id:            tableId,
+            name:          sqName,
+            alias,
+            database:      null,
+            position,
+            columns:       tableData.columns.map(c => ({ ...c })),
+            order:         State.tables.length + 1,
+            isSubquery:    true,
+            subquery:      tableData.subquery,
+            note:          tableData.note,
+            size:          tableData.size ? { ...tableData.size } : undefined,
+            htmlHighlight: tableData.htmlHighlight,
+        };
+
+        State.tables.push(newTableData);
+        _updateCanvasCount();
+        Canvas.renderTable(newTableData);
+
+        // Copy island color from source
+        if (!State.islandColors) State.islandColors = {};
+        if (State.islandColors[tableData.id]) {
+            State.islandColors[tableId] = State.islandColors[tableData.id];
+        }
+
+        // Set island name: find the source's existing island name then append suffix
+        if (!State.islandNames) State.islandNames = {};
+        const sourceIslandKey = Object.keys(State.islandNames).find(k =>
+            k.split('|').includes(tableData.id)) ?? tableData.id;
+        const sourceName = State.islandNames[sourceIslandKey] || tableData.alias || tableData.name;
+        State.islandNames[tableId] = sourceName + ' - duplicated';
+
+        // Scroll to the new card (position was set explicitly so auto-scroll didn't run)
+        if (position) Canvas.scrollToTableId(tableId);
+
+        if (typeof Islands !== 'undefined') {
+            Islands.recompute();
+            Islands.selectIsland(tableId);
+        } else {
+            if (typeof QueryPanel !== 'undefined') QueryPanel.refresh();
+            updateSQLPreview();
+        }
+
+        setTimeout(() => {
+            document.querySelector(`.table-card[data-table-id="${tableId}"] .subquery-textarea`)?.focus();
+        }, 0);
+    }
+
+    // -------------------------------------------------------------------------
     // Create a subquery canvas card pre-filled with SQL from scope extraction
     // -------------------------------------------------------------------------
     function _addExtractedSubquery(sql, alias) {
@@ -4890,6 +4969,7 @@ const App = (() => {
         addTableToCanvas,
         addSubqueryToCanvas,
         addSubqueryWithSql,
+        duplicateSubquery,
         updateSQLPreview,
         applyContext,
         loadContextList: _loadContextList,

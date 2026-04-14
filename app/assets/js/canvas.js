@@ -413,17 +413,11 @@ const Canvas = (() => {
             sqExpandBtn.textContent  = '⤢';
             sqControls.appendChild(sqExpandBtn);
 
-            const sqBindChk          = document.createElement('input');
-            sqBindChk.type           = 'checkbox';
-            sqBindChk.className      = 'sq-bind-chk';
-            sqBindChk.title          = 'Checked: create a new subquery with bound variables (original unchanged)\nUnchecked: replace this query in-place (undoable)';
-            sqControls.appendChild(sqBindChk);
-
-            const sqBindBtn          = document.createElement('button');
-            sqBindBtn.type           = 'button';
-            sqBindBtn.className      = 'sq-bind-btn';
-            sqBindBtn.textContent    = 'Bind vars';
-            sqControls.appendChild(sqBindBtn);
+            const sqDuplicateBtn       = document.createElement('button');
+            sqDuplicateBtn.type        = 'button';
+            sqDuplicateBtn.className   = 'sq-duplicate-btn';
+            sqDuplicateBtn.textContent = '⧉ Duplicate';
+            sqControls.appendChild(sqDuplicateBtn);
 
             const sqExplainBtn       = document.createElement('button');
             sqExplainBtn.type        = 'button';
@@ -749,26 +743,11 @@ const Canvas = (() => {
                 App.openSqExpand?.(sqTextarea);
             });
 
-            const sqBindChk = card.querySelector('.sq-bind-chk');
-            const sqBindBtn = card.querySelector('.sq-bind-btn');
-            sqBindBtn.addEventListener('mousedown', e => e.stopPropagation());
-            sqBindBtn.addEventListener('click', e => {
+            const sqDuplicateBtn = card.querySelector('.sq-duplicate-btn');
+            sqDuplicateBtn.addEventListener('mousedown', e => e.stopPropagation());
+            sqDuplicateBtn.addEventListener('click', e => {
                 e.stopPropagation();
-                const sql = sqTextarea.value.trim();
-                if (!sql) { App.notify?.('Subquery is empty.', 'warning'); return; }
-                const bound = _bindSqlVariables(sql);
-                if (!bound) { App.notify?.('No SET @variables found in this query.', 'warning'); return; }
-                if (sqBindChk.checked) {
-                    // Clone mode: create a new subquery card with the bound SQL
-                    App.addSubqueryWithSql?.(bound, tableData.alias);
-                } else {
-                    // In-place mode: replace content (undoable)
-                    if (typeof UndoManager !== 'undefined') UndoManager.push(sqTextarea);
-                    sqTextarea.value = bound;
-                    sqTextarea.dispatchEvent(new Event('input', { bubbles: true }));
-                    if (typeof UndoManager !== 'undefined') UndoManager.push(sqTextarea);
-                    sqTextarea.focus();
-                }
+                App.duplicateSubquery?.(tableData);
             });
 
             const sqExplainBtn = card.querySelector('.sq-explain-btn');
@@ -2695,6 +2674,7 @@ const Canvas = (() => {
         getContentScale,
         setOverviewZoom,
         toggleOverviewZoom,
+        scrollToTableId:       _scrollToTableId,
         scrollToLogicalBoundingBox,
         startPan(e) {
             const wrapper   = document.getElementById('canvas-wrapper');
