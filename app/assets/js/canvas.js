@@ -1311,6 +1311,8 @@ const Canvas = (() => {
         if (_pan.active) {
             _pan.active = false;
             document.getElementById('canvas-wrapper').style.cursor = '';
+            // Suppress the context menu that fires when the mouse is released outside the canvas
+            document.addEventListener('contextmenu', e => e.preventDefault(), { once: true, capture: true });
         }
     }
 
