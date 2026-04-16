@@ -2551,6 +2551,19 @@ body.is-cut-mode * { cursor: crosshair !important; }
     margin: 0;
 }
 .select-group-hdr__label input[type="checkbox"] { width: auto; flex-shrink: 0; }
+.select-visibility-label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    white-space: nowrap;
+    user-select: none;
+    padding-top: 24px;
+}
+.select-visibility-label input[type="checkbox"] { width: auto; flex-shrink: 0; cursor: pointer; }
 .sel-alias { color: var(--accent); font-family: var(--font-mono); }
 .sel-tname { color: var(--text-faint); font-family: var(--font-mono); font-weight: 400; }
 

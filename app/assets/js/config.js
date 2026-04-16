@@ -252,6 +252,39 @@ const QueryPanel = (() => {
             }
             _filterSelectColumns();
         });
+        // Visibility checkbox — check/uncheck all columns globally
+        const allActiveCols  = _activeColumns();
+        const visAllChecked  = !State.selectNone && (State.select.length === 0 || allActiveCols.every(k => State.select.includes(k)));
+        const visNoneChecked = State.selectNone  || (State.select.length > 0 && allActiveCols.every(k => !State.select.includes(k)));
+
+        const visLbl = document.createElement('label');
+        visLbl.className = 'select-visibility-label';
+        visLbl.title = 'Check / uncheck all columns';
+        const visChk = document.createElement('input');
+        visChk.type = 'checkbox';
+        visChk.id   = 'chk-select-visibility';
+        visChk.checked       = visAllChecked;
+        visChk.indeterminate = !visAllChecked && !visNoneChecked;
+        visChk.addEventListener('change', () => {
+            if (typeof UndoRedo !== 'undefined') UndoRedo.snapshot();
+            if (visChk.checked) {
+                State.selectNone = false;
+                State.select     = [];
+            } else {
+                if (State.select.length === 0) State.select = _activeColumns();
+                State.select     = [];
+                State.selectNone = true;
+            }
+            _refreshSelect();
+            App.updateSQLPreview();
+            Results.syncColDeselected?.(null, !visChk.checked);
+        });
+        visLbl.appendChild(visChk);
+        const visLblTxt = document.createElement('span');
+        visLblTxt.textContent = 'Visibility';
+        visLbl.appendChild(visLblTxt);
+        listHeader.appendChild(visLbl);
+
         const minimizeAllBtn = document.createElement('button');
         minimizeAllBtn.id        = 'btn-minimize-all';
         minimizeAllBtn.className = 'btn-toggle-mode' + (_allMinimized ? ' active' : '');
