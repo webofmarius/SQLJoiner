@@ -2002,6 +2002,14 @@ body.is-cut-mode * { cursor: crosshair !important; }
 }
 .col-search:focus { border-color: var(--accent); }
 #select-col-search-wrap .col-search { flex: 1; width: auto; padding-right: 20px; }
+.col-group-search-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+    padding: 3px 6px 4px;
+}
+.col-group-search-wrap .col-search { flex: 1; width: auto; padding-right: 20px; }
+.col-group-search-wrap .col-search-clear { right: 9px; }
 .col-search-clear {
     position: absolute;
     right: 3px;

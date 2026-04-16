@@ -397,6 +397,54 @@ const QueryPanel = (() => {
             hdr.appendChild(lblHdr);
             container.appendChild(hdr);
 
+            // Per-group column search
+            const grpSearchWrap = document.createElement('div');
+            grpSearchWrap.className = 'col-group-search-wrap';
+
+            const grpSearchInput = document.createElement('input');
+            grpSearchInput.type = 'text';
+            grpSearchInput.className = 'col-search col-group-search';
+            grpSearchInput.placeholder = 'Filter columns\u2026';
+            grpSearchInput.setAttribute('autocomplete', 'off');
+            grpSearchInput.value = _groupSearchTerms[group.alias] ?? '';
+
+            const grpClearBtn = document.createElement('button');
+            grpClearBtn.type = 'button';
+            grpClearBtn.className = 'col-search-clear';
+            grpClearBtn.textContent = '✕';
+            grpClearBtn.title = 'Clear filter';
+            grpClearBtn.style.display = grpSearchInput.value ? '' : 'none';
+
+            grpClearBtn.addEventListener('click', e => {
+                e.stopPropagation();
+                grpSearchInput.value = '';
+                _groupSearchTerms[group.alias] = '';
+                grpClearBtn.style.display = 'none';
+                _filterSelectColumns();
+                grpSearchInput.focus();
+            });
+
+            grpSearchInput.addEventListener('mousedown', e => e.stopPropagation());
+            grpSearchInput.addEventListener('keydown', e => {
+                if (e.key === 'Escape') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    grpSearchInput.value = '';
+                    _groupSearchTerms[group.alias] = '';
+                    grpClearBtn.style.display = 'none';
+                    _filterSelectColumns();
+                }
+            });
+            grpSearchInput.addEventListener('input', () => {
+                _groupSearchTerms[group.alias] = grpSearchInput.value;
+                grpClearBtn.style.display = grpSearchInput.value ? '' : 'none';
+                _filterSelectColumns();
+            });
+
+            grpSearchWrap.appendChild(grpSearchInput);
+            grpSearchWrap.appendChild(grpClearBtn);
+            container.appendChild(grpSearchWrap);
+
             // Table Header Drag Events
             hdr.addEventListener('dragstart', (e) => {
                 e.dataTransfer.setData('text/table-alias', group.alias);
@@ -648,6 +696,15 @@ const QueryPanel = (() => {
             searchInput.focus();
         });
 
+        searchInput.addEventListener('keydown', e => {
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                e.stopPropagation();
+                searchInput.value = '';
+                searchClearBtn.style.display = 'none';
+                _filterSelectColumns();
+            }
+        });
         searchInput.addEventListener('input', () => {
             _filterSelectColumns();
             searchClearBtn.style.display = searchInput.value ? '' : 'none';
@@ -709,6 +766,7 @@ const QueryPanel = (() => {
     let _showCheckedOnly     = false;
     let _checkedOnlySnapshot = null; // Set of column keys that were checked when the toggle was activated
     const _minimizedGroups   = new Set(); // aliases of collapsed table groups
+    const _groupSearchTerms  = {};   // alias → current per-group search string
     let _allMinimized        = false;
 
     // -------------------------------------------------------------------------
@@ -1058,25 +1116,31 @@ const QueryPanel = (() => {
 
         hdrs.forEach(hdr => {
             const alias = hdr.dataset.alias ?? '';
-            // collect all column rows that follow this header until the next header
+            const groupTerm = (_groupSearchTerms[alias] ?? '').trim().toLowerCase();
+            // collect all column rows and the group search wrap following this header until the next header
             const rows = [];
+            let grpWrap = null;
             let el = hdr.nextElementSibling;
             while (el && !el.classList.contains('select-table-hdr')) {
                 if (el.classList.contains('select-col-row')) rows.push(el);
+                else if (el.classList.contains('col-group-search-wrap')) grpWrap = el;
                 el = el.nextElementSibling;
             }
 
             const minimized = _minimizedGroups.has(alias);
 
             if (minimized) {
-                // Keep the header visible so the user can expand; hide all rows
+                // Keep the header visible so the user can expand; hide rows and group search
                 hdr.style.display = '';
+                if (grpWrap) grpWrap.style.display = 'none';
                 rows.forEach(r => (r.style.display = 'none'));
                 anyVisible = true;
                 return;
             }
 
-            if (!term && !_showCheckedOnly) {
+            if (grpWrap) grpWrap.style.display = '';
+
+            if (!term && !groupTerm && !_showCheckedOnly) {
                 hdr.style.display = '';
                 rows.forEach(r => (r.style.display = ''));
                 anyVisible = true;
@@ -1087,9 +1151,10 @@ const QueryPanel = (() => {
             rows.forEach(r => {
                 const colName = r.querySelector('label span')?.textContent?.toLowerCase() ?? '';
                 const matchesTerm = !term || colName.includes(term) || alias.toLowerCase().includes(term);
+                const matchesGroupTerm = !groupTerm || colName.includes(groupTerm);
                 const matchesChecked = !_showCheckedOnly ||
                     _checkedOnlySnapshot.has(State.columnOrder[parseInt(r.dataset.idx)] ?? '');
-                const visible = matchesTerm && matchesChecked;
+                const visible = matchesTerm && matchesGroupTerm && matchesChecked;
                 r.style.display = visible ? '' : 'none';
                 if (visible) groupVisible = true;
             });
