@@ -5576,3 +5576,60 @@ textarea.sql-bd-active.scope-mode-on {
     background: var(--accent);
     color: #fff;
 }
+
+/* =============================================================================
+   Timestamp Converter
+   ============================================================================= */
+.modal-box--timestamp-conv {
+    width: 580px;
+    max-width: 94vw;
+}
+
+.ts-conv-row {
+    display: flex;
+    align-items: flex-end;
+    gap: 12px;
+    margin-top: 12px;
+}
+
+.ts-conv-field {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.ts-conv-field label {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-weight: 600;
+    letter-spacing: 0.4px;
+}
+
+.ts-conv-field input {
+    width: 100%;
+    box-sizing: border-box;
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 7px 10px;
+    font-size: 13px;
+    font-family: var(--font-mono, monospace);
+    outline: none;
+}
+.ts-conv-field input:focus { border-color: var(--accent); }
+
+.ts-conv-arrow {
+    font-size: 18px;
+    color: var(--text-muted);
+    padding-bottom: 6px;
+    flex-shrink: 0;
+}
+
+.ts-conv-status {
+    margin-top: 8px;
+    font-size: 11px;
+    color: var(--text-muted);
+    min-height: 16px;
+}

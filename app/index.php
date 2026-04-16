@@ -31,6 +31,7 @@
             <button id="btn-save-context" class="btn-save-context" title="Save as a new context">💾</button>
             <button id="btn-focus-tables" title="Center view on tables">⊙</button>
             <button type="button" id="btn-canvas-overview-zoom" title="Overview zoom — shrink canvas only (toggle; recenters on tables)">⊟</button>
+            <button type="button" id="btn-timestamp-conv" title="Timestamp converter">⧖</button>
             <div id="undo-redo-bar">
                 <button id="btn-undo" title="Undo (Ctrl+Z)" disabled>↩</button>
                 <button id="btn-redo" title="Redo (Ctrl+Shift+Z)" disabled>↪</button>
@@ -788,6 +789,7 @@
                     <li><kbd>Cmd/Ctrl</kbd> + <kbd>E</kbd> <span>Run EXPLAIN on current query</span></li>
                     <li><kbd>Cmd/Ctrl</kbd> + <kbd>P</kbd> <span>Plot current query results as a bar chart</span></li>
                     <li><kbd>Cmd/Ctrl</kbd> + <kbd>K</kbd> <span>AI Knowledge — build final SELECT query + CREATE TABLE definitions for all tables used (copy to clipboard or save to file)</span></li>
+                    <li><kbd>F3</kbd> <span>Toggle Timestamp Converter</span></li>
                     <li><kbd>Cmd/Ctrl</kbd> + <kbd>F9</kbd> <span>Open Run Custom Query</span></li>
                     <li><kbd>Cmd/Ctrl</kbd> + <kbd>F8</kbd> <span>Explain custom query (popup must be open)</span></li>
                     <li><kbd>Alt</kbd> + <kbd>1</kbd> <span>Toggle Table Browser</span></li>
@@ -879,6 +881,31 @@
             <div class="modal-body modal-pin-container-body">
                 <div id="modal-pin-container-toolbar"></div>
                 <div id="modal-pin-container-grid"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== MODAL: Timestamp Converter ==================== -->
+    <div id="modal-timestamp-conv" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modal-timestamp-conv-title">
+        <div class="modal-box modal-box--timestamp-conv">
+            <div class="modal-header">
+                <h2 id="modal-timestamp-conv-title">⧖ Timestamp Converter</h2>
+                <button class="modal-close" aria-label="Close">✕</button>
+            </div>
+            <div class="modal-body">
+                <p class="modal-hint">Enter a Unix timestamp or a datetime string in either box. Conversion is done via MySQL using the active connection.</p>
+                <div class="ts-conv-row">
+                    <div class="ts-conv-field">
+                        <label for="ts-conv-left">Unix timestamp</label>
+                        <input type="text" id="ts-conv-left" placeholder="ex. 1715000000" autocomplete="off" spellcheck="false">
+                    </div>
+                    <div class="ts-conv-arrow">⇄</div>
+                    <div class="ts-conv-field">
+                        <label for="ts-conv-right">Datetime</label>
+                        <input type="text" id="ts-conv-right" placeholder="ex. 2024-05-06 12:00:00" autocomplete="off" spellcheck="false">
+                    </div>
+                </div>
+                <p id="ts-conv-status" class="ts-conv-status"></p>
             </div>
         </div>
     </div>

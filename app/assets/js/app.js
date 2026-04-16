@@ -479,6 +479,13 @@ const App = (() => {
                 return;
             }
 
+            // F3 — Timestamp converter
+            if (e.code === 'F3' && !isMod) {
+                e.preventDefault();
+                document.getElementById('btn-timestamp-conv').click();
+                return;
+            }
+
             // Run Custom Query popup: Cmd/Ctrl+F9
             // — opens the popup if closed, runs the query if already open
             if (isMod && e.code === 'F9') {
@@ -3722,6 +3729,48 @@ const App = (() => {
                 _overviewZoomBtn.classList.toggle('is-active', on);
             });
         }
+
+        // Timestamp converter popup
+        (() => {
+            const modal   = document.getElementById('modal-timestamp-conv');
+            const leftEl  = document.getElementById('ts-conv-left');
+            const rightEl = document.getElementById('ts-conv-right');
+            const status  = document.getElementById('ts-conv-status');
+
+            document.getElementById('btn-timestamp-conv').addEventListener('click', () => {
+                modal.classList.toggle('hidden');
+                if (!modal.classList.contains('hidden')) leftEl.focus();
+            });
+
+            modal.querySelectorAll('.modal-close').forEach(btn =>
+                btn.addEventListener('click', () => modal.classList.add('hidden'))
+            );
+
+            let _tsTimer = null;
+            function _tsConvert(value, direction, targetEl) {
+                clearTimeout(_tsTimer);
+                if (!value.trim()) { targetEl.value = ''; status.textContent = ''; return; }
+                _tsTimer = setTimeout(async () => {
+                    const profileId = State.activeProfileId;
+                    if (!profileId) {
+                        status.textContent = 'No active connection — select a profile first.';
+                        return;
+                    }
+                    status.textContent = '…';
+                    try {
+                        const data = await API.timestamp.convert(profileId, value.trim(), direction);
+                        targetEl.value  = data.result ?? '';
+                        status.textContent = data.result === null ? 'MySQL returned NULL (invalid input).' : '';
+                    } catch (e) {
+                        status.textContent = e.message;
+                        targetEl.value = '';
+                    }
+                }, 400);
+            }
+
+            leftEl.addEventListener('input',  () => _tsConvert(leftEl.value,  'to_datetime', rightEl));
+            rightEl.addEventListener('input', () => _tsConvert(rightEl.value, 'to_unix',     leftEl));
+        })();
 
         // Topbar menu — toggle open/close
         const _menuEl = document.getElementById('topbar-menu');

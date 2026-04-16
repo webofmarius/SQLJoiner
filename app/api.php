@@ -66,6 +66,9 @@ $routes = [
     // --- About ---
     'about.read' => ['Core\AboutManager', 'read'],
 
+    // --- Timestamp converter ---
+    'timestamp.convert' => ['Query\TimestampConverter', 'convert'],
+
     // --- Import SQL to canvas ---
     'query.parseFromSQL' => ['Query\QueryParser', 'parse'],
 ];

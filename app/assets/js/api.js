@@ -97,6 +97,11 @@ const API = (() => {
             read: () => call('about.read'),
         },
 
+        /** Timestamp converter */
+        timestamp: {
+            convert: (profileId, value, direction) => call('timestamp.convert', { profileId, value, direction }),
+        },
+
     };
 
 })();
