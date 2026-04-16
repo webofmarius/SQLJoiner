@@ -1087,12 +1087,8 @@ const Joins = (() => {
 
     /** Returns a stable color for a join based on its position within its table-pair group. */
     function _joinColor(join) {
-        const pairKey = [join.fromTableId, join.toTableId].sort().join('|');
-        const siblings = State.joins.filter(j =>
-            [j.fromTableId, j.toTableId].sort().join('|') === pairKey
-        );
-        const idx = siblings.findIndex(j => j.id === join.id);
-        return _PAIR_COLORS[Math.max(0, idx) % _PAIR_COLORS.length];
+        const colors = { INNER: '#4a9eff', LEFT: '#a78bfa', RIGHT: '#34d399', FULL: '#f0a050', CROSS: '#f05050' };
+        return colors[join.type] ?? '#4a9eff';
     }
 
     /** Re-render all joins in the same table pair as the given join (updates colors after add/delete). */
