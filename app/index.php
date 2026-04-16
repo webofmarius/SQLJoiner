@@ -29,9 +29,9 @@
             <button id="btn-load-context" title="Save/Load previously copied context">🗂 Contexts</button>
             <button id="btn-show-notes" title="Open notes">✎ Notes</button>
             <button id="btn-save-context" class="btn-save-context" title="Save as a new context">💾</button>
+            <button type="button" id="btn-timestamp-conv" title="Timestamp converter">⧖</button>
             <button id="btn-focus-tables" title="Center view on tables">⊙</button>
             <button type="button" id="btn-canvas-overview-zoom" title="Overview zoom — shrink canvas only (toggle; recenters on tables)">⊟</button>
-            <button type="button" id="btn-timestamp-conv" title="Timestamp converter">⧖</button>
             <div id="undo-redo-bar">
                 <button id="btn-undo" title="Undo (Ctrl+Z)" disabled>↩</button>
                 <button id="btn-redo" title="Redo (Ctrl+Shift+Z)" disabled>↪</button>
