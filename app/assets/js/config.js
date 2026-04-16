@@ -1215,8 +1215,9 @@ const QueryPanel = (() => {
                 if (visible) groupVisible = true;
             });
 
-            hdr.style.display = groupVisible ? '' : 'none';
-            if (groupVisible) anyVisible = true;
+            // Keep header visible when the per-group search is active (even with 0 matches)
+            hdr.style.display = (groupVisible || groupTerm) ? '' : 'none';
+            if (groupVisible || groupTerm) anyVisible = true;
         });
 
         // "no match" message
