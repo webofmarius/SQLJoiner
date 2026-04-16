@@ -87,6 +87,29 @@ const QueryPanel = (() => {
         _applyModeUI('orderby');
         _applyModeUI('groupby');
         _applyModeUI('having');
+
+        // Alt+click a SELECT column row → add it to WHERE (capture phase to prevent checkbox toggle)
+        document.getElementById('select-columns')?.addEventListener('click', e => {
+            if (!e.altKey) return;
+            const row = e.target.closest('.select-col-row');
+            if (!row) return;
+            if (e.target.closest('.col-alias-input') || e.target.closest('.col-highlight-chk')) return;
+            e.preventDefault();
+            e.stopPropagation();
+            const key = State.columnOrder[parseInt(row.dataset.idx, 10)];
+            if (!key) return;
+            if (!Array.isArray(State.where)) State.where = [];
+            State.where.push({ col: key, op: '=', val: '', operator: 'AND' });
+            QueryPanel.refresh();
+            App.updateSQLPreview?.();
+            requestAnimationFrame(() => {
+                const crows = document.querySelectorAll('#where-conditions .condition-row');
+                if (!crows.length) return;
+                const last = crows[crows.length - 1];
+                last.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+                last.querySelector('input[type="text"]')?.focus();
+            });
+        }, true);
     }
 
     // =========================================================================
