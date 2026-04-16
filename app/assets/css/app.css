@@ -2001,6 +2001,19 @@ body.is-cut-mode * { cursor: crosshair !important; }
     outline: none;
 }
 .col-search:focus { border-color: var(--accent); }
+#select-col-search-wrap .col-search { flex: 1; width: auto; padding-right: 20px; }
+.col-search-clear {
+    position: absolute;
+    right: 3px;
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 10px;
+    line-height: 1;
+    padding: 2px 4px;
+}
+.col-search-clear:hover { color: var(--text); }
 .col-search-no-match {
     padding: 5px 8px;
     font-size: 11px;
