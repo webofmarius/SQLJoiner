@@ -556,6 +556,14 @@ body.is-resizing * { user-select: none !important; }
 .select-table-hdr.select-hdr-flash {
     animation: select-hdr-flash 2s ease-out forwards;
 }
+@keyframes select-col-row-flash {
+    0%   { background: rgba(74, 158, 255, 0.30); }
+    65%  { background: rgba(74, 158, 255, 0.14); }
+    100% { background: transparent; }
+}
+.select-col-row.select-col-flash {
+    animation: select-col-row-flash 2s ease-out forwards;
+}
 
 .tl-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tl-rows { flex-shrink: 0; font-size: 10px; color: var(--text-faint); margin-left: auto; }

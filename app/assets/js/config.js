@@ -102,13 +102,19 @@ const QueryPanel = (() => {
             State.where.push({ col: key, op: '=', val: '', operator: 'AND' });
             QueryPanel.refresh();
             App.updateSQLPreview?.();
+            App.notify?.(`"${key}" added to WHERE`, 'success');
+            // Focus the new WHERE value input without scrolling
             requestAnimationFrame(() => {
                 const crows = document.querySelectorAll('#where-conditions .condition-row');
-                if (!crows.length) return;
-                const last = crows[crows.length - 1];
-                last.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-                last.querySelector('input[type="text"]')?.focus();
+                if (crows.length) crows[crows.length - 1].querySelector('input[type="text"]')?.focus({ preventScroll: true });
             });
+            // Flash the row — re-query after refresh since DOM was rebuilt
+            const freshRow = document.querySelector(`#select-columns .select-col-row[data-idx="${row.dataset.idx}"]`);
+            if (freshRow) {
+                freshRow.classList.remove('select-col-flash');
+                void freshRow.offsetWidth; // force reflow to restart animation
+                freshRow.classList.add('select-col-flash');
+            }
         }, true);
     }
 
