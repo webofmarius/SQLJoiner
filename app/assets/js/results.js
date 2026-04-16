@@ -1169,6 +1169,9 @@ const Results = (() => {
             .find(([, v]) => (v || '').trim().toLowerCase() === nameLc);
         if (aliasEntry) return aliasEntry[0];
 
+        const bare     = col.includes('.') ? col.split('.').pop() : col;
+        const bareNameLc = bare.toLowerCase();
+
         // Reconstruct from table alias + bare column name.
         // Use occurrence-index so self-joins resolve to the correct alias.
         if (colTable) {
@@ -1182,12 +1185,35 @@ const Results = (() => {
                     .filter(ct => (ct || '').toLowerCase() === colTableLc)
                     .length;
                 const tbl = matchingTbls[occurrenceBefore] ?? matchingTbls[matchingTbls.length - 1];
-                if (tbl?.alias) {
-                    const bare = col.includes('.') ? col.split('.').pop() : col;
-                    return `${tbl.alias}.${bare}`;
+                if (tbl?.alias) return `${tbl.alias}.${bare}`;
+            }
+        }
+
+        // Fallback A: infer from columnOrder (mirrors _formatHeaderLabel logic).
+        const occurrenceBefore = allColTables.slice(0, colIdx).filter(ct => !ct).length;
+        const colOrder = State.columnOrder || [];
+        let matchCount = 0;
+        for (const key of colOrder) {
+            const parts = String(key).split('.');
+            if (parts[1]?.toLowerCase() === bareNameLc && parts[0]) {
+                if (matchCount === occurrenceBefore) return key;
+                matchCount++;
+            }
+        }
+
+        // Fallback B: scan State.tables directly.
+        if (Array.isArray(State.tables)) {
+            let tableMatchCount = 0;
+            for (const t of State.tables) {
+                if ((t.columns ?? []).some(c => c.name.toLowerCase() === bareNameLc)) {
+                    if (tableMatchCount === occurrenceBefore) {
+                        return t.alias ? `${t.alias}.${bare}` : col;
+                    }
+                    tableMatchCount++;
                 }
             }
         }
+
         return col; // fallback (custom expressions, derived columns)
     }
 
