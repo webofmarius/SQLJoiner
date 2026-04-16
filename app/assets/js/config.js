@@ -1212,8 +1212,9 @@ const QueryPanel = (() => {
     function _buildConditionRow(cond, idx) {
         if (cond.type === 'raw') return _buildRawConditionRow(cond, idx);
 
-        const OPS = ['=', '!=', '<', '>', '<=', '>=', 'LIKE', 'NOT LIKE', 'IS NULL', 'IS NOT NULL', 'IN', 'NOT IN'];
-        const noVal = cond.op === 'IS NULL' || cond.op === 'IS NOT NULL';
+        const OPS = ['=', '!=', '<', '>', '<=', '>=', 'LIKE', 'NOT LIKE', 'IS NULL', 'IS NOT NULL', 'IN', 'NOT IN', 'BETWEEN', 'NOT BETWEEN'];
+        const noVal    = cond.op === 'IS NULL' || cond.op === 'IS NOT NULL';
+        const isBetween = cond.op === 'BETWEEN' || cond.op === 'NOT BETWEEN';
 
         const row = document.createElement('div');
         row.className = 'condition-row';
@@ -1370,8 +1371,11 @@ const QueryPanel = (() => {
         opSel.addEventListener('change', () => {
             if (typeof UndoRedo !== 'undefined') UndoRedo.snapshot();
             State.where[idx].op = opSel.value;
-            const noV = opSel.value === 'IS NULL' || opSel.value === 'IS NOT NULL';
-            valInput.style.display = noV ? 'none' : '';
+            const noV  = opSel.value === 'IS NULL' || opSel.value === 'IS NOT NULL';
+            const isBtw = opSel.value === 'BETWEEN' || opSel.value === 'NOT BETWEEN';
+            valInput.style.display  = noV ? 'none' : '';
+            valInput.placeholder    = isBtw ? 'from' : 'value';
+            val2Input.style.display = (!noV && isBtw) ? '' : 'none';
             App.updateSQLPreview();
         });
         row.appendChild(opSel);
@@ -1379,7 +1383,7 @@ const QueryPanel = (() => {
         // Value input
         const valInput = document.createElement('input');
         valInput.type        = 'text';
-        valInput.placeholder = 'value';
+        valInput.placeholder = isBetween ? 'from' : 'value';
         valInput.value       = cond.val ?? '';
         valInput.style.display = noVal ? 'none' : '';
         valInput.addEventListener('focus', () => { if (typeof UndoRedo !== 'undefined') UndoRedo.snapshot(); });
@@ -1394,6 +1398,25 @@ const QueryPanel = (() => {
             val => { valInput.value = val; State.where[idx].val = val; App.updateSQLPreview(); }
         );
         row.appendChild(valInput);
+
+        // Second value input for BETWEEN / NOT BETWEEN
+        const val2Input = document.createElement('input');
+        val2Input.type        = 'text';
+        val2Input.placeholder = 'to';
+        val2Input.value       = cond.val2 ?? '';
+        val2Input.style.display = isBetween ? '' : 'none';
+        val2Input.addEventListener('focus', () => { if (typeof UndoRedo !== 'undefined') UndoRedo.snapshot(); });
+        val2Input.addEventListener('input', () => {
+            State.where[idx].val2 = val2Input.value;
+            App.updateSQLPreview();
+        });
+        _bindExprPopupTrigger(
+            val2Input,
+            () => `EDIT WHERE VALUE — ${cond.col}`,
+            () => val2Input.value,
+            val => { val2Input.value = val; State.where[idx].val2 = val; App.updateSQLPreview(); }
+        );
+        row.appendChild(val2Input);
 
         const endParen = document.createElement('button');
         endParen.className = 'btn-paren btn-paren--end' + (cond.endGroup ? ' is-active' : '');
@@ -2058,6 +2081,8 @@ const QueryPanel = (() => {
             else if (c.op === 'IN' || c.op === 'NOT IN') {
                 const vals = String(c.val ?? '').split(',').map(v => v.trim()).filter(v => v !== '');
                 part = `${c.col} ${c.op} (${vals.join(', ')})`;
+            } else if (c.op === 'BETWEEN' || c.op === 'NOT BETWEEN') {
+                part = `${c.col} ${c.op} ${String(c.val ?? '')} AND ${String(c.val2 ?? '')}`;
             } else {
                 const v = String(c.val ?? '');
                 part = `${c.col} ${c.op} ${v}`;
@@ -2482,6 +2507,8 @@ const QueryPanel = (() => {
                 else if (c.op === 'IN' || c.op === 'NOT IN') {
                     const vals = String(c.val ?? '').split(',').map(v => v.trim()).filter(v => v !== '');
                     part = `${c.col} ${c.op} (${vals.join(', ')})`;
+                } else if (c.op === 'BETWEEN' || c.op === 'NOT BETWEEN') {
+                    part = `${c.col} ${c.op} ${String(c.val ?? '')} AND ${String(c.val2 ?? '')}`;
                 } else {
                     const v = String(c.val ?? '');
                     part = `${c.col} ${c.op} ${v}`;

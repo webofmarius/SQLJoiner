@@ -941,6 +941,8 @@ const Canvas = (() => {
                 else if (c.op === 'IN' || c.op === 'NOT IN') {
                     const vals = String(c.val ?? '').split(',').map(v => v.trim()).filter(v => v);
                     part = `${c.col} ${c.op} (${vals.join(', ')})`;
+                } else if (c.op === 'BETWEEN' || c.op === 'NOT BETWEEN') {
+                    part = `${c.col} ${c.op} ${c.val ?? ''} AND ${c.val2 ?? ''}`;
                 } else {
                     part = `${c.col} ${c.op} ${c.val ?? ''}`;
                 }

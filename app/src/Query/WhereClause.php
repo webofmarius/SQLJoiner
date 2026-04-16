@@ -30,6 +30,7 @@ class WhereClause
         'LIKE', 'NOT LIKE',
         'IS NULL', 'IS NOT NULL',
         'IN', 'NOT IN',
+        'BETWEEN', 'NOT BETWEEN',
     ];
 
     /**
@@ -93,6 +94,9 @@ class WhereClause
                     $vals = array_map('trim', explode(',', $val));
                     $list = implode(', ', $vals);
                     $part = "$col $op ($list)";
+                } elseif ($op === 'BETWEEN' || $op === 'NOT BETWEEN') {
+                    $val2 = (string) ($cond['val2'] ?? '');
+                    $part = "$col $op $val AND $val2";
                 } else {
                     $part = "$col $op $val";
                 }
