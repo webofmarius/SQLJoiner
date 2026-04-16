@@ -360,6 +360,7 @@ const Canvas = (() => {
             <div class="table-card__note-row">
                 <button class="table-card__copy-filtered-btn btn-icon" title="Copy SELECT with WHERE filters for this table">≡</button>
                 <button class="table-card__copy-simple-btn btn-icon" title="Copy SELECT * FROM table ORDER BY id DESC LIMIT 10">⎘</button>
+                <button class="table-card__count-btn btn-icon" title="Copy COUNT(*) query for this table">#</button>
                 <input  class="table-card__quick-note"
                         type="text"
                         value="${_esc(tableData.note ?? '')}"
@@ -954,6 +955,9 @@ const Canvas = (() => {
         };
 
         if (tableData.isSubquery) {
+            // Count button doesn't apply to subqueries
+            card.querySelector('.table-card__count-btn').style.display = 'none';
+
             // S button: save subquery SQL to disk via native browser download
             card.querySelector('.table-card__copy-simple-btn').addEventListener('click', e => {
                 e.stopPropagation();
@@ -980,6 +984,11 @@ const Canvas = (() => {
             card.querySelector('.table-card__copy-simple-btn').addEventListener('click', e => {
                 e.stopPropagation();
                 navigator.clipboard.writeText(`SELECT * FROM ${tableRef} ORDER BY id DESC LIMIT 10`);
+            });
+
+            card.querySelector('.table-card__count-btn').addEventListener('click', e => {
+                e.stopPropagation();
+                navigator.clipboard.writeText(`SELECT COUNT(*) FROM ${tableRef}`);
             });
         }
 
