@@ -673,7 +673,7 @@ const App = (() => {
 
                     const [, schema, table] = match;
                     const tablesBefore = State.tables.length;
-                    addTableToCanvas(table, null, schema)
+                    addTableToCanvas(table, null, schema, true)
                         .then(() => {
                             if (State.tables.length > tablesBefore) {
                                 const newTable = State.tables[State.tables.length - 1];
@@ -868,12 +868,7 @@ const App = (() => {
             }
 
             li.addEventListener('dblclick', () => {
-                if (li.classList.contains('on-canvas')) {
-                    if (typeof UndoRedo !== 'undefined') UndoRedo.snapshot();
-                    Canvas.removeTableByName(name, activeDb);
-                } else {
-                    addTableToCanvas(name);
-                }
+                addTableToCanvas(name, null, null, true);
             });
             list.appendChild(li);
         });
@@ -934,7 +929,7 @@ const App = (() => {
                     x: Math.round((e.clientX - rect.left + canvasWrapper.scrollLeft) / z),
                     y: Math.round((e.clientY - rect.top  + canvasWrapper.scrollTop) / z),
                 };
-                addTableToCanvas(tableName, position);
+                addTableToCanvas(tableName, position, null, true);
                 return;
             }
             // File drop → create new subquery with red island color
@@ -1026,13 +1021,13 @@ const App = (() => {
         });
     }
 
-    async function addTableToCanvas(tableName, position = null, overrideDb = null) {
+    async function addTableToCanvas(tableName, position = null, overrideDb = null, allowDuplicate = false) {
         if (!State.activeProfileId) return;
 
         const activeDb = overrideDb !== null ? overrideDb : (State.activeDatabase || '');
 
         // Prevent duplicates (same table name AND same database)
-        if (State.tables.find(t => t.name === tableName && (t.database || '') === activeDb)) {
+        if (!allowDuplicate && State.tables.find(t => t.name === tableName && (t.database || '') === activeDb)) {
             _notify(`"${tableName}" is already on the canvas.`, 'warn');
             return;
         }
