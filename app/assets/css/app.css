@@ -2105,6 +2105,27 @@ body.is-cut-mode * { cursor: crosshair !important; }
     flex-shrink: 0;
 }
 
+.table-card__col-copy-btn {
+    flex-shrink: 0;
+    background: transparent;
+    border: none;
+    color: var(--text-faint);
+    font-size: 11px;
+    padding: 0 2px;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.15s, color 0.15s;
+    line-height: 1;
+    margin-left: auto;
+}
+.table-card__col:hover .table-card__col-copy-btn {
+    opacity: 0.45;
+}
+.table-card__col-copy-btn:hover {
+    opacity: 1 !important;
+    color: var(--accent);
+}
+
 /* Column key badges (PK / FK / UQ) */
 .col-badge {
     font-size: 9px;

@@ -590,7 +590,18 @@ const Canvas = (() => {
             <span class="table-card__col-name">${_esc(col.name)}</span>
             ${badge}
             <span class="table-card__col-type">${typeStr}</span>
+            <button class="table-card__col-copy-btn" title="Copy column name to clipboard">⎘</button>
         `;
+
+        const colCopyBtn = li.querySelector('.table-card__col-copy-btn');
+        colCopyBtn.addEventListener('mousedown', e => e.stopPropagation());
+        colCopyBtn.addEventListener('click', e => {
+            e.stopPropagation();
+            navigator.clipboard.writeText(`${tableData.alias}.${col.name}`).then(() => {
+                colCopyBtn.textContent = '✓';
+                setTimeout(() => { colCopyBtn.textContent = '⎘'; }, 1200);
+            });
+        });
 
         let _colClickTimer = null;
 
@@ -1092,6 +1103,7 @@ const Canvas = (() => {
             State.islandConfigs[islandKey].anchorTableId = tableId;
             _refreshAllOrderDropdowns();
             App.updateSQLPreview();
+            App.notify?.(`"${t.alias}" set as join anchor`, 'success');
         });
 
         // --- Cut button: enter/exit cut mode for this card ---
