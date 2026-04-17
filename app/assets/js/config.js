@@ -837,7 +837,7 @@ const QueryPanel = (() => {
         const exprModeBar = document.createElement('div');
         exprModeBar.className = 'expr-mode-bar';
         const currentMode = State.selectCustomExprsMode ?? 'combined';
-        [['combined', 'Combined'], ['only', 'Only'], ['exclude', 'Exclude']].forEach(([val, label]) => {
+        [['combined', '↑↓ Combined'], ['exclude', '↑ Exclude'], ['only', '↓ Only']].forEach(([val, label]) => {
             const lbl = document.createElement('label');
             lbl.className = 'expr-mode-option';
             const radio = document.createElement('input');
