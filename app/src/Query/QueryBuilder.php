@@ -240,9 +240,10 @@ class QueryBuilder
         $selectAddDelimiter = (bool)   $request->get('selectAddDelimiter', false);
         $selectSortAlpha    = (bool)   $request->get('selectSortAlpha',    false);
         $selectDistinct     = (bool)   $request->get('selectDistinct',     false);
-        $selectNone         = (bool)   $request->get('selectNone',         false);
-        $selectCustomExprs  = (array)  $request->get('selectCustomExprs',  []);
-        $selectAliases      = (array)  $request->get('selectAliases',      []);
+        $selectNone             = (bool)   $request->get('selectNone',             false);
+        $selectCustomExprs      = (array)  $request->get('selectCustomExprs',      []);
+        $selectCustomExprsMode  = (string) $request->get('selectCustomExprsMode',  'combined');
+        $selectAliases          = (array)  $request->get('selectAliases',          []);
         $columnOrder        = (array)  $request->get('columnOrder',        []);
         $where       = (array)  $request->get('where',       []);
         $whereRaw    = (string) $request->get('whereRaw',    '');
@@ -372,7 +373,7 @@ class QueryBuilder
         }
 
         [$sql, $warnings] = $this->assembleSql(
-            $pdo, $tables, $joins, $select, $selectRaw, $selectMode, $selectAddDelimiter, $selectSortAlpha, $selectDistinct, $selectNone, $selectCustomExprs, $selectAliases,
+            $pdo, $tables, $joins, $select, $selectRaw, $selectMode, $selectAddDelimiter, $selectSortAlpha, $selectDistinct, $selectNone, $selectCustomExprs, $selectCustomExprsMode, $selectAliases,
             $where, $whereRaw, $whereMode,
             $groupBy, $groupByRaw, $groupByMode,
             $having, $havingRaw, $havingMode,
@@ -400,6 +401,7 @@ class QueryBuilder
         bool   $selectDistinct,
         bool   $selectNone,
         array  $selectCustomExprs,
+        string $selectCustomExprsMode,
         array  $selectAliases,
         array  $where,
         string $whereRaw,
@@ -426,11 +428,16 @@ class QueryBuilder
             }
             $selectSql = $raw;
         } else {
-            $selectSql = $this->buildSelect($select, $selectAddDelimiter, $selectAliases, $selectSortAlpha);
+            // In 'only' mode custom expressions replace all SELECT columns
+            if ($selectCustomExprsMode === 'only') {
+                $selectSql = '/* no columns selected */';
+            } else {
+                $selectSql = $this->buildSelect($select, $selectAddDelimiter, $selectAliases, $selectSortAlpha);
+            }
         }
 
-        // Append custom expressions (visual mode only)
-        if ($selectMode !== 'raw') {
+        // Append custom expressions (visual mode only; skipped in 'exclude' mode)
+        if ($selectMode !== 'raw' && $selectCustomExprsMode !== 'exclude') {
             $customParts = [];
             foreach ($selectCustomExprs as $e) {
                 if (($e['enabled'] ?? true) === false) continue;
@@ -448,7 +455,9 @@ class QueryBuilder
             }
             if (!empty($customParts)) {
                 $customSql = implode(', ', array_column($customParts, 'sql'));
-                $selectSql = ($selectNone && $selectSql === '*') ? $customSql : "$selectSql, $customSql";
+                $selectSql = ($selectCustomExprsMode === 'only' || ($selectNone && $selectSql === '*'))
+                    ? $customSql
+                    : "$selectSql, $customSql";
             }
         }
 
