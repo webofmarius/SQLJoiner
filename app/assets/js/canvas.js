@@ -11,7 +11,7 @@
 const Canvas = (() => {
 
     // =========================================================================
-    // Card color palette
+    // Card color palette + column highlight themes
     // =========================================================================
     const CARD_COLORS = [
         { hex: '#b71c1c', label: 'Red'       },
@@ -22,6 +22,13 @@ const Canvas = (() => {
         { hex: '#1565c0', label: 'Blue'      },
         { hex: '#4a148c', label: 'Purple'    },
         { hex: '#37474f', label: 'Blue Grey' },
+    ];
+
+    const COL_THEMES = [
+        'col-highlight-1',
+        'col-highlight-2',
+        'col-highlight-3',
+        'col-highlight-4',
     ];
 
     // Singleton color popup
@@ -493,7 +500,7 @@ const Canvas = (() => {
             const colList      = document.createElement('ul');
             colList.className  = 'table-card__columns';
             (tableData.columns || []).forEach(col => {
-                colList.appendChild(_buildColumnRow(col, tableData.id));
+                colList.appendChild(_buildColumnRow(col, tableData.id, tableData));
             });
 
             card.appendChild(header);
@@ -549,13 +556,17 @@ const Canvas = (() => {
         return card;
     }
 
-    function _buildColumnRow(col, tableId) {
+    function _buildColumnRow(col, tableId, tableData) {
         const li              = document.createElement('li');
         li.className          = 'table-card__col';
         li.dataset.col        = col.name;
         li.dataset.tableId    = tableId;
         li.draggable          = true;   // Phase 4 wires the dragstart event
         li.title              = `${col.name}  —  ${col.type}`;
+
+        // Restore saved column highlight
+        const savedTheme = tableData?.colHighlights?.[col.name];
+        if (savedTheme) li.classList.add(savedTheme);
 
         // Key badge
         let badge = '';
@@ -574,9 +585,12 @@ const Canvas = (() => {
             <span class="table-card__col-type">${typeStr}</span>
         `;
 
+        let _colClickTimer = null;
+
         // Double-click → add column to WHERE box (same as drag-drop)
         li.addEventListener('dblclick', e => {
             e.stopPropagation();
+            clearTimeout(_colClickTimer); // cancel any pending single-click color cycle
             const zone = document.querySelector('.drop-zone[data-section="where"]');
             if (zone) {
                 QueryPanel.onColumnDrop(zone, tableId, col.name);
@@ -586,6 +600,22 @@ const Canvas = (() => {
                     if (rows?.length) rows[rows.length - 1].querySelector('input[placeholder="value"]')?.focus();
                 });
             }
+        });
+
+        // Click → toggle column background highlight on/off
+        // Debounced so a dblclick (which fires two click events) doesn't accidentally toggle.
+        li.addEventListener('click', e => {
+            e.stopPropagation();
+            clearTimeout(_colClickTimer);
+            _colClickTimer = setTimeout(() => {
+                const on = li.classList.toggle(COL_THEMES[0]);
+                if (!tableData.colHighlights) tableData.colHighlights = {};
+                if (on) {
+                    tableData.colHighlights[col.name] = COL_THEMES[0];
+                } else {
+                    delete tableData.colHighlights[col.name];
+                }
+            }, 220);
         });
 
         // Right-click → flash the matching row in the SELECT pane
