@@ -4256,6 +4256,31 @@ const App = (() => {
                 _runCustomQuery();
                 return;
             }
+            // Delete — remove selected scope (scope mode on + single/exclusive mode)
+            if (e.key === 'Delete') {
+                const scopeBtn = document.getElementById('btn-custom-query-scope');
+                const scopeChk = document.getElementById('chk-custom-query-scope-exclusive');
+                const scopeOn  = scopeBtn?.classList.contains('is-active') ?? false;
+                const exclusive = scopeChk ? !scopeChk.checked : false;
+                if (scopeOn && exclusive && typeof SqlBackdrop !== 'undefined') {
+                    const focusRanges = SqlBackdrop.getFocusRanges(e.currentTarget);
+                    if (focusRanges.length) {
+                        e.preventDefault();
+                        const range  = focusRanges[0];
+                        const ta2    = e.currentTarget;
+                        const newSql = _disassembleScopeFromSql(ta2.value, range);
+                        if (newSql === ta2.value.trim()) {
+                            _notify('Nothing to disassemble in the selected scope.', 'warn');
+                            return;
+                        }
+                        if (typeof UndoManager !== 'undefined') UndoManager.push(ta2);
+                        ta2.value = newSql;
+                        ta2.dispatchEvent(new Event('input', { bubbles: true }));
+                        if (typeof UndoManager !== 'undefined') UndoManager.push(ta2);
+                        return;
+                    }
+                }
+            }
             if (e.key === 'F2') {
                 e.preventDefault();
                 const ta2 = e.currentTarget;
