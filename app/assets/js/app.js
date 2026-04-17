@@ -3862,6 +3862,14 @@ const App = (() => {
             }
         });
 
+        document.getElementById('btn-new-context-shortcut').addEventListener('click', async () => {
+            if (!await Dialog.confirm('Starting a new context will clear the canvas and lose all unsaved changes. Continue?')) return;
+            applyContext(JSON.stringify({ tables: [], joins: [] }));
+            State.loadedContextId   = null;
+            State.loadedContextName = null;
+            _updateSaveContextButton();
+        });
+
         document.getElementById('topbar-notes-title').addEventListener('click', () => {
             document.getElementById('modal-context').classList.remove('hidden');
         });

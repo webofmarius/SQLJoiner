@@ -26,6 +26,7 @@
                     <li id="menu-about">(: About</li>
                 </ul>
             </div>
+            <button id="btn-new-context-shortcut" title="Save as a new context">+ New</button>
             <button id="btn-load-context" title="Save/Load previously copied context">🗂 Contexts</button>
             <button id="btn-show-notes" title="Open notes">✎ Notes</button>
             <button id="btn-save-context" class="btn-save-context" title="Save as a new context">💾</button>
