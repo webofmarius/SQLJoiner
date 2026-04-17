@@ -2097,6 +2097,23 @@ const Canvas = (() => {
         });
 
         if (typeof Islands !== 'undefined') Islands.redrawPositions();
+
+        // Scroll so the arranged island is centered — collect all positioned table IDs first
+        const arrangedIds = islands.flat();
+        requestAnimationFrame(() => {
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            arrangedIds.forEach(id => {
+                const card = document.querySelector(`.table-card[data-table-id="${id}"]`);
+                if (!card) return;
+                const x = parseInt(card.style.left, 10) || 0;
+                const y = parseInt(card.style.top,  10) || 0;
+                minX = Math.min(minX, x);
+                minY = Math.min(minY, y);
+                maxX = Math.max(maxX, x + card.offsetWidth);
+                maxY = Math.max(maxY, y + card.offsetHeight);
+            });
+            if (isFinite(minX)) scrollToLogicalBoundingBox(minX, minY, maxX, maxY);
+        });
     }
 
     function focusTables() {
