@@ -158,6 +158,23 @@ const App = (() => {
     // JSON snapshot of the last saved/loaded context — used to detect unsaved changes.
     let _lastSavedJson = null;
 
+    // Tracks whether results panel was already collapsed before overview zoom auto-collapsed it.
+    let _zoomResultsWasCollapsed = false;
+
+    function _applyOverviewZoom(on) {
+        const resultsPanel = document.getElementById('results-panel');
+        if (on) {
+            _zoomResultsWasCollapsed = resultsPanel?.classList.contains('is-collapsed') ?? false;
+            if (!_zoomResultsWasCollapsed) Results.toggle();
+        } else {
+            if (!_zoomResultsWasCollapsed && resultsPanel?.classList.contains('is-collapsed')) {
+                Results.toggle();
+            }
+        }
+        Canvas.setOverviewZoom(on);
+        document.getElementById('btn-canvas-overview-zoom')?.classList.toggle('is-active', on);
+    }
+
     // -------------------------------------------------------------------------
     // Initialise
     // -------------------------------------------------------------------------
@@ -483,6 +500,14 @@ const App = (() => {
             if (e.code === 'F3' && !isMod) {
                 e.preventDefault();
                 document.getElementById('btn-timestamp-conv').click();
+                return;
+            }
+
+            // F4 — Toggle overview zoom (auto-minimizes results panel while zoomed out)
+            if (e.code === 'F4' && !isMod) {
+                e.preventDefault();
+                const on = !document.body.classList.contains('is-canvas-overview-zoom');
+                _applyOverviewZoom(on);
                 return;
             }
 
@@ -3725,8 +3750,7 @@ const App = (() => {
         if (_overviewZoomBtn) {
             _overviewZoomBtn.addEventListener('click', () => {
                 const on = !document.body.classList.contains('is-canvas-overview-zoom');
-                Canvas.setOverviewZoom(on);
-                _overviewZoomBtn.classList.toggle('is-active', on);
+                _applyOverviewZoom(on);
             });
         }
 
