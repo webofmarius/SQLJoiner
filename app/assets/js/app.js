@@ -3165,6 +3165,20 @@ const App = (() => {
                 disassembleBtn.click();
                 return;
             }
+            // Delete — remove all selected scopes in multiple-scope mode
+            if (e.key === 'Delete' && _chkExclusive.checked && _scopeBtn.classList.contains('is-active')) {
+                const focusRanges = SqlBackdrop.getFocusRanges(ta);
+                if (!focusRanges.length) return;
+                e.preventDefault();
+                e.stopPropagation();
+                const newSql = _disassembleMultipleScopesFromSql(ta.value, focusRanges);
+                if (newSql === ta.value.trim()) { _notify('Nothing to disassemble in the selected scopes.', 'warn'); return; }
+                if (typeof UndoManager !== 'undefined') UndoManager.push(ta);
+                ta.value = newSql;
+                ta.dispatchEvent(new Event('input', { bubbles: true }));
+                if (typeof UndoManager !== 'undefined') UndoManager.push(ta);
+                return;
+            }
             // Shift+Enter — same as Alt+E (legacy shortcut kept)
             if (e.shiftKey && e.key === 'Enter') {
                 e.preventDefault();
@@ -4256,21 +4270,22 @@ const App = (() => {
                 _runCustomQuery();
                 return;
             }
-            // Delete — remove selected scope (scope mode on + single/exclusive mode)
+            // Delete — remove selected scope(s) when scope mode is on
             if (e.key === 'Delete') {
                 const scopeBtn = document.getElementById('btn-custom-query-scope');
                 const scopeChk = document.getElementById('chk-custom-query-scope-exclusive');
                 const scopeOn  = scopeBtn?.classList.contains('is-active') ?? false;
-                const exclusive = scopeChk ? !scopeChk.checked : false;
-                if (scopeOn && exclusive && typeof SqlBackdrop !== 'undefined') {
+                if (scopeOn && typeof SqlBackdrop !== 'undefined') {
                     const focusRanges = SqlBackdrop.getFocusRanges(e.currentTarget);
                     if (focusRanges.length) {
                         e.preventDefault();
-                        const range  = focusRanges[0];
                         const ta2    = e.currentTarget;
-                        const newSql = _disassembleScopeFromSql(ta2.value, range);
+                        const multiple = scopeChk?.checked ?? false;
+                        const newSql = multiple
+                            ? _disassembleMultipleScopesFromSql(ta2.value, focusRanges)
+                            : _disassembleScopeFromSql(ta2.value, focusRanges[0]);
                         if (newSql === ta2.value.trim()) {
-                            _notify('Nothing to disassemble in the selected scope.', 'warn');
+                            _notify('Nothing to disassemble in the selected scope(s).', 'warn');
                             return;
                         }
                         if (typeof UndoManager !== 'undefined') UndoManager.push(ta2);
@@ -5572,6 +5587,13 @@ function _findSetOperatorComponentEnd(sql, fromPos) {
         if (dep[mo.index] === 0) return mo.index;
     }
     return sql.length;
+}
+
+function _disassembleMultipleScopesFromSql(sql, ranges) {
+    const sorted = [...ranges].sort((a, b) => b.start - a.start);
+    let result = sql;
+    for (const range of sorted) result = _disassembleScopeFromSql(result, range);
+    return result;
 }
 
 function _disassembleScopeFromSql(sql, range) {
