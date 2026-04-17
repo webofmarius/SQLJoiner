@@ -645,6 +645,38 @@ const SqlBackdrop = (() => {
                 return;
             }
 
+            // Cmd+/ (macOS) or Ctrl+/ (Windows) — toggle SQL line comments on selected lines
+            if ((e.metaKey || e.ctrlKey) && e.key === '/') {
+                e.preventDefault();
+                e.stopPropagation();
+
+                const val   = ta.value;
+                const start = ta.selectionStart;
+                const end   = ta.selectionEnd;
+
+                // Expand to full lines
+                const lineStart = val.lastIndexOf('\n', start - 1) + 1;
+                const lineEndRaw = val.indexOf('\n', end);
+                const lineEnd    = lineEndRaw === -1 ? val.length : lineEndRaw;
+
+                const lines    = val.substring(lineStart, lineEnd).split('\n');
+                const nonEmpty = lines.filter(l => l.trim() !== '');
+
+                // If every non-empty line is already commented → uncomment; else comment
+                const allCommented = nonEmpty.length > 0 && nonEmpty.every(l => /^--/.test(l));
+
+                const newLines = lines.map(line => {
+                    if (allCommented) return line.replace(/^--\s?/, '');
+                    return '-- ' + line;
+                });
+
+                const newBlock = newLines.join('\n');
+                ta.value = val.substring(0, lineStart) + newBlock + val.substring(lineEnd);
+                ta.setSelectionRange(lineStart, lineStart + newBlock.length);
+                ta.dispatchEvent(new Event('input', { bubbles: true }));
+                return;
+            }
+
             // Arrow navigation between same-colour lines
             if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
                 if (Object.keys(h.lineColors).length === 0) return;
