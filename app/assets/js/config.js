@@ -2513,6 +2513,29 @@ const QueryPanel = (() => {
             return [...cols].sort((a, b) => keyFor(a).localeCompare(keyFor(b)));
         };
 
+        // Compute the active island's tables / columns upfront so the SELECT clause
+        // never leaks columns from other islands (e.g. same table name, different alias).
+        // This mirrors the island detection done later for the FROM clause, but we need
+        // it here before selectPart is built.
+        const _preEnabledJoins = state.joins.filter(j => j.enabled !== false);
+        const _preIslands      = typeof App !== 'undefined'
+            ? App.computeIslands(state.tables, _preEnabledJoins)
+            : [state.tables.map(t => t.id)];
+        let _preActiveIds;
+        if (_preIslands.length > 1 && state.selectedIslandKey) {
+            _preActiveIds = new Set(state.selectedIslandKey.split('|'));
+        } else {
+            _preActiveIds = new Set(_preIslands.length === 1 ? _preIslands[0] : state.tables.map(t => t.id));
+        }
+        const _preActiveAliases = new Set(state.tables.filter(t => _preActiveIds.has(t.id)).map(t => t.alias));
+        const _activeColOrder   = (state.columnOrder || []).filter(k => _preActiveAliases.has(k.split('.')[0]));
+        const _activeAllCols    = () => {
+            const out = [];
+            state.tables.filter(t => _preActiveIds.has(t.id))
+                .forEach(t => (t.columns ?? []).forEach(c => out.push(`${t.alias}.${c.name}`)));
+            return out;
+        };
+
         let selectPart = '*';
         if (state.selectNone && state.selectMode !== 'raw') {
             selectPart = '/* no columns selected */';
@@ -2529,27 +2552,27 @@ const QueryPanel = (() => {
             selectPart = useDelimiter
                 ? (useSortVisual ? _injectDelimitersByGroup(cols) : _injectDelimiters(cols))
                 : cols.map(_colWithAlias).join(', ');
-        } else if (state.columnOrder && state.columnOrder.length > 0) {
-            const defaultOrder = _allColumns();
-            const isDefault = state.columnOrder.length === defaultOrder.length &&
-                              state.columnOrder.every((v, i) => v === defaultOrder[i]);
+        } else if (_activeColOrder.length > 0) {
+            const defaultOrder = _activeAllCols();
+            const isDefault = _activeColOrder.length === defaultOrder.length &&
+                              _activeColOrder.every((v, i) => v === defaultOrder[i]);
 
-            const hasAliases = state.columnOrder.some(k => (state.selectAliases || {})[k]);
+            const hasAliases = _activeColOrder.some(k => (state.selectAliases || {})[k]);
             if (useDelimiter || useSortVisual) {
                 // Always expand to explicit columns when delimiter or sort-alpha is on —
                 // SELECT * cannot carry ordering or '|||' markers.
-                const cols = useSortVisual ? _alphaSorted(state.columnOrder) : state.columnOrder;
+                const cols = useSortVisual ? _alphaSorted(_activeColOrder) : _activeColOrder;
                 selectPart = useDelimiter
                     ? (useSortVisual ? _injectDelimitersByGroup(cols) : _injectDelimiters(cols))
                     : cols.map(_colWithAlias).join(', ');
             } else if (!isDefault || hasAliases) {
-                selectPart = state.columnOrder.map(_colWithAlias).join(', ');
+                selectPart = _activeColOrder.map(_colWithAlias).join(', ');
             } else {
                 selectPart = '*';
             }
         } else if (useDelimiter || useSortVisual) {
-            // columnOrder not yet populated; derive from tables
-            const allCols = _allColumns();
+            // columnOrder not yet populated; derive from active island tables
+            const allCols = _activeAllCols();
             if (allCols.length > 0) {
                 const cols = useSortVisual ? _alphaSorted(allCols) : allCols;
                 selectPart = useDelimiter

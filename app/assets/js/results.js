@@ -1052,7 +1052,7 @@ const Results = (() => {
      * @param {number} colIdx    - position of this column in the result cols array
      * @param {string[]} allCols - the full result cols array (needed for duplicate detection)
      */
-    function _formatHeaderLabel(colName, colIdx = 0, allCols = [], colTable = '', allColTables = []) {
+    function _formatHeaderLabel(colName, colIdx = 0, allCols = [], colTable = '', allColTables = [], activeIds = null) {
         const name            = String(colName ?? '');
         const nameLc          = name.toLowerCase();
         const bareName        = name.includes('.') ? name.split('.').pop() : name;
@@ -1075,7 +1075,10 @@ const Results = (() => {
         if (colTable) {
             const colTableLc    = colTable.toLowerCase();
             const matchingTbls  = Array.isArray(State.tables)
-                ? State.tables.filter(t => t.name.toLowerCase() === colTableLc)
+                ? State.tables.filter(t =>
+                    t.name.toLowerCase() === colTableLc &&
+                    (!activeIds || activeIds.has(t.id))
+                )
                 : [];
             if (matchingTbls.length > 0) {
                 const occurrenceBefore = allColTables
@@ -1116,8 +1119,14 @@ const Results = (() => {
         }
 
         // 2) Fallback A: infer from columnOrder (case-insensitive, sort-aware).
+        //    Restrict to active island columns to avoid picking up the same column
+        //    name from a different island's table.
         const bareNameLc  = bareName.toLowerCase();
-        const rawColOrder = State.columnOrder || [];
+        const rawColOrder = (State.columnOrder || []).filter(k => {
+            if (!activeIds) return true;
+            const alias = k.split('.')[0];
+            return (State.tables || []).some(t => t.alias === alias && activeIds.has(t.id));
+        });
 
         const effectiveOrder = sortAlphaOn
             ? [...rawColOrder].sort((a, b) => _sortKey(a).localeCompare(_sortKey(b)))
@@ -1141,10 +1150,13 @@ const Results = (() => {
             }
         }
 
-        // 3) Fallback B: scan State.tables directly (case-insensitive).
+        // 3) Fallback B: scan State.tables directly (case-insensitive, active island only).
         if (!tableAlias && Array.isArray(State.tables)) {
             let tableMatchCount = 0;
-            for (const t of State.tables) {
+            const tbls = activeIds
+                ? State.tables.filter(t => activeIds.has(t.id))
+                : State.tables;
+            for (const t of tbls) {
                 if ((t.columns ?? []).some(c => c.name.toLowerCase() === bareNameLc)) {
                     if (tableMatchCount === occurrenceBefore) {
                         tableAlias = t.alias || null;
@@ -1162,7 +1174,7 @@ const Results = (() => {
      * Reconstruct the SELECT state key (e.g. "u.age") for a result column.
      * Used to tag <th> elements so the highlight feature can locate them.
      */
-    function _computeColKey(col, colTable, colIdx = 0, allColTables = []) {
+    function _computeColKey(col, colTable, colIdx = 0, allColTables = [], activeIds = null) {
         // If col is an explicit alias, find the original select key
         const nameLc = String(col).toLowerCase();
         const aliasEntry = Object.entries(State.selectAliases || {})
@@ -1174,10 +1186,14 @@ const Results = (() => {
 
         // Reconstruct from table alias + bare column name.
         // Use occurrence-index so self-joins resolve to the correct alias.
+        // Restrict to active island to avoid picking up the same table from another island.
         if (colTable) {
             const colTableLc   = colTable.toLowerCase();
             const matchingTbls = Array.isArray(State.tables)
-                ? State.tables.filter(t => t.name.toLowerCase() === colTableLc)
+                ? State.tables.filter(t =>
+                    t.name.toLowerCase() === colTableLc &&
+                    (!activeIds || activeIds.has(t.id))
+                )
                 : [];
             if (matchingTbls.length > 0) {
                 const occurrenceBefore = allColTables
@@ -1189,9 +1205,13 @@ const Results = (() => {
             }
         }
 
-        // Fallback A: infer from columnOrder (mirrors _formatHeaderLabel logic).
+        // Fallback A: infer from columnOrder (active island only).
         const occurrenceBefore = allColTables.slice(0, colIdx).filter(ct => !ct).length;
-        const colOrder = State.columnOrder || [];
+        const colOrder = (State.columnOrder || []).filter(k => {
+            if (!activeIds) return true;
+            const alias = k.split('.')[0];
+            return (State.tables || []).some(t => t.alias === alias && activeIds.has(t.id));
+        });
         let matchCount = 0;
         for (const key of colOrder) {
             const parts = String(key).split('.');
@@ -1201,10 +1221,11 @@ const Results = (() => {
             }
         }
 
-        // Fallback B: scan State.tables directly.
+        // Fallback B: scan State.tables directly (active island only).
         if (Array.isArray(State.tables)) {
+            const tbls = activeIds ? State.tables.filter(t => activeIds.has(t.id)) : State.tables;
             let tableMatchCount = 0;
-            for (const t of State.tables) {
+            for (const t of tbls) {
                 if ((t.columns ?? []).some(c => c.name.toLowerCase() === bareNameLc)) {
                     if (tableMatchCount === occurrenceBefore) {
                         return t.alias ? `${t.alias}.${bare}` : col;
@@ -1322,6 +1343,18 @@ const Results = (() => {
         const thead = document.querySelector('#results-table thead');
         const tbody = document.querySelector('#results-table tbody');
 
+        // Compute active island table IDs once so header labels use the correct
+        // aliases even when the same table name exists in other islands.
+        let _activeResultIds = null;
+        if (State.selectedIslandKey && Array.isArray(State.tables) && State.joins) {
+            const enabledJoins = State.joins.filter(j => j.enabled !== false);
+            const islands = typeof App !== 'undefined'
+                ? App.computeIslands(State.tables, enabledJoins) : null;
+            if (islands && islands.length > 1) {
+                _activeResultIds = new Set(State.selectedIslandKey.split('|'));
+            }
+        }
+
         // --- Header ---
         const trHead = document.createElement('tr');
         cols.forEach((col, colIdx) => {
@@ -1345,7 +1378,7 @@ const Results = (() => {
                 th.appendChild(badge);
             }
             // Tag with the select-state key so the highlight feature can find it
-            th.dataset.colKey = _computeColKey(col, colTables[colIdx] || '', colIdx, colTables);
+            th.dataset.colKey = _computeColKey(col, colTables[colIdx] || '', colIdx, colTables, _activeResultIds);
             // Store raw column name so Ctrl+C copies only the name, not badge/origin text
             th.dataset.raw = col;
 
@@ -1365,7 +1398,7 @@ const Results = (() => {
             // Header label: prefix with table alias when possible (e.g. "u.id").
             // If the column has a user-defined alias, render it in italic so it's
             // visually distinct from real column names.
-            const labelText = _formatHeaderLabel(col, colIdx, cols, colTables[colIdx] || '', colTables);
+            const labelText = _formatHeaderLabel(col, colIdx, cols, colTables[colIdx] || '', colTables, _activeResultIds);
             if (_isCustomExprColumn(col)) {
                 th.classList.add('th-custom-expr');
                 th.appendChild(document.createTextNode(labelText));
