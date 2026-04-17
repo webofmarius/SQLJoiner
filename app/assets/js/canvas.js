@@ -602,9 +602,10 @@ const Canvas = (() => {
             }
         });
 
-        // Click → toggle column background highlight on/off
+        // Alt+click → toggle column background highlight on/off
         // Debounced so a dblclick (which fires two click events) doesn't accidentally toggle.
         li.addEventListener('click', e => {
+            if (!e.altKey) return;
             e.stopPropagation();
             clearTimeout(_colClickTimer);
             _colClickTimer = setTimeout(() => {
