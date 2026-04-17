@@ -393,6 +393,13 @@ const Canvas = (() => {
             copySimpleBtn.title = 'Save subquery SQL to disk';
             copySimpleBtn.classList.add('sq-save-btn');
 
+            const sqCountHeaderBtn = document.createElement('button');
+            sqCountHeaderBtn.type      = 'button';
+            sqCountHeaderBtn.className = 'table-card__sq-count-btn btn-icon';
+            sqCountHeaderBtn.textContent = '#';
+            sqCountHeaderBtn.title = 'Copy table list + COUNT queries to clipboard';
+            copySimpleBtn.insertAdjacentElement('beforebegin', sqCountHeaderBtn);
+
             const sqLoadHeaderBtn = document.createElement('button');
             sqLoadHeaderBtn.type      = 'button';
             sqLoadHeaderBtn.className = 'table-card__sq-load-btn btn-icon';
@@ -641,6 +648,22 @@ const Canvas = (() => {
         });
 
         return li;
+    }
+
+    // =========================================================================
+    // Extract distinct table names referenced in a SQL string
+    // =========================================================================
+    function _extractTablesFromSql(sql) {
+        const cleaned = sql
+            .replace(/--[^\n]*/g, '')
+            .replace(/\/\*[\s\S]*?\*\//g, '');
+        const tables = new Set();
+        const re = /\b(?:FROM|JOIN)\s+`?([\w.]+)`?/gi;
+        let m;
+        while ((m = re.exec(cleaned)) !== null) {
+            tables.add(m[1]);
+        }
+        return [...tables];
     }
 
     // =========================================================================
@@ -988,6 +1011,18 @@ const Canvas = (() => {
         if (tableData.isSubquery) {
             // Count button doesn't apply to subqueries
             card.querySelector('.table-card__count-btn').style.display = 'none';
+
+            // # button: copy table list + COUNT queries to clipboard
+            card.querySelector('.table-card__sq-count-btn').addEventListener('click', e => {
+                e.stopPropagation();
+                const ta     = card.querySelector('.subquery-textarea');
+                const sql    = ta ? ta.value : '';
+                const tables = _extractTablesFromSql(sql);
+                if (!tables.length) return;
+                const list   = tables.join('\n');
+                const counts = tables.map(t => `SELECT count(id) FROM ${t};`).join('\n');
+                navigator.clipboard.writeText(list + '\n\n' + counts);
+            });
 
             // S button: save subquery SQL to disk via native browser download
             card.querySelector('.table-card__copy-simple-btn').addEventListener('click', e => {
