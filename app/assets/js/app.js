@@ -42,7 +42,7 @@ const State = {
     selectCustomExprs: [],
 
     /** @type {'combined'|'only'|'exclude'} how custom expressions interact with SELECT columns */
-    selectCustomExprsMode: 'combined',
+    selectCustomExprsMode: 'exclude',
 
     /** @type {Object.<string,string>}  map of "alias.col" → SQL column alias */
     selectAliases: {},
@@ -1430,7 +1430,7 @@ const App = (() => {
             selectRaw:          State.selectRaw          ?? '',
             selectMode:         State.selectMode         ?? 'visual',
             selectCustomExprs:     JSON.parse(JSON.stringify(State.selectCustomExprs ?? [])),
-            selectCustomExprsMode: State.selectCustomExprsMode ?? 'combined',
+            selectCustomExprsMode: State.selectCustomExprsMode ?? 'exclude',
             selectAliases:         { ...(State.selectAliases ?? {}) },
             selectNone:            State.selectNone         ?? false,
             selectAddDelimiter:    State.selectAddDelimiter    ?? false,
@@ -1464,12 +1464,14 @@ const App = (() => {
     /** Apply a right-pane snapshot to flat State fields + Calculus. */
     function _applyRightPaneSnapshot(snap) {
         if (!snap) return;
+        const _prevWhereRaw  = State.whereRaw;
+        const _prevWhereMode = State.whereMode;
         Object.assign(State, {
             select:             snap.select             ?? [],
             selectRaw:          snap.selectRaw          ?? '',
             selectMode:         snap.selectMode         ?? 'visual',
             selectCustomExprs:     snap.selectCustomExprs     ?? [],
-            selectCustomExprsMode: snap.selectCustomExprsMode ?? 'combined',
+            selectCustomExprsMode: snap.selectCustomExprsMode ?? 'exclude',
             selectAliases:         snap.selectAliases         ?? {},
             selectNone:            snap.selectNone            ?? false,
             selectAddDelimiter: snap.selectAddDelimiter ?? false,
@@ -1489,6 +1491,10 @@ const App = (() => {
             orderByMode:        snap.orderByMode        ?? 'visual',
             limit:              snap.limit              ?? 10,
         });
+        if (_prevWhereMode === 'raw') {
+            State.whereRaw  = _prevWhereRaw;
+            State.whereMode = 'raw';
+        }
         if (typeof QueryPanel !== 'undefined' && QueryPanel.setCheckedOnlySnapshot) {
             QueryPanel.setCheckedOnlySnapshot(snap.selectCheckedOnlySnapshot ?? null);
         }
@@ -3315,7 +3321,7 @@ const App = (() => {
             selectRaw:          parsed.selectRaw ?? '',
             selectMode:         'visual',
             selectCustomExprs:     parsed.selectCustomExprs     ?? [],
-            selectCustomExprsMode: parsed.selectCustomExprsMode ?? 'combined',
+            selectCustomExprsMode: parsed.selectCustomExprsMode ?? 'exclude',
             selectAliases:      parsed.selectAliases ?? {},
             // selectNone=true when there are only custom exprs and no alias.col items,
             // so the query doesn't produce "SELECT *, custom_expr"
@@ -3519,7 +3525,7 @@ const App = (() => {
             selectRaw:          parsed.selectRaw          ?? '',
             selectMode:         'visual',
             selectCustomExprs:     parsed.selectCustomExprs     ?? [],
-            selectCustomExprsMode: parsed.selectCustomExprsMode ?? 'combined',
+            selectCustomExprsMode: parsed.selectCustomExprsMode ?? 'exclude',
             selectAliases:         parsed.selectAliases         ?? {},
             selectNone:            !hasVisualSelect && hasCustomExprs,
             selectAddDelimiter: false,
@@ -3599,9 +3605,11 @@ const App = (() => {
         return JSON.stringify(ctx);
     }
 
-    function applyContext(json, contextName = '') {
+    function applyContext(json, contextName = '', opts = {}) {
         try {
             const parsed = JSON.parse(json);
+            const _prevWhereRaw  = State.whereRaw;
+            const _prevWhereMode = State.whereMode;
 
             // Basic validation
             if (typeof parsed !== 'object' || !Array.isArray(parsed.tables)) {
@@ -3620,7 +3628,7 @@ const App = (() => {
                 selectSchemaAlias:  parsed.selectSchemaAlias  ?? true,
                 selectTableName:    parsed.selectTableName    ?? false,
                 selectCustomExprs:     parsed.selectCustomExprs     ?? [],
-                selectCustomExprsMode: parsed.selectCustomExprsMode ?? 'combined',
+                selectCustomExprsMode: parsed.selectCustomExprsMode ?? 'exclude',
                 where:          parsed.where          ?? [],
                 orderBy:        parsed.orderBy        ?? [],
                 orderByRaw:     parsed.orderByRaw     ?? '',
@@ -3643,6 +3651,11 @@ const App = (() => {
                 islandPinnedPlots:  (!parsed.islandPinnedPlots  || Array.isArray(parsed.islandPinnedPlots))  ? {} : parsed.islandPinnedPlots,
                 islandPinSortOrder: (!parsed.islandPinSortOrder || Array.isArray(parsed.islandPinSortOrder)) ? {} : parsed.islandPinSortOrder,
             });
+
+            if (opts.preserveWhereRaw && _prevWhereMode === 'raw') {
+                State.whereRaw  = _prevWhereRaw;
+                State.whereMode = 'raw';
+            }
 
             // Ensure every table has a join-order value (old contexts won't have it)
             State.tables.forEach((t, i) => { if (t.order == null) t.order = i + 1; });

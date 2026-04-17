@@ -39,7 +39,7 @@ const UndoRedo = (() => {
     function undo() {
         if (!_undo.length) return;
         _redo.push(App.captureSnapshot());
-        App.applyContext(_undo.pop());
+        App.applyContext(_undo.pop(), '', { preserveWhereRaw: true });
         _refreshUI();
     }
 
@@ -50,7 +50,7 @@ const UndoRedo = (() => {
         if (!_redo.length) return;
         _undo.push(App.captureSnapshot());
         if (_undo.length > MAX) _undo.shift();
-        App.applyContext(_redo.pop());
+        App.applyContext(_redo.pop(), '', { preserveWhereRaw: true });
         _refreshUI();
     }
 

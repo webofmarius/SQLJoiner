@@ -836,7 +836,7 @@ const QueryPanel = (() => {
         // Mode radio buttons: Combined / Only / Exclude
         const exprModeBar = document.createElement('div');
         exprModeBar.className = 'expr-mode-bar';
-        const currentMode = State.selectCustomExprsMode ?? 'combined';
+        const currentMode = State.selectCustomExprsMode ?? 'exclude';
         [['combined', '↑↓ Combined'], ['exclude', '↑ Exclude'], ['only', '↓ Only']].forEach(([val, label]) => {
             const lbl = document.createElement('label');
             lbl.className = 'expr-mode-option';
@@ -869,7 +869,7 @@ const QueryPanel = (() => {
         container.appendChild(addExprBtn);
 
         // Apply mode-based visual state to the container and option checkboxes
-        const mode = State.selectCustomExprsMode ?? 'combined';
+        const mode = State.selectCustomExprsMode ?? 'exclude';
         container.classList.toggle('exprs-mode-only',    mode === 'only');
         container.classList.toggle('exprs-mode-exclude', mode === 'exclude');
         _applyExprModeToCheckboxes(mode);
@@ -2608,7 +2608,7 @@ const QueryPanel = (() => {
         }
 
         // In 'only' mode: custom expressions replace all SELECT columns
-        const exprMode = state.selectCustomExprsMode ?? 'combined';
+        const exprMode = state.selectCustomExprsMode ?? 'exclude';
         if (exprMode === 'only' && state.selectMode !== 'raw') {
             selectPart = '/* no columns selected */';
         }
