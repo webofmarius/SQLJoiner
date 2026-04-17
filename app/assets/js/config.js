@@ -211,6 +211,30 @@ const QueryPanel = (() => {
     // =========================================================================
     // SELECT section
     // =========================================================================
+    function _applyExprModeToCheckboxes(mode) {
+        const disabled = mode === 'only';
+
+        // SELECT option checkboxes (in the delimiter row)
+        ['select-sort-alpha-toggle', 'select-delimiter-toggle', 'select-table-name-toggle',
+         'select-schema-alias-toggle', 'select-distinct-toggle'].forEach(id => {
+            const el  = document.getElementById(id);
+            const lbl = el?.closest('label');
+            if (!el) return;
+            el.disabled = disabled;
+            if (lbl) lbl.style.opacity = disabled ? '0.4' : '';
+        });
+
+        // Column panel controls (rebuilt each render, so query by ID set above)
+        ['chk-select-visibility', 'btn-minimize-all', 'btn-checked-columns'].forEach(id => {
+            const el  = document.getElementById(id);
+            const lbl = el?.closest('label');
+            if (!el) return;
+            el.disabled = disabled;
+            const target = lbl ?? el;
+            target.style.opacity = disabled ? '0.4' : '';
+        });
+    }
+
     function _refreshSelect() {
         const container = document.getElementById('select-columns');
         const emptyEl   = document.querySelector('#section-select .config-empty');
@@ -260,6 +284,7 @@ const QueryPanel = (() => {
         listHeaderTxt.textContent = 'Columns (Drag Table or Column)';
         listHeader.appendChild(listHeaderTxt);
         const checkedOnlyBtn = document.createElement('button');
+        checkedOnlyBtn.id        = 'btn-checked-columns';
         checkedOnlyBtn.className = 'btn-toggle-mode' + (_showCheckedOnly ? ' active' : '');
         checkedOnlyBtn.textContent = 'Checked columns';
         checkedOnlyBtn.title = 'Show only checked columns';
@@ -843,10 +868,11 @@ const QueryPanel = (() => {
 
         container.appendChild(addExprBtn);
 
-        // Apply mode-based visual state to the container
+        // Apply mode-based visual state to the container and option checkboxes
         const mode = State.selectCustomExprsMode ?? 'combined';
         container.classList.toggle('exprs-mode-only',    mode === 'only');
         container.classList.toggle('exprs-mode-exclude', mode === 'exclude');
+        _applyExprModeToCheckboxes(mode);
 
         _filterSelectColumns();
     }
