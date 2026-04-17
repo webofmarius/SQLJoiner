@@ -514,6 +514,20 @@ const App = (() => {
                 return;
             }
 
+            // F8 — Toggle results panel minimize / restore
+            if (e.code === 'F8' && !isMod) {
+                e.preventDefault();
+                Results.toggle?.();
+                return;
+            }
+
+            // F9 — Toggle results panel fullscreen (maximize)
+            if (e.code === 'F9' && !isMod) {
+                e.preventDefault();
+                Results.toggleFullscreen?.();
+                return;
+            }
+
             // Run Custom Query popup: Cmd/Ctrl+F9
             // — opens the popup if closed, runs the query if already open
             if (isMod && e.code === 'F9') {

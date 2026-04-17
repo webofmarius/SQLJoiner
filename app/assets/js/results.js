@@ -5597,7 +5597,9 @@ async function _copyAsSqlSelect() {
         renderError,
         rerender,
         clear,
-        toggle: _toggleCollapsed,
+        toggle:           _toggleCollapsed,
+        toggleTall:       _toggleTall,
+        toggleFullscreen: _toggleFullscreen,
         /** Apply or remove col-deselected styling on a result column by its select key. */
         syncColDeselected: _applyColDeselected,
         /** Toggle highlight on a result column. scrollTo=true scrolls to the column. */

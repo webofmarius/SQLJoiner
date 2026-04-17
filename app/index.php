@@ -791,6 +791,9 @@
                     <li><kbd>Cmd/Ctrl</kbd> + <kbd>P</kbd> <span>Plot current query results as a bar chart</span></li>
                     <li><kbd>Cmd/Ctrl</kbd> + <kbd>K</kbd> <span>AI Knowledge — build final SELECT query + CREATE TABLE definitions for all tables used (copy to clipboard or save to file)</span></li>
                     <li><kbd>F3</kbd> <span>Toggle Timestamp Converter</span></li>
+                    <li><kbd>F4</kbd> <span>Toggle Overview Zoom</span></li>
+                    <li><kbd>F8</kbd> <span>Toggle Results panel minimize / restore</span></li>
+                    <li><kbd>F9</kbd> <span>Toggle Results panel fullscreen (maximize)</span></li>
                     <li><kbd>Cmd/Ctrl</kbd> + <kbd>F9</kbd> <span>Open Run Custom Query</span></li>
                     <li><kbd>Cmd/Ctrl</kbd> + <kbd>F8</kbd> <span>Explain custom query (popup must be open)</span></li>
                     <li><kbd>Alt</kbd> + <kbd>1</kbd> <span>Toggle Table Browser</span></li>
