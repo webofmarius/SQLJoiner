@@ -808,6 +808,30 @@ const QueryPanel = (() => {
         });
         container.appendChild(exprSectionHdr);
 
+        // Mode radio buttons: Combined / Only / Exclude
+        const exprModeBar = document.createElement('div');
+        exprModeBar.className = 'expr-mode-bar';
+        const currentMode = State.selectCustomExprsMode ?? 'combined';
+        [['combined', 'Combined'], ['only', 'Only'], ['exclude', 'Exclude']].forEach(([val, label]) => {
+            const lbl = document.createElement('label');
+            lbl.className = 'expr-mode-option';
+            const radio = document.createElement('input');
+            radio.type = 'radio';
+            radio.name = 'expr-mode';
+            radio.value = val;
+            radio.checked = currentMode === val;
+            radio.addEventListener('change', () => {
+                if (!radio.checked) return;
+                State.selectCustomExprsMode = val;
+                _refreshSelect();
+                App.updateSQLPreview();
+            });
+            lbl.appendChild(radio);
+            lbl.append(' ' + label);
+            exprModeBar.appendChild(lbl);
+        });
+        container.appendChild(exprModeBar);
+
         const exprLegend = document.createElement('div');
         exprLegend.className = 'select-expr-legend';
         exprLegend.textContent = 'Click to edit SQL alias · Right-click (or Shift + Enter) to edit expression';
@@ -818,6 +842,11 @@ const QueryPanel = (() => {
         });
 
         container.appendChild(addExprBtn);
+
+        // Apply mode-based visual state to the container
+        const mode = State.selectCustomExprsMode ?? 'combined';
+        container.classList.toggle('exprs-mode-only',    mode === 'only');
+        container.classList.toggle('exprs-mode-exclude', mode === 'exclude');
 
         _filterSelectColumns();
     }
@@ -2529,8 +2558,14 @@ const QueryPanel = (() => {
             }
         }
 
-        // Append enabled custom expressions (visual mode only)
-        if (state.selectMode !== 'raw') {
+        // In 'only' mode: custom expressions replace all SELECT columns
+        const exprMode = state.selectCustomExprsMode ?? 'combined';
+        if (exprMode === 'only' && state.selectMode !== 'raw') {
+            selectPart = '/* no columns selected */';
+        }
+
+        // Append enabled custom expressions (visual mode only; skipped in 'exclude' mode)
+        if (state.selectMode !== 'raw' && exprMode !== 'exclude') {
             let customParts = (state.selectCustomExprs ?? [])
                 .filter(e => e.enabled !== false && e.expr?.trim())
                 .map(e => {

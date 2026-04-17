@@ -2605,6 +2605,40 @@ body.is-cut-mode * { cursor: crosshair !important; }
 }
 .select-expr-input:focus { outline: none; border-color: var(--accent); }
 .select-expr-input::placeholder { color: var(--text-faint); font-style: italic; }
+/* Custom Expressions mode radio bar */
+.expr-mode-bar {
+    display: flex;
+    gap: 10px;
+    padding: 4px 4px 2px;
+}
+.expr-mode-option {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 11px;
+    color: var(--text-muted);
+    cursor: pointer;
+    user-select: none;
+}
+.expr-mode-option input[type="radio"] {
+    cursor: pointer;
+    accent-color: var(--accent, #4a9eff);
+}
+
+/* 'Only' mode: visually dim the regular SELECT column rows */
+#select-columns.exprs-mode-only .select-col-row,
+#select-columns.exprs-mode-only .select-table-hdr:not(:last-of-type) {
+    opacity: 0.35;
+    pointer-events: none;
+}
+
+/* 'Exclude' mode: visually dim the custom expression rows and add button */
+#select-columns.exprs-mode-exclude .select-expr-row,
+#select-columns.exprs-mode-exclude .btn-add-expr {
+    opacity: 0.35;
+    pointer-events: none;
+}
+
 .select-expr-legend {
     font-size: 9px;
     font-style: italic;
