@@ -1076,7 +1076,7 @@ const Results = (() => {
             const colTableLc    = colTable.toLowerCase();
             const matchingTbls  = Array.isArray(State.tables)
                 ? State.tables.filter(t =>
-                    t.name.toLowerCase() === colTableLc &&
+                    (t.name.toLowerCase() === colTableLc || (t.alias || '').toLowerCase() === colTableLc) &&
                     (!activeIds || activeIds.has(t.id))
                 )
                 : [];

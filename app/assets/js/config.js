@@ -491,7 +491,7 @@ const QueryPanel = (() => {
                 });
                 hdr.appendChild(colorChk);
             }
-            
+
             const minimizeBtn = document.createElement('button');
             minimizeBtn.className = 'btn-select-locate btn-select-minimize';
             const isMinimized = _minimizedGroups.has(group.alias);
