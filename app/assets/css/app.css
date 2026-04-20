@@ -612,12 +612,13 @@ body.is-resizing * { user-select: none !important; }
     overflow: hidden;
     flex-shrink: 0;
 }
+/* also see canvas.js // const OVERVIEW_ZOOM_SCALE = 0.60; */
 #canvas.is-overview-zoom {
-    transform: scale(var(--canvas-overview-scale, 0.45));
+    transform: scale(var(--canvas-overview-scale, 0.65));
     transform-origin: 0 0;
 }
 body.is-canvas-overview-zoom {
-    --canvas-overview-scale: 0.45;
+    --canvas-overview-scale: 0.65;
 }
 
 #canvas {

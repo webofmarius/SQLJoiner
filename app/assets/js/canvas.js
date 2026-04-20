@@ -94,7 +94,7 @@ const Canvas = (() => {
     /** Logical canvas size (matches CSS #canvas min-width / min-height). */
     const CANVAS_LOGICAL_PX   = 5000;
     /** Canvas-only overview zoom — not browser zoom. */
-    const OVERVIEW_ZOOM_SCALE = 0.45;
+    const OVERVIEW_ZOOM_SCALE = 0.65;
 
     function _canvasContentScale() {
         return document.body.classList.contains('is-canvas-overview-zoom')
