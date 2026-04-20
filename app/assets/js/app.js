@@ -522,17 +522,24 @@ const App = (() => {
                 return;
             }
 
-            // F8 — Toggle results panel minimize / restore
-            if (e.code === 'F8' && !isMod) {
+            // F7 — Toggle results panel minimize / restore
+            if (e.code === 'F7' && !isMod) {
                 e.preventDefault();
                 Results.toggle?.();
                 return;
             }
 
-            // F9 — Toggle results panel fullscreen (maximize)
-            if (e.code === 'F9' && !isMod) {
+            // F8 — Toggle results panel fullscreen (maximize)
+            if (e.code === 'F8' && !isMod) {
                 e.preventDefault();
                 Results.toggleFullscreen?.();
+                return;
+            }
+
+            // F9 — Toggle config (right) panel show / hide
+            if (e.code === 'F9' && !isMod) {
+                e.preventDefault();
+                _togglePane('config');
                 return;
             }
 
