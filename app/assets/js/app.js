@@ -499,6 +499,14 @@ const App = (() => {
                 return;
             }
 
+            // F1 — Focus canvas table search (same as Alt+F; prevents browser help)
+            if (e.code === 'F1' && !isMod) {
+                e.preventDefault();
+                const searchInput = document.getElementById('canvas-search-input');
+                if (searchInput) { searchInput.focus(); searchInput.select(); }
+                return;
+            }
+
             // F3 — Timestamp converter
             if (e.code === 'F3' && !isMod) {
                 e.preventDefault();
