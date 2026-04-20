@@ -2601,7 +2601,14 @@ body.is-cut-mode * { cursor: crosshair !important; }
     padding-top: 24px;
 }
 .select-visibility-label input[type="checkbox"] { width: auto; flex-shrink: 0; cursor: pointer; }
-.sel-alias { color: var(--accent); font-family: var(--font-mono); }
+.sel-alias {
+    color: var(--accent);
+    font-family: var(--font-mono);
+
+    font-size: 20px;
+    font-weight: 600;
+    height: 30px;
+}
 .sel-tname { color: var(--text-faint); font-family: var(--font-mono); font-weight: 400; }
 
 /* Custom expression rows in SELECT section */
