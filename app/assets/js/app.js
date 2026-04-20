@@ -1755,6 +1755,7 @@ const App = (() => {
             selectRaw:          sources[0].selectRaw          ?? '',
             selectMode:         sources[0].selectMode         ?? 'visual',
             selectCustomExprs:  unionArr([...sources.map(s => s.selectCustomExprs ?? []), cachedOnlyExprs]),
+            selectCustomExprsMode: sources[0].selectCustomExprsMode ?? 'exclude',
             selectAliases:      Object.assign({}, ...sources.map(s => s.selectAliases ?? {})),
             selectNone:         false,
             selectAddDelimiter: sources[0].selectAddDelimiter ?? false,
@@ -1864,6 +1865,7 @@ const App = (() => {
                 selectRaw:          source.selectRaw          ?? '',
                 selectMode:         source.selectMode         ?? 'visual',
                 selectCustomExprs:  (source.selectCustomExprs ?? []).filter(e => fragmentExprIds[targetKey].has(e.id)),
+                selectCustomExprsMode: State.islandConfigs[targetKey]?.selectCustomExprsMode ?? source.selectCustomExprsMode ?? 'exclude',
                 selectAliases:      Object.fromEntries(
                     Object.entries(source.selectAliases ?? {})
                         .filter(([k]) => myAliases.has(k.split('.')[0]))
