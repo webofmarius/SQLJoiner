@@ -2185,6 +2185,50 @@ const Canvas = (() => {
         _scrollWrapperToLogicalCenter((minX + maxX) / 2, (minY + maxY) / 2);
     }
 
+    /**
+     * Scroll so the top of the active island sits at the top of the viewport.
+     * Falls back to all cards when no island is selected.
+     */
+    function _scrollToActiveIslandTop() {
+        const wrapper = document.getElementById('canvas-wrapper');
+        if (!wrapper) return;
+
+        const activeIds = State.selectedIslandKey
+            ? new Set(State.selectedIslandKey.split('|'))
+            : null;
+
+        const cards = Array.from(document.querySelectorAll('.table-card'));
+        if (!cards.length) return;
+
+        const compute = (subset) => {
+            let minX = Infinity, minY = Infinity, maxX = -Infinity;
+            subset.forEach(card => {
+                const x = parseInt(card.style.left, 10) || 0;
+                const y = parseInt(card.style.top,  10) || 0;
+                minX = Math.min(minX, x);
+                minY = Math.min(minY, y);
+                maxX = Math.max(maxX, x + card.offsetWidth);
+            });
+            return { minX, minY, maxX };
+        };
+
+        let { minX, minY, maxX } = activeIds
+            ? compute(cards.filter(c => activeIds.has(c.dataset.tableId)))
+            : compute(cards);
+
+        // Fall back to all cards if the island filter produced nothing
+        if (!isFinite(minX)) ({ minX, minY, maxX } = compute(cards));
+        if (!isFinite(minX)) return;
+
+        const s   = _canvasContentScale();
+        const PAD = 40; // screen-pixel gap above the island top
+        wrapper.scrollTo({
+            left:     ((minX + maxX) / 2) * s - wrapper.clientWidth / 2,
+            top:      Math.max(0, minY * s - PAD),
+            behavior: 'smooth',
+        });
+    }
+
     function _applyPosition(card, pos) {
         card.style.left = (pos?.x ?? 40) + 'px';
         card.style.top  = (pos?.y ?? 40) + 'px';
@@ -2755,7 +2799,7 @@ const Canvas = (() => {
         });
         if (typeof Islands !== 'undefined') Islands.redrawPositions?.();
         requestAnimationFrame(() => {
-            requestAnimationFrame(() => focusTables());
+            requestAnimationFrame(() => _scrollToActiveIslandTop());
         });
     }
 

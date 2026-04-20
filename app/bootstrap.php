@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 define('APP_NAME',     'SQL Joiner');
-define('APP_VERSION',  '1.15.0');
+define('APP_VERSION',  '1.15.1');
 define('BASE_PATH',    __DIR__);
 define('SRC_PATH',     BASE_PATH . '/src');
 define('STORAGE_PATH', BASE_PATH . '/storage');
