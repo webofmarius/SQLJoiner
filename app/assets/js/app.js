@@ -4446,6 +4446,28 @@ const App = (() => {
                 e.preventDefault();
                 _importQueryRun();
             }
+            if (e.key === 'Delete') {
+                const scopeBtn = document.getElementById('btn-import-query-scope');
+                const scopeChk = document.getElementById('chk-import-query-scope-exclusive');
+                const scopeOn  = scopeBtn?.classList.contains('is-active') ?? false;
+                if (scopeOn && typeof SqlBackdrop !== 'undefined') {
+                    const focusRanges = SqlBackdrop.getFocusRanges(e.currentTarget);
+                    if (focusRanges.length) {
+                        e.preventDefault();
+                        const ta2 = e.currentTarget;
+                        const multiple = scopeChk?.checked ?? false;
+                        const newSql = multiple
+                            ? _disassembleMultipleScopesFromSql(ta2.value, focusRanges)
+                            : _disassembleScopeFromSql(ta2.value, focusRanges[0]);
+                        if (newSql === ta2.value.trim()) { _notify('Nothing to disassemble in the selected scope(s).', 'warn'); return; }
+                        if (typeof UndoManager !== 'undefined') UndoManager.push(ta2);
+                        ta2.value = newSql;
+                        ta2.dispatchEvent(new Event('input', { bubbles: true }));
+                        if (typeof UndoManager !== 'undefined') UndoManager.push(ta2);
+                        return;
+                    }
+                }
+            }
         });
 
         // Save current context
