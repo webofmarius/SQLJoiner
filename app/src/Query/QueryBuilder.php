@@ -287,6 +287,26 @@ class QueryBuilder
             });
         }
 
+        // Restrict columnOrder and select to the active island's table aliases.
+        // State.columnOrder / State.select on the frontend span ALL islands; $tables
+        // has already been filtered to the active island by the caller.  Without this
+        // restriction the delimiter / sort-alpha / alias expansion blocks below would
+        // pull in column keys from other islands and inject them into the SELECT of
+        // the current query, causing "Unknown column" errors.
+        $activeAliases = array_flip(
+            array_filter(array_map(fn($t) => strtolower((string) ($t['alias'] ?? '')), $tables))
+        );
+        $aliasFilter = function (string $k) use ($activeAliases): bool {
+            $dot = strpos($k, '.');
+            return $dot !== false && isset($activeAliases[strtolower(substr($k, 0, $dot))]);
+        };
+        if (!empty($columnOrder)) {
+            $columnOrder = array_values(array_filter($columnOrder, fn($k) => $aliasFilter((string) $k)));
+        }
+        if (!empty($select)) {
+            $select = array_values(array_filter($select, fn($k) => $aliasFilter((string) $k)));
+        }
+
         // When delimiter is on, SELECT * cannot carry delimiters — expand to explicit columns.
         // Use the columnOrder sent by the frontend (respects drag-reorder); fall back to
         // deriving from the tables array in declaration order.
