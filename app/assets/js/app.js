@@ -1273,82 +1273,147 @@ const App = (() => {
     }
 
     // -------------------------------------------------------------------------
-    // Duplicate an existing subquery card, place it to the right, and focus it.
-    // Pinned plots are intentionally NOT copied.
+    // Copy an entire island — all tables, joins and right-pane config —
+    // placing the copy to the right of the canvas with a gap.
+    // Calculus state is intentionally not copied.
     // -------------------------------------------------------------------------
-    function duplicateSubquery(tableData) {
-        const inUseNames = State.tables.map(t => t.name);
-        let sqNum = 1;
-        while (inUseNames.includes('sq' + sqNum)) sqNum++;
-        const sqName = 'sq' + sqNum;
+    function copyIsland(islandKey) {
+        _flushCurrentIslandConfig();
 
-        // Derive alias as parentAlias_N
-        const inUseAliases = State.tables.map(t => t.alias);
-        const prefix = tableData.alias + '_';
-        let maxN = 0;
-        inUseAliases.forEach(a => {
-            if (a.startsWith(prefix)) {
-                const n = parseInt(a.slice(prefix.length), 10);
-                if (!isNaN(n) && n > maxN) maxN = n;
-            }
+        const sourceTableIds = new Set(islandKey.split('|'));
+        const sourceTables   = State.tables.filter(t => sourceTableIds.has(t.id));
+        if (!sourceTables.length) return;
+
+        // Bounding box of source island cards (DOM positions)
+        let islandMinX = Infinity;
+        sourceTables.forEach(t => {
+            const card = document.querySelector(`.table-card[data-table-id="${t.id}"]`);
+            if (card) islandMinX = Math.min(islandMinX, parseInt(card.style.left, 10) || 0);
         });
-        const alias = prefix + (maxN + 1);
+        if (!isFinite(islandMinX)) islandMinX = 0;
 
-        // Place the clone to the right of the source card
-        const sourceCard = document.querySelector(`.table-card[data-table-id="${tableData.id}"]`);
-        const cardWidth  = sourceCard ? sourceCard.offsetWidth : 300;
-        const position   = tableData.position
-            ? { x: tableData.position.x + cardWidth + 120, y: tableData.position.y }
+        // Right edge of all canvas cards — copy goes further right
+        let canvasMaxRight = 0;
+        document.querySelectorAll('.table-card').forEach(card => {
+            canvasMaxRight = Math.max(canvasMaxRight, (parseInt(card.style.left, 10) || 0) + (card.offsetWidth || 0));
+        });
+        const xShift = canvasMaxRight + 80 - islandMinX;
+
+        // Build alias map (oldAlias → newAlias) and ID map (oldId → newId)
+        const inUse    = new Set(State.tables.map(t => t.alias));
+        const aliasMap = {};
+        const idMap    = {};
+        let   idCtr    = Date.now();
+
+        sourceTables.forEach(t => {
+            const stem = t.alias.replace(/\d+$/, '');
+            let n = 2;
+            while (inUse.has(stem + n)) n++;
+            const newAlias = stem + n;
+            inUse.add(newAlias);
+            aliasMap[t.alias] = newAlias;
+            idMap[t.id]       = 't_' + (idCtr++);
+        });
+
+        // Clone tables
+        const newTables = sourceTables.map((t, i) => {
+            const pos = t.position ?? { x: islandMinX, y: 40 };
+            return {
+                ...JSON.parse(JSON.stringify(t)),
+                id:       idMap[t.id],
+                alias:    aliasMap[t.alias],
+                position: { x: pos.x + xShift, y: pos.y },
+                order:    State.tables.length + i + 1,
+            };
+        });
+
+        // Clone joins that connect only tables within this island
+        const newJoins = State.joins
+            .filter(j => sourceTableIds.has(j.fromTableId) && sourceTableIds.has(j.toTableId))
+            .map(j => ({
+                ...JSON.parse(JSON.stringify(j)),
+                id:          'j_' + (idCtr++),
+                fromTableId: idMap[j.fromTableId],
+                toTableId:   idMap[j.toTableId],
+            }));
+
+        // Clone and alias-substitute the island config
+        const sourceConfig = State.islandConfigs?.[islandKey];
+        const newConfig    = sourceConfig
+            ? _substituteIslandConfig(JSON.parse(JSON.stringify(sourceConfig)), aliasMap, idMap)
             : null;
 
-        const tableId = 't_' + Date.now();
+        // Compute new island key
+        const newIslandKey = newTables.map(t => t.id).sort().join('|');
 
-        const newTableData = {
-            id:            tableId,
-            name:          sqName,
-            alias,
-            database:      null,
-            position,
-            columns:       tableData.columns.map(c => ({ ...c })),
-            order:         State.tables.length + 1,
-            isSubquery:    true,
-            subquery:      tableData.subquery,
-            note:          tableData.note,
-            size:          tableData.size ? { ...tableData.size } : undefined,
-            htmlHighlight: tableData.htmlHighlight,
-        };
+        // Register in State
+        State.tables.push(...newTables);
+        State.joins.push(...newJoins);
+        if (!State.islandConfigs) State.islandConfigs = {};
+        if (!State.islandNames)   State.islandNames   = {};
+        if (!State.islandColors)  State.islandColors  = {};
+        if (newConfig) State.islandConfigs[newIslandKey] = newConfig;
+        const sourceName  = State.islandNames[islandKey] ?? '';
+        State.islandNames[newIslandKey] = sourceName ? sourceName + ' (copy)' : '';
+        const sourceColor = State.islandColors[islandKey] ?? null;
+        if (sourceColor) State.islandColors[newIslandKey] = sourceColor;
 
-        State.tables.push(newTableData);
+        // Render cards
         _updateCanvasCount();
-        Canvas.renderTable(newTableData);
+        newTables.forEach(t => Canvas.renderTable(t));
 
-        // Copy island color from source
-        if (!State.islandColors) State.islandColors = {};
-        if (State.islandColors[tableData.id]) {
-            State.islandColors[tableId] = State.islandColors[tableData.id];
-        }
-
-        // Set island name: find the source's existing island name then append suffix
-        if (!State.islandNames) State.islandNames = {};
-        const sourceIslandKey = Object.keys(State.islandNames).find(k =>
-            k.split('|').includes(tableData.id)) ?? tableData.id;
-        const sourceName = State.islandNames[sourceIslandKey] || tableData.alias || tableData.name;
-        State.islandNames[tableId] = sourceName + ' - duplicated';
-
-        // Scroll to the new card (position was set explicitly so auto-scroll didn't run)
-        if (position) Canvas.scrollToTableId(tableId);
-
-        if (typeof Islands !== 'undefined') {
+        // Render joins + recompute islands in next frame (cards must be in DOM)
+        requestAnimationFrame(() => {
+            newTables.forEach(t => Joins.redrawForTable(t.id));
             Islands.recompute();
-            Islands.selectIsland(tableId);
-        } else {
-            if (typeof QueryPanel !== 'undefined') QueryPanel.refresh();
-            updateSQLPreview();
-        }
+            Islands.selectIsland(newIslandKey);
+            if (newTables.length) Canvas.scrollToTableId(newTables[0].id);
+        });
+    }
 
-        setTimeout(() => {
-            document.querySelector(`.table-card[data-table-id="${tableId}"] .subquery-textarea`)?.focus();
-        }, 0);
+    // -------------------------------------------------------------------------
+    // Substitute old table aliases → new aliases throughout an island config.
+    // -------------------------------------------------------------------------
+    function _substituteIslandConfig(config, aliasMap, idMap) {
+        const _s = str => {
+            if (typeof str !== 'string') return str;
+            Object.entries(aliasMap).forEach(([oldA, newA]) => {
+                str = str.replaceAll(oldA + '.', newA + '.');
+            });
+            return str;
+        };
+        const _cond = c => c ? { ...c, col: _s(c.col), val: _s(c.val), val2: _s(c.val2), expr: _s(c.expr) } : c;
+
+        if (Array.isArray(config.select))
+            config.select = config.select.map(_s);
+        config.selectRaw = _s(config.selectRaw);
+
+        if (config.selectAliases) {
+            const a = {};
+            Object.entries(config.selectAliases).forEach(([k, v]) => { a[_s(k)] = v; });
+            config.selectAliases = a;
+        }
+        if (Array.isArray(config.selectCustomExprs))
+            config.selectCustomExprs = config.selectCustomExprs.map(e =>
+                ({ ...e, id: 'cx_' + (Date.now() + Math.random()), expr: _s(e.expr) }));
+
+        if (Array.isArray(config.where))   config.where   = config.where.map(_cond);
+        config.whereRaw   = _s(config.whereRaw);
+        if (Array.isArray(config.groupBy)) config.groupBy = config.groupBy.map(_s);
+        config.groupByRaw = _s(config.groupByRaw);
+        if (Array.isArray(config.having))  config.having  = config.having.map(_cond);
+        config.havingRaw  = _s(config.havingRaw);
+        if (Array.isArray(config.orderBy))
+            config.orderBy = config.orderBy.map(o => ({ ...o, col: _s(o.col) }));
+        config.orderByRaw = _s(config.orderByRaw);
+
+        if (config.tableOrder) {
+            const to = {};
+            Object.entries(config.tableOrder).forEach(([oldId, ord]) => { to[idMap[oldId] ?? oldId] = ord; });
+            config.tableOrder = to;
+        }
+        config.calculus = null;
+        return config;
     }
 
     // -------------------------------------------------------------------------
@@ -5211,7 +5276,7 @@ const App = (() => {
         addTableToCanvas,
         addSubqueryToCanvas,
         addSubqueryWithSql,
-        duplicateSubquery,
+        copyIsland,
         updateSQLPreview,
         applyContext,
         loadContextList: _loadContextList,

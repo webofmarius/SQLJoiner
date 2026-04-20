@@ -428,12 +428,6 @@ const Canvas = (() => {
             sqExpandBtn.textContent  = '⤢';
             sqControls.appendChild(sqExpandBtn);
 
-            const sqDuplicateBtn       = document.createElement('button');
-            sqDuplicateBtn.type        = 'button';
-            sqDuplicateBtn.className   = 'sq-duplicate-btn';
-            sqDuplicateBtn.textContent = '⧉ Duplicate';
-            sqControls.appendChild(sqDuplicateBtn);
-
             const sqExplainBtn       = document.createElement('button');
             sqExplainBtn.type        = 'button';
             sqExplainBtn.className   = 'sq-explain-btn btn-outline-blue';
@@ -807,13 +801,6 @@ const Canvas = (() => {
             sqExpandBtn.addEventListener('click', e => {
                 e.stopPropagation();
                 App.openSqExpand?.(sqTextarea);
-            });
-
-            const sqDuplicateBtn = card.querySelector('.sq-duplicate-btn');
-            sqDuplicateBtn.addEventListener('mousedown', e => e.stopPropagation());
-            sqDuplicateBtn.addEventListener('click', e => {
-                e.stopPropagation();
-                App.duplicateSubquery?.(tableData);
             });
 
             const sqExplainBtn = card.querySelector('.sq-explain-btn');
@@ -1586,6 +1573,22 @@ const Canvas = (() => {
 
         if (typeof App !== 'undefined') App.cleanupPinsForRemovedTable(tableId);
         if (typeof Islands !== 'undefined') Islands.recompute();
+
+        // If recompute() nulled the selected island (the removed table was in it),
+        // re-select the single surviving island now — before updateSQLPreview() calls
+        // _flushCurrentIslandConfig(), which via _currentIslandKey() would otherwise
+        // fall back to that surviving island and overwrite its saved config with the
+        // stale flat state left over from the deleted island.
+        if (!State.selectedIslandKey && State.tables.length > 0 && typeof App !== 'undefined') {
+            const enabledJoins = State.joins.filter(j => j.enabled !== false);
+            const remaining    = App.computeIslands(State.tables, enabledJoins);
+            if (remaining.length === 1) {
+                const survivingKey = [...remaining[0]].sort().join('|');
+                State.selectedIslandKey = survivingKey;
+                App.blitIslandConfig?.(survivingKey);
+            }
+        }
+
         App.updateSQLPreview();
         if (typeof QueryPanel !== 'undefined') QueryPanel.refresh();
 

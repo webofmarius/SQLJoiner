@@ -1120,6 +1120,24 @@ body.is-canvas-overview-zoom {
 }
 
 /* Island binary-tree layout button */
+.island-copy-btn {
+    flex-shrink: 0;
+    background: transparent;
+    border: none;
+    color: rgba(255, 255, 255, 0.3);
+    font-size: 12px;
+    padding: 1px 4px;
+    cursor: pointer;
+    line-height: 1;
+    border-radius: 3px;
+    pointer-events: auto;
+    transition: color 0.12s, background 0.12s;
+}
+.island-copy-btn:hover {
+    color: rgba(255, 255, 255, 0.8);
+    background: rgba(255, 255, 255, 0.1);
+}
+
 .island-tree-btn {
     flex-shrink: 0;
     background: transparent;
@@ -5223,7 +5241,7 @@ kbd {
     padding: 2px 0;
 }
 /* .sq-expand-btn inherits the default button{} styles (same look as btn-add-subquery) */
-.sq-expand-btn, .sq-explain-btn, .sq-run-btn, .sq-duplicate-btn {
+.sq-expand-btn, .sq-explain-btn, .sq-run-btn {
     flex-shrink: 0;
     height: 40px;
 }

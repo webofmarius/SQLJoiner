@@ -383,6 +383,18 @@ const Islands = (() => {
             });
             header.appendChild(colorDot);
 
+            // Copy Island button — duplicates the entire island to the right
+            const copyBtn = document.createElement('button');
+            copyBtn.className   = 'island-copy-btn';
+            copyBtn.textContent = '⧉';
+            copyBtn.title       = 'Copy island — duplicate all tables, joins and config';
+            copyBtn.addEventListener('mousedown', e => { e.stopPropagation(); e.preventDefault(); });
+            copyBtn.addEventListener('click', e => {
+                e.stopPropagation();
+                if (typeof App !== 'undefined' && App.copyIsland) App.copyIsland(key);
+            });
+            header.appendChild(copyBtn);
+
             // Tree-layout button — rearranges this island's tables as a binary tree
             const treeBtn = document.createElement('button');
             treeBtn.className   = 'island-tree-btn';
