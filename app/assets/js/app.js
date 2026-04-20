@@ -4440,7 +4440,7 @@ const App = (() => {
             _importQueryRun();
         });
 
-        document.getElementById('import-query-textarea').addEventListener('keydown', e => {
+        document.getElementById('import-query-textarea').addEventListener('keydown', async e => {
             // Cmd/Ctrl+Enter triggers Import (same UX pattern as custom-query modal)
             if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
                 e.preventDefault();
@@ -4467,6 +4467,23 @@ const App = (() => {
                         return;
                     }
                 }
+            }
+            if (e.key === 'F2') {
+                e.preventDefault();
+                const ta2 = e.currentTarget;
+                const activeWord = (typeof SqlBackdrop !== 'undefined') ? SqlBackdrop.getActiveWord(ta2) : null;
+                if (!activeWord) return;
+                const newName = await Dialog.prompt('Rename item?', activeWord);
+                if (newName === null) return;
+                const trimmed = newName.trim();
+                if (!trimmed) return;
+                const esc    = activeWord.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                const result = ta2.value.replace(new RegExp(`\\b${esc}\\b`, 'gi'), trimmed);
+                if (result === ta2.value) return;
+                if (typeof UndoManager !== 'undefined') UndoManager.push(ta2);
+                ta2.value = result;
+                ta2.dispatchEvent(new Event('input', { bubbles: true }));
+                if (typeof UndoManager !== 'undefined') UndoManager.push(ta2);
             }
         });
 
