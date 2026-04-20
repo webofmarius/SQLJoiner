@@ -3184,8 +3184,7 @@ tr.row-hl-faded td { opacity: 0.28; }
 
 /* --- Calculus row highlight --- */
 tr.calculus-hl > td {
-    background-color: rgba(74, 158, 255, 0.10) !important;
-    outline: 1px solid rgba(74, 158, 255, 0.25);
+    background-color: rgba(17, 89, 15, 0.83) !important;
     outline-offset: -1px;
 }
 

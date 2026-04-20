@@ -4975,7 +4975,7 @@ async function _copyAsSqlSelect() {
         if (tr.classList.contains('dim-row-hidden'))  return null;
 
         const ths      = Array.from(document.querySelectorAll('#results-table thead tr th'));
-        const thLabels = ths.map(th => th.textContent.trim());
+        const thLabels = ths.map(th => _thGetLabel(th));
         const tds      = Array.from(tr.querySelectorAll('td'));
 
         // Build temp items with cell values from this result row
@@ -5036,7 +5036,7 @@ async function _copyAsSqlSelect() {
             if (numVal !== null) {
                 // Build labelValMap from this row's cell values
                 const ths      = Array.from(document.querySelectorAll('#results-table thead tr th'));
-                const thLabels = ths.map(th => th.textContent.trim());
+                const thLabels = ths.map(th => _thGetLabel(th));
                 const tds      = Array.from(tr.querySelectorAll('td'));
                 const labelValMap  = {};
                 const colKeyValMap = {};
