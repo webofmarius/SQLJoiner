@@ -2427,6 +2427,13 @@ body.is-cut-mode * { cursor: crosshair !important; }
     flex-shrink: 0;
 }
 .btn-select-locate:hover { color: var(--accent); }
+.hdr-color-chk {
+    flex-shrink: 0;
+    width: auto !important;
+    margin: 0 2px;
+    cursor: pointer;
+    opacity: 0.75;
+}
 
 .select-table-hdr {
     display: flex;

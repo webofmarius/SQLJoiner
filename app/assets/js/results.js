@@ -1170,6 +1170,16 @@ const Results = (() => {
         return (tableAlias && showSchemaAlias) ? `${tableAlias}.${bareName}` : (tableAlias ? bareName : name);
     }
 
+    /** Returns '#ffffff' or '#1a1a1a' — whichever is more readable on `hex` background. */
+    function _readableTextColor(hex) {
+        const r = parseInt(hex.slice(1, 3), 16) / 255;
+        const g = parseInt(hex.slice(3, 5), 16) / 255;
+        const b = parseInt(hex.slice(5, 7), 16) / 255;
+        const lin = c => c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+        const L = 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+        return L > 0.179 ? '#1a1a1a' : '#ffffff';
+    }
+
     /**
      * Reconstruct the SELECT state key (e.g. "u.age") for a result column.
      * Used to tag <th> elements so the highlight feature can locate them.
@@ -1328,6 +1338,22 @@ const Results = (() => {
             .some(v => (v || '').trim().toLowerCase() === nameLc);
     }
 
+    /** Re-apply table colors to all result header cells (called after a table color changes). */
+    function _applyResultHeaderColors() {
+        document.querySelectorAll('#results-table thead th').forEach(th => {
+            const colKey = th.dataset.colKey || '';
+            const alias  = colKey.includes('.') ? colKey.split('.')[0] : '';
+            const tbl    = alias ? (State.tables || []).find(t => t.alias === alias) : null;
+            if (tbl?.color) {
+                th.style.backgroundColor = tbl.color;
+                th.style.color = _readableTextColor(tbl.color);
+            } else {
+                th.style.backgroundColor = '';
+                th.style.color = '';
+            }
+        });
+    }
+
     /** Returns true when the DB result column name comes from a custom expression. */
     function _isCustomExprColumn(colName) {
         const nameLc = String(colName ?? '').toLowerCase();
@@ -1382,16 +1408,20 @@ const Results = (() => {
             // Store raw column name so Ctrl+C copies only the name, not badge/origin text
             th.dataset.raw = col;
 
-            // Tooltip: show full schema.table origin on hover
+            // Tooltip: show full schema.table origin on hover; also apply table color
             const colTableAlias = colTables[colIdx] || '';
             if (colTableAlias) {
-                const originTable = (State.tables || []).find(
-                    t => t.alias.toLowerCase() === colTableAlias.toLowerCase()
-                );
+                const colTableLc  = colTableAlias.toLowerCase();
+                const originTable = (State.tables || []).find(t => t.alias?.toLowerCase() === colTableLc)
+                                 ?? (State.tables || []).find(t => t.name?.toLowerCase()  === colTableLc);
                 if (originTable) {
                     th.title = originTable.database
                         ? `${originTable.database}.${originTable.name}`
                         : originTable.name;
+                    if (originTable.color) {
+                        th.style.backgroundColor = originTable.color;
+                        th.style.color = _readableTextColor(originTable.color);
+                    }
                 }
             }
 
@@ -5602,6 +5632,8 @@ async function _copyAsSqlSelect() {
         toggleFullscreen: _toggleFullscreen,
         /** Apply or remove col-deselected styling on a result column by its select key. */
         syncColDeselected: _applyColDeselected,
+        /** Re-apply table colors to all result header cells (call after a table color changes). */
+        refreshHeaderColors: _applyResultHeaderColors,
         /** Toggle highlight on a result column. scrollTo=true scrolls to the column. */
         highlightColumn(colKey, on, scrollTo = false) {
             if (on) _highlightedCols.add(colKey);

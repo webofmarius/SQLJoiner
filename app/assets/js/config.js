@@ -235,6 +235,16 @@ const QueryPanel = (() => {
         });
     }
 
+    /** Returns '#ffffff' or '#1a1a1a' — whichever is more readable on `hex` background. */
+    function _readableTextColor(hex) {
+        const r = parseInt(hex.slice(1, 3), 16) / 255;
+        const g = parseInt(hex.slice(3, 5), 16) / 255;
+        const b = parseInt(hex.slice(5, 7), 16) / 255;
+        const lin = c => c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+        const L = 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+        return L > 0.179 ? '#1a1a1a' : '#ffffff';
+    }
+
     function _refreshSelect() {
         const container = document.getElementById('select-columns');
         const emptyEl   = document.querySelector('#section-select .config-empty');
@@ -460,6 +470,28 @@ const QueryPanel = (() => {
             });
             hdr.appendChild(locateBtn);
 
+            if (table?.color) {
+                const colorChk = document.createElement('input');
+                colorChk.type = 'checkbox';
+                colorChk.className = 'hdr-color-chk';
+                colorChk.checked = !_colorDisabledGroups.has(group.alias);
+                colorChk.title = 'Apply table color to this header';
+                colorChk.addEventListener('mousedown', e => e.stopPropagation());
+                colorChk.addEventListener('change', e => {
+                    e.stopPropagation();
+                    if (colorChk.checked) {
+                        _colorDisabledGroups.delete(group.alias);
+                        hdr.style.backgroundColor = table.color;
+                        hdr.style.color = _readableTextColor(table.color);
+                    } else {
+                        _colorDisabledGroups.add(group.alias);
+                        hdr.style.backgroundColor = '';
+                        hdr.style.color = '';
+                    }
+                });
+                hdr.appendChild(colorChk);
+            }
+            
             const minimizeBtn = document.createElement('button');
             minimizeBtn.className = 'btn-select-locate btn-select-minimize';
             const isMinimized = _minimizedGroups.has(group.alias);
@@ -482,6 +514,10 @@ const QueryPanel = (() => {
             hdr.appendChild(minimizeBtn);
 
             hdr.appendChild(lblHdr);
+            if (table?.color && !_colorDisabledGroups.has(group.alias)) {
+                hdr.style.backgroundColor = table.color;
+                hdr.style.color = _readableTextColor(table.color);
+            }
             container.appendChild(hdr);
 
             // Per-group column search
@@ -601,6 +637,12 @@ const QueryPanel = (() => {
                 const row = document.createElement('div');
                 row.className = 'select-col-row is-draggable';
                 row.dataset.idx = globalIdx;
+                if (table?.color && !_colorDisabledGroups.has(group.alias)) {
+                    const r = parseInt(table.color.slice(1, 3), 16);
+                    const g = parseInt(table.color.slice(3, 5), 16);
+                    const b = parseInt(table.color.slice(5, 7), 16);
+                    row.style.backgroundColor = `rgba(${r}, ${g}, ${b}, 0.10)`;
+                }
 
                 const dragHandle = document.createElement('div');
                 dragHandle.className = 'drag-handle';
@@ -883,6 +925,7 @@ const QueryPanel = (() => {
     let _showCheckedOnly     = false;
     let _checkedOnlySnapshot = null; // Set of column keys that were checked when the toggle was activated
     const _minimizedGroups   = new Set(); // aliases of collapsed table groups
+    const _colorDisabledGroups = new Set(); // aliases where table color is suppressed in SELECT header
     const _groupSearchTerms  = {};   // alias → current per-group search string
     let _allMinimized        = false;
 

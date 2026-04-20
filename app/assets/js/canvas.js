@@ -1648,6 +1648,8 @@ const Canvas = (() => {
                 if (typeof UndoRedo !== 'undefined') UndoRedo.snapshot();
                 tableData.color = hex;
                 _applyCardColor(card, hex);
+                QueryPanel.refresh?.();
+                Results.refreshHeaderColors?.();
                 _closeColorPopup();
             });
             swatchWrap.appendChild(swatch);
@@ -1662,6 +1664,8 @@ const Canvas = (() => {
             if (typeof UndoRedo !== 'undefined') UndoRedo.snapshot();
             tableData.color = null;
             _applyCardColor(card, null);
+            QueryPanel.refresh?.();
+            Results.refreshHeaderColors?.();
             _closeColorPopup();
         });
 
