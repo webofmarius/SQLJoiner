@@ -982,15 +982,16 @@ class QueryParser
      */
     private function splitByAndOr(string $text): array
     {
-        $parts    = [];
-        $len      = strlen($text);
-        $upper    = strtoupper($text);
-        $depth    = 0;
-        $inString = false;
-        $strChar  = '';
-        $start    = 0;
-        $curConn  = null;
-        $i        = 0;
+        $parts          = [];
+        $len            = strlen($text);
+        $upper          = strtoupper($text);
+        $depth          = 0;
+        $inString       = false;
+        $strChar        = '';
+        $start          = 0;
+        $curConn        = null;
+        $betweenPending = 0; // BETWEEN keywords awaiting their AND
+        $i              = 0;
 
         while ($i < $len) {
             if (!$inString && ($text[$i] === "'" || $text[$i] === '"')) {
@@ -1007,6 +1008,18 @@ class QueryParser
             if ($text[$i] === ')') { $depth--; $i++; continue; }
 
             if ($depth === 0) {
+                // BETWEEN — the AND that follows is part of the range, not a separator
+                if (substr($upper, $i, 7) === 'BETWEEN') {
+                    $after      = $i + 7;
+                    $charBefore = $i > 0 ? $upper[$i - 1] : ' ';
+                    $charAfter  = $after < $len ? $upper[$after] : ' ';
+                    if ((!ctype_alnum($charBefore) && $charBefore !== '_')
+                        && (!ctype_alnum($charAfter) && $charAfter !== '_')) {
+                        $betweenPending++;
+                        $i = $after;
+                        continue;
+                    }
+                }
                 // AND (3 chars)
                 if (substr($upper, $i, 3) === 'AND') {
                     $after      = $i + 3;
@@ -1014,6 +1027,12 @@ class QueryParser
                     $charAfter  = $after < $len ? $upper[$after] : ' ';
                     if ((!ctype_alnum($charBefore) && $charBefore !== '_')
                         && (!ctype_alnum($charAfter) && $charAfter !== '_')) {
+                        if ($betweenPending > 0) {
+                            // This AND closes a BETWEEN range — skip it as a separator
+                            $betweenPending--;
+                            $i = $after;
+                            continue;
+                        }
                         $parts[]  = [$curConn, substr($text, $start, $i - $start)];
                         $curConn  = 'AND';
                         $i        = $after;
@@ -1064,6 +1083,16 @@ class QueryParser
         // IS NULL
         if (preg_match('/^(.+?)\s+IS\s+NULL\s*$/i', $clean, $m)) {
             return ['col' => trim($m[1]), 'op' => 'IS NULL', 'val' => ''];
+        }
+
+        // NOT BETWEEN … AND …  (before NOT LIKE to avoid ambiguity)
+        if (preg_match('/^(.+?)\s+NOT\s+BETWEEN\s+(.+?)\s+AND\s+(.+)$/i', $clean, $m)) {
+            return ['col' => trim($m[1]), 'op' => 'NOT BETWEEN', 'val' => trim($m[2]), 'val2' => trim($m[3])];
+        }
+
+        // BETWEEN … AND …
+        if (preg_match('/^(.+?)\s+BETWEEN\s+(.+?)\s+AND\s+(.+)$/i', $clean, $m)) {
+            return ['col' => trim($m[1]), 'op' => 'BETWEEN', 'val' => trim($m[2]), 'val2' => trim($m[3])];
         }
 
         // NOT LIKE  (before LIKE)
