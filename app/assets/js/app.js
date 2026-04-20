@@ -4547,6 +4547,12 @@ const App = (() => {
             });
 
 
+        _bindScopeMode(
+            document.getElementById('sql-pretty-input'),
+            document.getElementById('btn-sql-preview-scope'),
+            document.getElementById('chk-sql-preview-scope-exclusive')
+        );
+
         document.getElementById('btn-copy-pretty-sql')
             .addEventListener('click', () => {
                 const sql = document.getElementById('sql-pretty-input').value;

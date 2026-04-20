@@ -580,6 +580,9 @@
             <div class="modal-body">
                 <textarea id="sql-pretty-input" readonly data-sql-backdrop></textarea>
                 <div class="form-actions">
+                    <label class="scope-exclusive-label"><input type="checkbox" id="chk-sql-preview-scope-exclusive" checked disabled> multiple</label>
+                    <button type="button" id="btn-sql-preview-scope" class="btn-outline-blue btn-scope-mode">Scope</button>
+                    <span class="scope-legend">Alt+click: copy scopes <br /> Alt+right-click: extract subquery</span>
                     <button type="button" id="btn-copy-pretty-sql">Copy SQL</button>
                     <div class="tables-menu">
                         <button type="button" class="btn-tables-trigger">Tables ▾</button>
