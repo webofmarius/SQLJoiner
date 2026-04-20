@@ -522,6 +522,13 @@ const App = (() => {
                 return;
             }
 
+            // F5 — Focus mode: hide all panels / restore previous visibility
+            if (e.code === 'F5' && !isMod) {
+                e.preventDefault();
+                _toggleFocusMode();
+                return;
+            }
+
             // F7 — Toggle results panel minimize / restore
             if (e.code === 'F7' && !isMod) {
                 e.preventDefault();
@@ -5001,6 +5008,30 @@ const App = (() => {
         const collapsed = pane.el.classList.contains('is-collapsed');
         _applyPaneState(key, !collapsed);
         localStorage.setItem(`pane-${key}`, !collapsed ? 'collapsed' : 'expanded');
+    }
+
+    let _focusModeState = null; // non-null while F5 focus mode is active
+
+    function _toggleFocusMode() {
+        const resultsEl = document.getElementById('results-panel');
+        if (_focusModeState) {
+            // Restore each panel to its pre-focus state
+            if (!_focusModeState.sidebarCollapsed) _applyPaneState('sidebar', false);
+            if (!_focusModeState.configCollapsed)  _applyPaneState('config',  false);
+            if (!_focusModeState.resultsCollapsed && resultsEl?.classList.contains('is-collapsed'))
+                Results.toggle?.();
+            _focusModeState = null;
+        } else {
+            // Snapshot current visibility, then hide everything visible
+            _focusModeState = {
+                sidebarCollapsed: _PANE_DEFAULTS.sidebar.el?.classList.contains('is-collapsed') ?? false,
+                configCollapsed:  _PANE_DEFAULTS.config.el?.classList.contains('is-collapsed')  ?? false,
+                resultsCollapsed: resultsEl?.classList.contains('is-collapsed') ?? false,
+            };
+            if (!_focusModeState.sidebarCollapsed) _applyPaneState('sidebar', true);
+            if (!_focusModeState.configCollapsed)  _applyPaneState('config',  true);
+            if (!_focusModeState.resultsCollapsed) Results.toggle?.();
+        }
     }
 
     function _applyPaneState(key, collapsed) {
