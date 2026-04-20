@@ -3048,6 +3048,12 @@ body.is-resizing-results #resizer-results {
     letter-spacing: 0;
     color: var(--text);
 }
+#results-table th[draggable="true"] { cursor: grab; }
+#results-table td[draggable="true"] { cursor: grab; }
+#results-table th[draggable="true"]:active,
+#results-table td[draggable="true"]:active { cursor: grabbing; }
+#results-table th.th-dragging { opacity: 0.6; }
+
 #results-table th.th-alias {
     background: color-mix(in srgb, var(--surface3) 88%, #c8a000 12%);
     color: #e6c000;

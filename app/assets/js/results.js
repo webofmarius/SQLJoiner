@@ -1618,6 +1618,21 @@ const Results = (() => {
                 });
             });
 
+            // Drag to WHERE / GROUP BY / HAVING / ORDER BY drop zones
+            if (th.dataset.colKey) {
+                th.draggable = true;
+                th.addEventListener('dragstart', e => {
+                    e.dataTransfer.effectAllowed = 'copy';
+                    e.dataTransfer.setData('text/x-col-key', th.dataset.colKey);
+                    th.classList.add('th-dragging');
+                });
+                th.addEventListener('dragend', () => {
+                    th.classList.remove('th-dragging');
+                    document.querySelectorAll('.drop-zone.is-drag-hover')
+                        .forEach(z => z.classList.remove('is-drag-hover'));
+                });
+            }
+
             trHead.appendChild(th);
         });
         thead.innerHTML = '';
@@ -1793,6 +1808,24 @@ const Results = (() => {
                     _applyDimVisibility();
                     _applyDimRowVisibility();
                 });
+
+                // Drag to WHERE / GROUP BY / HAVING / ORDER BY drop zones
+                const tdColKey = trHead.querySelectorAll('th')[colIdx]?.dataset.colKey;
+                if (tdColKey) {
+                    td.draggable = true;
+                    td.addEventListener('dragstart', e => {
+                        e.dataTransfer.effectAllowed = 'copy';
+                        e.dataTransfer.setData('text/x-col-key', tdColKey);
+                        const rawVal = td.dataset.raw ?? td.textContent;
+                        if (rawVal !== null && rawVal !== undefined && rawVal !== 'NULL') {
+                            e.dataTransfer.setData('text/x-col-value', String(rawVal));
+                        }
+                    });
+                    td.addEventListener('dragend', () => {
+                        document.querySelectorAll('.drop-zone.is-drag-hover')
+                            .forEach(z => z.classList.remove('is-drag-hover'));
+                    });
+                }
 
                 tr.appendChild(td);
             });

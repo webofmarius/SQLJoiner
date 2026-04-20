@@ -88,6 +88,41 @@ const QueryPanel = (() => {
         _applyModeUI('groupby');
         _applyModeUI('having');
 
+        // HTML5 drop zones — accept dragged result-table headers / cells
+        document.querySelectorAll('.drop-zone[data-section]').forEach(zone => {
+            zone.addEventListener('dragover', e => {
+                if (!e.dataTransfer.types.includes('text/x-col-key')) return;
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'copy';
+                zone.classList.add('is-drag-hover');
+            });
+            zone.addEventListener('dragleave', e => {
+                if (zone.contains(e.relatedTarget)) return;
+                zone.classList.remove('is-drag-hover');
+            });
+            zone.addEventListener('drop', e => {
+                zone.classList.remove('is-drag-hover');
+                const colKey = e.dataTransfer.getData('text/x-col-key');
+                if (!colKey) return;
+                e.preventDefault();
+                const cellValue = e.dataTransfer.getData('text/x-col-value') || '';
+                _dropColKey(zone, colKey, cellValue);
+                App.notify?.(`"${colKey}" added to ${zone.dataset.section.toUpperCase()}`, 'success');
+                // For WHERE / HAVING: scroll to the new row and focus the value input
+                const sec = zone.dataset.section;
+                if (sec === 'where' || sec === 'having') {
+                    requestAnimationFrame(() => {
+                        const id   = sec === 'where' ? 'where-conditions' : 'having-conditions';
+                        const rows = document.querySelectorAll(`#${id} .condition-row`);
+                        if (!rows.length) return;
+                        const newRow = rows[rows.length - 1];
+                        newRow.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                        newRow.querySelector('input[placeholder="value"]')?.focus({ preventScroll: true });
+                    });
+                }
+            });
+        });
+
         // Alt+click a SELECT column row → add it to WHERE (capture phase to prevent checkbox toggle)
         document.getElementById('select-columns')?.addEventListener('click', e => {
             if (!e.altKey) return;
@@ -2173,28 +2208,29 @@ const QueryPanel = (() => {
 
     // =========================================================================
     // Column drag dropped onto a config-panel drop zone
-    // Called by joins.js _onDragEnd when drop target is .drop-zone[data-section]
+    // Called by joins.js _onDragEnd (canvas drag) and the HTML5 drop listeners
+    // wired in init() (results-table drag).
     // =========================================================================
-    function onColumnDrop(zone, tableId, colName) {
-        const table = State.tables.find(t => t.id === tableId);
-        if (!table) return;
 
-        const col = `${table.alias}.${colName}`;
-
+    /**
+     * Core drop handler — expects a pre-formed colKey ("alias.col").
+     * cellValue is optionally pre-filled into WHERE / HAVING val fields.
+     */
+    function _dropColKey(zone, colKey, cellValue) {
         switch (zone.dataset.section) {
             case 'where':
                 if (State.whereMode === 'visual') {
                     if (typeof UndoRedo !== 'undefined') UndoRedo.snapshot();
-                    State.where.push({ col, op: '=', val: '', operator: 'AND' });
+                    State.where.push({ col: colKey, op: '=', val: cellValue ?? '', operator: 'AND' });
                     _refreshWhere();
                     App.updateSQLPreview();
                 }
                 break;
             case 'groupby':
                 if (State.groupByMode === 'visual') {
-                    if (!State.groupBy.includes(col)) {
+                    if (!State.groupBy.includes(colKey)) {
                         if (typeof UndoRedo !== 'undefined') UndoRedo.snapshot();
-                        State.groupBy.push(col);
+                        State.groupBy.push(colKey);
                         _refreshGroupBy();
                         App.updateSQLPreview();
                     }
@@ -2203,23 +2239,29 @@ const QueryPanel = (() => {
             case 'having':
                 if (State.havingMode === 'visual') {
                     if (typeof UndoRedo !== 'undefined') UndoRedo.snapshot();
-                    State.having.push({ col, op: '=', val: '' });
+                    State.having.push({ col: colKey, op: '=', val: cellValue ?? '' });
                     _refreshHaving();
                     App.updateSQLPreview();
                 }
                 break;
             case 'orderby':
                 if (State.orderByMode === 'visual') {
-                    // Prevent duplicate ORDER BY on same column
-                    if (!State.orderBy.find(o => o.col === col)) {
+                    if (!State.orderBy.find(o => o.col === colKey)) {
                         if (typeof UndoRedo !== 'undefined') UndoRedo.snapshot();
-                        State.orderBy.push({ col, dir: 'ASC' });
+                        State.orderBy.push({ col: colKey, dir: 'ASC' });
                         _refreshOrderBy();
                         App.updateSQLPreview();
                     }
                 }
                 break;
         }
+    }
+
+    /** Called by joins.js when a canvas column is dropped onto a drop zone. */
+    function onColumnDrop(zone, tableId, colName) {
+        const table = State.tables.find(t => t.id === tableId);
+        if (!table) return;
+        _dropColKey(zone, `${table.alias}.${colName}`);
     }
 
     /** Generates the SELECT clause part from State.select */
