@@ -2819,18 +2819,25 @@ const QueryPanel = (() => {
                          FULL: 'FULL OUTER JOIN', CROSS: 'CROSS JOIN' }[j.type] ?? 'JOIN';
 
             // Which table is the "new" one to add to the chain?
-            let joinT, onL, onR;
+            let joinT, onL, onR, reversed = false;
             if (!chain.has(j.toTableId)) {
                 joinT = toT;   onL = `${fromT.alias}.${j.fromCol}`; onR = `${toT.alias}.${j.toCol}`;
                 chain.add(j.toTableId);
             } else if (!chain.has(j.fromTableId)) {
                 joinT = fromT; onL = `${toT.alias}.${j.toCol}`;   onR = `${fromT.alias}.${j.fromCol}`;
                 chain.add(j.fromTableId);
+                reversed = true;
             } else {
                 // Both already in chain — additional ON condition between them
                 joinT = toT;   onL = `${fromT.alias}.${j.fromCol}`; onR = `${toT.alias}.${j.toCol}`;
             }
-            sql += `\n${kw} ${tableRef(joinT)} ${joinT.alias} ON ${onL} = ${onR}`;
+            const extraParts = (j.extraConditions ?? []).map(ec =>
+                reversed
+                    ? `${toT.alias}.${ec.toCol} = ${fromT.alias}.${ec.fromCol}`
+                    : `${fromT.alias}.${ec.fromCol} = ${toT.alias}.${ec.toCol}`
+            );
+            const onClause = [onL + ' = ' + onR, ...extraParts].join(' AND ');
+            sql += `\n${kw} ${tableRef(joinT)} ${joinT.alias} ON ${onClause}`;
         });
 
 

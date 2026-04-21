@@ -532,6 +532,11 @@
             </div>
             <div class="modal-body">
                 <div id="join-info" class="join-info"></div>
+                <div class="join-conditions-section">
+                    <div class="join-conditions-label">ON Conditions</div>
+                    <div id="join-conditions"></div>
+                    <button type="button" id="btn-add-join-condition" class="btn-add-condition">+ Add condition</button>
+                </div>
                 <label>
                     Join Type
                     <select id="join-type-select">
@@ -542,7 +547,7 @@
                         <option value="CROSS">CROSS JOIN</option>
                     </select>
                 </label>
-<div class="form-actions">
+                <div class="form-actions">
                     <button type="button" id="btn-save-join">Save</button>
                     <button type="button" id="btn-delete-join" class="btn-danger">Remove Join</button>
                 </div>

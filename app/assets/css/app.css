@@ -5027,6 +5027,72 @@ th.calc-nop { opacity: 0.1; font-weight: bold; }
     margin-bottom: 5px;
     letter-spacing: 0.02em;
 }
+.join-info__tables {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text);
+}
+
+/* Join conditions list */
+.join-conditions-section {
+    margin-bottom: 12px;
+}
+.join-conditions-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+}
+.join-condition-row {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    margin-bottom: 5px;
+}
+.join-condition-row select {
+    flex: 1;
+    min-width: 0;
+    font-size: 12px;
+    font-family: var(--font-mono);
+    padding: 3px 5px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text);
+}
+.join-cond-eq {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-muted);
+    flex-shrink: 0;
+}
+.join-cond-delete {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--text-muted);
+    padding: 2px 4px;
+    font-size: 11px;
+    border-radius: 3px;
+    flex-shrink: 0;
+    line-height: 1;
+}
+.join-cond-delete:hover:not(:disabled) { color: var(--danger, #e06c6c); }
+.join-cond-delete:disabled { opacity: 0.25; cursor: default; }
+.btn-add-condition {
+    font-size: 11px;
+    background: none;
+    border: 1px dashed var(--border);
+    border-radius: 4px;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 3px 8px;
+    margin-top: 2px;
+    width: 100%;
+}
+.btn-add-condition:hover { border-color: var(--accent); color: var(--accent); }
 
 /* =============================================================================
    13. Context modal — saved-contexts list

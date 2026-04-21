@@ -29,7 +29,7 @@ const State = {
     /** @type {Array<{id:string, name:string, alias:string, database:string|null, position:{x:number,y:number}, columns:Array}>} */
     tables: [],
 
-    /** @type {Array<{id:string, fromTableId:string, fromCol:string, toTableId:string, toCol:string, type:string}>} */
+    /** @type {Array<{id:string, fromTableId:string, fromCol:string, toTableId:string, toCol:string, type:string, extraConditions:Array<{fromCol:string,toCol:string}>}>} */
     joins: [],
 
     /** @type {string[]}  empty = SELECT *  */

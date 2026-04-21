@@ -73,6 +73,7 @@ class JoinClause
             $fromInChain = isset($chain[$fromId]);
             $toInChain   = isset($chain[$toId]);
 
+            $reversed = false;
             if (!$toInChain) {
                 // Normal order: from-table is the driver, to-table is new
                 $joinTable = $toT;
@@ -85,6 +86,7 @@ class JoinClause
                 $onLeft    = $toT['alias']   . '.' . $this->col($join['toCol']   ?? '');
                 $onRight   = $fromT['alias'] . '.' . $this->col($join['fromCol'] ?? '');
                 $chain[$fromId] = true;
+                $reversed  = true;
             } else {
                 // Both already in chain — emit as an additional ON join
                 $joinTable = $toT;
@@ -92,13 +94,28 @@ class JoinClause
                 $onRight   = $toT['alias']   . '.' . $this->col($join['toCol']   ?? '');
             }
 
+            $extraParts = [];
+            foreach ($join['extraConditions'] ?? [] as $ec) {
+                $ecFrom = $this->col((string) ($ec['fromCol'] ?? ''));
+                $ecTo   = $this->col((string) ($ec['toCol']   ?? ''));
+                if ($reversed) {
+                    $extraParts[] = $toT['alias'] . '.' . $ecTo . ' = ' . $fromT['alias'] . '.' . $ecFrom;
+                } else {
+                    $extraParts[] = $fromT['alias'] . '.' . $ecFrom . ' = ' . $toT['alias'] . '.' . $ecTo;
+                }
+            }
+
+            $onSql = $onLeft . ' = ' . $onRight;
+            if (!empty($extraParts)) {
+                $onSql .= ' AND ' . implode(' AND ', $extraParts);
+            }
+
             $lines[] = sprintf(
-                '%s %s %s ON %s = %s',
+                '%s %s %s ON %s',
                 $kw,
                 $this->tableRef($joinTable),
                 $joinTable['alias'],
-                $onLeft,
-                $onRight
+                $onSql
             );
         }
 

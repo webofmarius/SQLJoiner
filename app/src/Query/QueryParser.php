@@ -504,15 +504,19 @@ class QueryParser
                     continue;
                 }
                 if ($table['id'] === $joinDef['fromTableId']) {
-                    $col = $joinDef['fromCol'];
-                    if (!$this->hasColumn($table['columns'], $col)) {
-                        $table['columns'][] = ['name' => $col];
+                    foreach (array_merge([['fromCol' => $joinDef['fromCol']]], array_map(fn($ec) => ['fromCol' => $ec['fromCol']], $joinDef['extraConditions'] ?? [])) as $pair) {
+                        $col = $pair['fromCol'];
+                        if ($col !== '' && !$this->hasColumn($table['columns'], $col)) {
+                            $table['columns'][] = ['name' => $col];
+                        }
                     }
                 }
                 if ($table['id'] === $joinDef['toTableId']) {
-                    $col = $joinDef['toCol'];
-                    if (!$this->hasColumn($table['columns'], $col)) {
-                        $table['columns'][] = ['name' => $col];
+                    foreach (array_merge([['toCol' => $joinDef['toCol']]], array_map(fn($ec) => ['toCol' => $ec['toCol']], $joinDef['extraConditions'] ?? [])) as $pair) {
+                        $col = $pair['toCol'];
+                        if ($col !== '' && !$this->hasColumn($table['columns'], $col)) {
+                            $table['columns'][] = ['name' => $col];
+                        }
                     }
                 }
             }
@@ -761,40 +765,62 @@ class QueryParser
     }
 
     /**
-     * Parse a JOIN ON clause.  Only handles the simple case:
-     *   alias1.col1 = alias2.col2
+     * Parse a JOIN ON clause.  Handles one or more equality conditions joined by AND:
+     *   alias1.col1 = alias2.col2 [AND alias1.col3 = alias2.col4 ...]
      * Backtick-quoted identifiers (e.g. `col_name`) are stripped before matching.
-     * Returns a join array or null if the pattern is not matched.
+     * Returns a join array or null if no valid condition is found.
      */
     private function parseOnClause(string $onText, string $joinType, array $tables): ?array
     {
         $clean = str_replace('`', '', $onText);
-        if (!preg_match('/(\w+)\.(\w+)\s*=\s*(\w+)\.(\w+)/i', $clean, $m)) {
+        preg_match_all('/(\w+)\.(\w+)\s*=\s*(\w+)\.(\w+)/i', $clean, $allMatches, PREG_SET_ORDER);
+
+        if (empty($allMatches)) {
             return null;
         }
 
-        $alias1 = strtolower($m[1]); $col1 = $m[2];
-        $alias2 = strtolower($m[3]); $col2 = $m[4];
-
-        $fromTable = null;
-        $toTable   = null;
+        // Build alias → table lookup
+        $tablesByAlias = [];
         foreach ($tables as $t) {
-            if (strtolower($t['alias']) === $alias1) { $fromTable = $t; }
-            if (strtolower($t['alias']) === $alias2) { $toTable   = $t; }
+            $tablesByAlias[strtolower($t['alias'])] = $t;
         }
+
+        // Primary condition = first match
+        $primary = $allMatches[0];
+        $alias1  = strtolower($primary[1]); $col1 = $primary[2];
+        $alias2  = strtolower($primary[3]); $col2 = $primary[4];
+
+        $fromTable = $tablesByAlias[$alias1] ?? null;
+        $toTable   = $tablesByAlias[$alias2] ?? null;
 
         if ($fromTable === null || $toTable === null) {
             return null;
         }
 
-        return [
-            'id'          => 'j_' . bin2hex(random_bytes(5)),
-            'fromTableId' => $fromTable['id'],
-            'fromCol'     => $col1,
-            'toTableId'   => $toTable['id'],
-            'toCol'       => $col2,
-            'type'        => $joinType,
+        $join = [
+            'id'              => 'j_' . bin2hex(random_bytes(5)),
+            'fromTableId'     => $fromTable['id'],
+            'fromCol'         => $col1,
+            'toTableId'       => $toTable['id'],
+            'toCol'           => $col2,
+            'type'            => $joinType,
+            'extraConditions' => [],
         ];
+
+        // Map remaining AND-connected pairs to extraConditions, oriented to fromTable
+        $fromAlias = strtolower($fromTable['alias']);
+        for ($i = 1; $i < count($allMatches); $i++) {
+            $m      = $allMatches[$i];
+            $mA1    = strtolower($m[1]); $mC1 = $m[2];
+            $mA2    = strtolower($m[3]); $mC2 = $m[4];
+            if ($mA1 === $fromAlias) {
+                $join['extraConditions'][] = ['fromCol' => $mC1, 'toCol' => $mC2];
+            } else {
+                $join['extraConditions'][] = ['fromCol' => $mC2, 'toCol' => $mC1];
+            }
+        }
+
+        return $join;
     }
 
     // -------------------------------------------------------------------------

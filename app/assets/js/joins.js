@@ -233,16 +233,17 @@ const Joins = (() => {
         if (isMerge) State._pendingMergeToTableId = toTableId;
 
         const join = {
-            id:          'j_' + Date.now(),
+            id:              'j_' + Date.now(),
             fromTableId,
             fromCol,
             toTableId,
             toCol,
-            type:        'INNER',
-            color:       null,
-            enabled:     true,
-            label:       '',
-            note:        '',
+            type:            'INNER',
+            color:           null,
+            enabled:         true,
+            label:           '',
+            note:            '',
+            extraConditions: [],
         };
 
         if (typeof UndoRedo !== 'undefined') UndoRedo.snapshot();
@@ -515,7 +516,8 @@ const Joins = (() => {
 
         label.setAttribute('x', midX);
         label.setAttribute('y', midY);
-        label.textContent = join.type;
+        const _extraCount = (join.extraConditions ?? []).length;
+        label.textContent = _extraCount > 0 ? `${join.type} +${_extraCount}` : join.type;
         delBtn.setAttribute('x', midX + 22);
         delBtn.setAttribute('y', midY);
 
@@ -539,9 +541,13 @@ const Joins = (() => {
             }
         }
 
-        // Mark the two joined column rows in accent colour
+        // Mark the two joined column rows in accent colour (primary + extra conditions)
         _markJoinedCol(join.fromTableId, join.fromCol);
         _markJoinedCol(join.toTableId,   join.toCol);
+        (join.extraConditions ?? []).forEach(ec => {
+            _markJoinedCol(join.fromTableId, ec.fromCol);
+            _markJoinedCol(join.toTableId,   ec.toCol);
+        });
     }
 
     // =========================================================================
@@ -657,13 +663,65 @@ const Joins = (() => {
         const toTable   = State.tables.find(t => t.id === join.toTableId);
         const fromAlias = fromTable?.alias ?? '?';
         const toAlias   = toTable?.alias   ?? '?';
+        const fromCols  = (fromTable?.columns ?? []).map(c => (typeof c === 'string' ? c : c.name));
+        const toCols    = (toTable?.columns   ?? []).map(c => (typeof c === 'string' ? c : c.name));
 
         const labelText = (join.label ?? '').trim();
         document.getElementById('join-info').innerHTML =
             (labelText ? `<div class="join-info__label">${_esc(labelText)}</div>` : '') +
-            `<strong>${_esc(fromAlias)}.${_esc(join.fromCol)}</strong>` +
-            `<span style="opacity:0.45;margin:0 6px">↔</span>` +
-            `<strong>${_esc(toAlias)}.${_esc(join.toCol)}</strong>`;
+            `<span class="join-info__tables">${_esc(fromAlias)} ↔ ${_esc(toAlias)}</span>`;
+
+        // Build condition rows
+        const container = document.getElementById('join-conditions');
+        container.innerHTML = '';
+
+        const _makeColSelect = (cols, alias, selectedVal, cls) => {
+            const sel = document.createElement('select');
+            sel.className = cls;
+            const colSet = new Set(cols);
+            if (selectedVal && !colSet.has(selectedVal)) cols = [selectedVal, ...cols];
+            cols.forEach(c => {
+                const opt = document.createElement('option');
+                opt.value = c;
+                opt.textContent = `${alias}.${c}`;
+                if (c === selectedVal) opt.selected = true;
+                sel.appendChild(opt);
+            });
+            return sel;
+        };
+
+        const _updateDeleteBtns = () => {
+            const rows = container.querySelectorAll('.join-condition-row');
+            rows.forEach(r => { r.querySelector('.join-cond-delete').disabled = rows.length <= 1; });
+        };
+
+        const _addConditionRow = (fromCol, toCol) => {
+            const row = document.createElement('div');
+            row.className = 'join-condition-row';
+            row.appendChild(_makeColSelect(fromCols, fromAlias, fromCol, 'join-cond-from'));
+            const eq = document.createElement('span');
+            eq.className = 'join-cond-eq';
+            eq.textContent = '=';
+            row.appendChild(eq);
+            row.appendChild(_makeColSelect(toCols, toAlias, toCol, 'join-cond-to'));
+            const del = document.createElement('button');
+            del.type = 'button';
+            del.className = 'join-cond-delete';
+            del.title = 'Remove condition';
+            del.textContent = '✕';
+            del.addEventListener('click', () => { row.remove(); _updateDeleteBtns(); });
+            row.appendChild(del);
+            container.appendChild(row);
+        };
+
+        _addConditionRow(join.fromCol, join.toCol);
+        (join.extraConditions ?? []).forEach(ec => _addConditionRow(ec.fromCol, ec.toCol));
+        _updateDeleteBtns();
+
+        document.getElementById('btn-add-join-condition').onclick = () => {
+            _addConditionRow(fromCols[0] ?? '', toCols[0] ?? '');
+            _updateDeleteBtns();
+        };
 
         document.getElementById('join-type-select').value = join.type;
         document.getElementById('modal-join').classList.remove('hidden');
@@ -679,6 +737,18 @@ const Joins = (() => {
         if (join) {
             if (typeof UndoRedo !== 'undefined') UndoRedo.snapshot();
             join.type = document.getElementById('join-type-select').value;
+
+            const rows = document.querySelectorAll('#join-conditions .join-condition-row');
+            const conditions = Array.from(rows).map(r => ({
+                fromCol: r.querySelector('.join-cond-from').value,
+                toCol:   r.querySelector('.join-cond-to').value,
+            }));
+            if (conditions.length > 0) {
+                join.fromCol         = conditions[0].fromCol;
+                join.toCol           = conditions[0].toCol;
+                join.extraConditions = conditions.slice(1);
+            }
+
             _renderJoin(join);
             if (typeof Islands !== 'undefined') Islands.recompute();
             App.updateSQLPreview();
