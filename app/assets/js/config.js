@@ -2299,20 +2299,30 @@ const QueryPanel = (() => {
 
             const hasAliases = State.columnOrder.some(k => (State.selectAliases || {})[k]);
             if (useDelimiter || useSortAlpha) {
-                const cols = useSortAlpha ? _alphaSortedCopy(State.columnOrder) : State.columnOrder;
-                rawText = useDelimiter
-                    ? (useSortAlpha ? _injectDelimitersByGroup(cols) : _injectDelimiters(cols))
-                    : cols.map(_colWithAlias).join(', ');
+                if (useDelimiter && State.tables.some(t => t.isSubquery)) {
+                    const tables = [...State.tables].sort((a, b) => (a.order ?? 1) - (b.order ?? 1));
+                    rawText = tables.reduce((acc, t, i) => acc + (i > 0 ? ", '|||', " : '') + `${t.alias}.*`, '');
+                } else {
+                    const cols = useSortAlpha ? _alphaSortedCopy(State.columnOrder) : State.columnOrder;
+                    rawText = useDelimiter
+                        ? (useSortAlpha ? _injectDelimitersByGroup(cols) : _injectDelimiters(cols))
+                        : cols.map(_colWithAlias).join(', ');
+                }
             } else if (!isDefault || hasAliases) {
                 rawText = State.columnOrder.map(_colWithAlias).join(', ');
             }
         } else if (useDelimiter || useSortAlpha) {
-            const allCols = _allColumns();
-            if (allCols.length > 0) {
-                const cols = useSortAlpha ? _alphaSortedCopy(allCols) : allCols;
-                rawText = useDelimiter
-                    ? (useSortAlpha ? _injectDelimitersByGroup(cols) : _injectDelimiters(cols))
-                    : cols.map(_colWithAlias).join(', ');
+            if (useDelimiter && State.tables.some(t => t.isSubquery)) {
+                const tables = [...State.tables].sort((a, b) => (a.order ?? 1) - (b.order ?? 1));
+                rawText = tables.reduce((acc, t, i) => acc + (i > 0 ? ", '|||', " : '') + `${t.alias}.*`, '');
+            } else {
+                const allCols = _allColumns();
+                if (allCols.length > 0) {
+                    const cols = useSortAlpha ? _alphaSortedCopy(allCols) : allCols;
+                    rawText = useDelimiter
+                        ? (useSortAlpha ? _injectDelimitersByGroup(cols) : _injectDelimiters(cols))
+                        : cols.map(_colWithAlias).join(', ');
+                }
             }
         }
 
@@ -2647,6 +2657,20 @@ const QueryPanel = (() => {
             return out;
         };
 
+        // Subquery tables (joined islands) only expose join-key columns in their metadata.
+        // When delimiter is on and no explicit columns are chosen, use alias.* per table.
+        const _hasSubqueryTables = () => state.tables.some(t => _preActiveIds.has(t.id) && t.isSubquery);
+        const _delimStarSelect   = () => {
+            const tables = state.tables.filter(t => _preActiveIds.has(t.id))
+                .sort((a, b) => (a.order ?? 1) - (b.order ?? 1));
+            const parts = [];
+            tables.forEach((t, i) => {
+                if (i > 0) parts.push("'|||'");
+                parts.push(`${t.alias}.*`);
+            });
+            return parts.join(', ');
+        };
+
         let selectPart = '*';
         if (state.selectNone && state.selectMode !== 'raw') {
             selectPart = '/* no columns selected */';
@@ -2670,12 +2694,16 @@ const QueryPanel = (() => {
 
             const hasAliases = _activeColOrder.some(k => (state.selectAliases || {})[k]);
             if (useDelimiter || useSortVisual) {
-                // Always expand to explicit columns when delimiter or sort-alpha is on —
-                // SELECT * cannot carry ordering or '|||' markers.
-                const cols = useSortVisual ? _alphaSorted(_activeColOrder) : _activeColOrder;
-                selectPart = useDelimiter
-                    ? (useSortVisual ? _injectDelimitersByGroup(cols) : _injectDelimiters(cols))
-                    : cols.map(_colWithAlias).join(', ');
+                if (useDelimiter && _hasSubqueryTables()) {
+                    selectPart = _delimStarSelect();
+                } else {
+                    // Always expand to explicit columns when delimiter or sort-alpha is on —
+                    // SELECT * cannot carry ordering or '|||' markers.
+                    const cols = useSortVisual ? _alphaSorted(_activeColOrder) : _activeColOrder;
+                    selectPart = useDelimiter
+                        ? (useSortVisual ? _injectDelimitersByGroup(cols) : _injectDelimiters(cols))
+                        : cols.map(_colWithAlias).join(', ');
+                }
             } else if (!isDefault || hasAliases) {
                 selectPart = _activeColOrder.map(_colWithAlias).join(', ');
             } else {
@@ -2683,12 +2711,16 @@ const QueryPanel = (() => {
             }
         } else if (useDelimiter || useSortVisual) {
             // columnOrder not yet populated; derive from active island tables
-            const allCols = _activeAllCols();
-            if (allCols.length > 0) {
-                const cols = useSortVisual ? _alphaSorted(allCols) : allCols;
-                selectPart = useDelimiter
-                    ? (useSortVisual ? _injectDelimitersByGroup(cols) : _injectDelimiters(cols))
-                    : cols.map(_colWithAlias).join(', ');
+            if (useDelimiter && _hasSubqueryTables()) {
+                selectPart = _delimStarSelect();
+            } else {
+                const allCols = _activeAllCols();
+                if (allCols.length > 0) {
+                    const cols = useSortVisual ? _alphaSorted(allCols) : allCols;
+                    selectPart = useDelimiter
+                        ? (useSortVisual ? _injectDelimitersByGroup(cols) : _injectDelimiters(cols))
+                        : cols.map(_colWithAlias).join(', ');
+                }
             }
         }
 

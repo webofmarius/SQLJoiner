@@ -310,8 +310,15 @@ class QueryBuilder
         // When delimiter is on, SELECT * cannot carry delimiters — expand to explicit columns.
         // Use the columnOrder sent by the frontend (respects drag-reorder); fall back to
         // deriving from the tables array in declaration order.
+        // Exception: subquery (joined-island) tables only expose join-key columns in their
+        // metadata — use alias.* per table so all columns appear between delimiters.
         if ($selectAddDelimiter && empty($select) && $selectMode !== 'raw') {
-            if (!empty($columnOrder)) {
+            $hasSubquery = !empty(array_filter($tables, fn($t) => !empty($t['isSubquery'])));
+            if ($hasSubquery) {
+                foreach ($tables as $t) {
+                    $select[] = ($t['alias'] ?? '') . '.*';
+                }
+            } elseif (!empty($columnOrder)) {
                 $select = array_values(array_filter(
                     $columnOrder,
                     fn($k) => preg_match('/^\w+\.\w+$/', (string) $k)
@@ -573,6 +580,16 @@ class QueryBuilder
         $cols = [];
         foreach ($select as $item) {
             $item = (string) $item;
+            if (preg_match('/^(\w+)\.\*$/', $item, $m)) {
+                // alias.* — used for subquery tables where full column list is unavailable
+                $cols[] = [
+                    'alias'   => $m[1],
+                    'colname' => '*',
+                    'sortkey' => $m[1],
+                    'expr'    => $m[1] . '.*',
+                ];
+                continue;
+            }
             if (!preg_match('/^(\w+)\.(\w+)$/', $item, $m)) {
                 continue; // silently skip malformed items
             }
