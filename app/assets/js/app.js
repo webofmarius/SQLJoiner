@@ -5122,27 +5122,27 @@ const App = (() => {
         localStorage.setItem(`pane-${key}`, !collapsed ? 'collapsed' : 'expanded');
     }
 
-    let _focusModeState = null; // non-null while F5 focus mode is active
+    let _focusModeState = null; // saved pane state for F5 restore
 
     function _toggleFocusMode() {
         const resultsEl = document.getElementById('results-panel');
-        if (_focusModeState) {
-            // Restore each panel to its pre-focus state
+        const sidebarCollapsed = _PANE_DEFAULTS.sidebar.el?.classList.contains('is-collapsed') ?? false;
+        const configCollapsed  = _PANE_DEFAULTS.config.el?.classList.contains('is-collapsed')  ?? false;
+        const resultsCollapsed = resultsEl?.classList.contains('is-collapsed') ?? false;
+        const anyVisible = !sidebarCollapsed || !configCollapsed || !resultsCollapsed;
+
+        if (anyVisible) {
+            // At least one pane is open — (re-)save current state and collapse all
+            _focusModeState = { sidebarCollapsed, configCollapsed, resultsCollapsed };
+            if (!sidebarCollapsed) _applyPaneState('sidebar', true);
+            if (!configCollapsed)  _applyPaneState('config',  true);
+            if (!resultsCollapsed) Results.toggle?.();
+        } else if (_focusModeState) {
+            // All panes hidden and we have a saved state — restore it
             if (!_focusModeState.sidebarCollapsed) _applyPaneState('sidebar', false);
             if (!_focusModeState.configCollapsed)  _applyPaneState('config',  false);
-            if (!_focusModeState.resultsCollapsed && resultsEl?.classList.contains('is-collapsed'))
-                Results.toggle?.();
-            _focusModeState = null;
-        } else {
-            // Snapshot current visibility, then hide everything visible
-            _focusModeState = {
-                sidebarCollapsed: _PANE_DEFAULTS.sidebar.el?.classList.contains('is-collapsed') ?? false,
-                configCollapsed:  _PANE_DEFAULTS.config.el?.classList.contains('is-collapsed')  ?? false,
-                resultsCollapsed: resultsEl?.classList.contains('is-collapsed') ?? false,
-            };
-            if (!_focusModeState.sidebarCollapsed) _applyPaneState('sidebar', true);
-            if (!_focusModeState.configCollapsed)  _applyPaneState('config',  true);
             if (!_focusModeState.resultsCollapsed) Results.toggle?.();
+            _focusModeState = null;
         }
     }
 
