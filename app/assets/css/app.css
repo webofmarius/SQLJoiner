@@ -2078,8 +2078,8 @@ body.is-cut-mode * { cursor: crosshair !important; }
 .table-card__col:hover  { background: var(--surface2); }
 .table-card__col:active { cursor: grabbing; }
 
-/* Highlight a column that is part of a join */
-.table-card__col.is-joined { color: var(--accent); }
+/* Highlight a column that is part of a join — color matches the join line */
+.table-card__col.is-joined { color: var(--join-col-color, var(--accent)); }
 
 /* Source column highlight while dragging a join */
 .table-card__col.is-join-source { color: var(--join-left); }

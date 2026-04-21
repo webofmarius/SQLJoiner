@@ -321,11 +321,14 @@ const Joins = (() => {
             svg.insertBefore(path, dragLine || null);
         }
         // Refresh class every render (type may have changed since creation)
-        const disabled = join.enabled === false;
-        path.setAttribute('class', `join-line join-line--${join.type}${disabled ? ' join-line--disabled' : ''}`);
+        const disabled    = join.enabled === false;
+        const _extraConds = join.extraConditions ?? [];
+        const _totalPairs = 1 + _extraConds.length;
+        const hasExtra    = _extraConds.length > 0;
+        path.setAttribute('class', `join-line join-line--${join.type}${disabled ? ' join-line--disabled' : ''}${hasExtra ? ' join-line--multi' : ''}`);
         path.setAttribute('d', _bezierPath(ep.x1, ep.y1, ep.x2, ep.y2));
-        // Custom color overrides auto palette; disabled lines keep their color but go dashed+dim via CSS
-        path.style.stroke = join.color ?? _joinColor(join);
+        path.style.stroke      = join.color ?? _joinColor(join);
+        path.style.strokeWidth = String(_totalPairs * 2);
 
         // Keep SVG <title> in sync for browser tooltip on hover
         let pathTitle = path.querySelector('title');
@@ -506,19 +509,19 @@ const Joins = (() => {
 
         // Position checkbox foreignObject (14×14, centered on midY-3)
         // and color dot to the left of the join-type label
-        toggleFO.setAttribute('x', String(midX - 52));
+        const _xPad = hasExtra ? 18 : 0;
+        toggleFO.setAttribute('x', String(midX - 52 - _xPad));
         toggleFO.setAttribute('y', String(midY - 10));
         if (chkEl) chkEl.checked = join.enabled !== false;
 
-        colorCircle.setAttribute('cx', String(midX - 28));
+        colorCircle.setAttribute('cx', String(midX - 28 - _xPad));
         colorCircle.setAttribute('cy', String(midY - 4));
         colorCircle.style.fill = join.color ?? _joinColor(join);
 
         label.setAttribute('x', midX);
         label.setAttribute('y', midY);
-        const _extraCount = (join.extraConditions ?? []).length;
-        label.textContent = _extraCount > 0 ? `${join.type} +${_extraCount}` : join.type;
-        delBtn.setAttribute('x', midX + 22);
+        label.textContent = _totalPairs > 1 ? `${join.type} +(${_totalPairs})` : join.type;
+        delBtn.setAttribute('x', midX + 22 + _xPad);
         delBtn.setAttribute('y', midY);
 
         // Dim label, delete, and color dot for disabled joins; checkbox stays full opacity
@@ -541,12 +544,13 @@ const Joins = (() => {
             }
         }
 
-        // Mark the two joined column rows in accent colour (primary + extra conditions)
-        _markJoinedCol(join.fromTableId, join.fromCol);
-        _markJoinedCol(join.toTableId,   join.toCol);
+        // Mark joined column rows using the join's own color (primary + extra conditions)
+        const _joinColColor = join.color ?? _joinColor(join);
+        _markJoinedCol(join.fromTableId, join.fromCol, _joinColColor);
+        _markJoinedCol(join.toTableId,   join.toCol,   _joinColColor);
         (join.extraConditions ?? []).forEach(ec => {
-            _markJoinedCol(join.fromTableId, ec.fromCol);
-            _markJoinedCol(join.toTableId,   ec.toCol);
+            _markJoinedCol(join.fromTableId, ec.fromCol, _joinColColor);
+            _markJoinedCol(join.toTableId,   ec.toCol,   _joinColColor);
         });
     }
 
@@ -1177,19 +1181,28 @@ const Joins = (() => {
         document.getElementById('jlabel-' + joinId)?.remove();
     }
 
-    function _markJoinedCol(tableId, colName) {
+    function _markJoinedCol(tableId, colName, color) {
         const el = document.querySelector(
             `.table-card[data-table-id="${tableId}"] .table-card__col[data-col="${colName}"]`
         );
-        if (el) el.classList.add('is-joined');
+        if (!el) return;
+        el.classList.add('is-joined');
+        if (color) el.style.setProperty('--join-col-color', color);
     }
 
     function _refreshAllColumnHighlights() {
-        document.querySelectorAll('.table-card__col.is-joined')
-                .forEach(el => el.classList.remove('is-joined'));
+        document.querySelectorAll('.table-card__col.is-joined').forEach(el => {
+            el.classList.remove('is-joined');
+            el.style.removeProperty('--join-col-color');
+        });
         State.joins.forEach(j => {
-            _markJoinedCol(j.fromTableId, j.fromCol);
-            _markJoinedCol(j.toTableId,   j.toCol);
+            const color = j.color ?? _joinColor(j);
+            _markJoinedCol(j.fromTableId, j.fromCol, color);
+            _markJoinedCol(j.toTableId,   j.toCol,   color);
+            (j.extraConditions ?? []).forEach(ec => {
+                _markJoinedCol(j.fromTableId, ec.fromCol, color);
+                _markJoinedCol(j.toTableId,   ec.toCol,   color);
+            });
         });
     }
 
