@@ -70,6 +70,9 @@ const Results = (() => {
     // Column highlight (SELECT box ☆ checkbox)
     const _highlightedCols = new Set();
 
+    // Results-header column drag-to-reorder
+    let _dragReorderSrcIdx = -1;
+
     // Track Alt key state independently — e.altKey is unreliable on Windows
     // (the OS may swallow Alt before mouse events fire).
     let _altKeyHeld = false;
@@ -1365,6 +1368,27 @@ const Results = (() => {
         });
     }
 
+    function _reorderResultsColumn(thead, tbody, fromIdx, toIdx) {
+        [thead, tbody].forEach(section => {
+            if (!section) return;
+            Array.from(section.rows).forEach(row => {
+                const cells = Array.from(row.cells);
+                if (fromIdx >= cells.length || toIdx >= cells.length) return;
+                const moving = cells[fromIdx];
+                const ref    = cells[toIdx];
+                if (fromIdx < toIdx) {
+                    row.insertBefore(moving, ref.nextSibling);
+                } else {
+                    row.insertBefore(moving, ref);
+                }
+            });
+        });
+        // Keep data-col-idx in sync so subsequent drags use correct positions
+        Array.from(thead.querySelectorAll('th')).forEach((th, i) => {
+            th.dataset.colIdx = String(i);
+        });
+    }
+
     function _populateTable(cols, rows, colTables = [], colTypes = []) {
         const thead = document.querySelector('#results-table thead');
         const tbody = document.querySelector('#results-table tbody');
@@ -1618,18 +1642,71 @@ const Results = (() => {
                 });
             });
 
-            // Drag to WHERE / GROUP BY / HAVING / ORDER BY drop zones
+            // Drag: reorder columns in results table + WHERE / GROUP BY / HAVING / ORDER BY drop zones
             if (th.dataset.colKey) {
                 th.draggable = true;
+                th.dataset.colIdx = String(colIdx);
                 th.addEventListener('dragstart', e => {
-                    e.dataTransfer.effectAllowed = 'copy';
+                    e.dataTransfer.effectAllowed = 'copyMove';
                     e.dataTransfer.setData('text/x-col-key', th.dataset.colKey);
+                    _dragReorderSrcIdx = parseInt(th.dataset.colIdx, 10);
                     th.classList.add('th-dragging');
                 });
                 th.addEventListener('dragend', () => {
+                    _dragReorderSrcIdx = -1;
                     th.classList.remove('th-dragging');
                     document.querySelectorAll('.drop-zone.is-drag-hover')
                         .forEach(z => z.classList.remove('is-drag-hover'));
+                    document.querySelectorAll('th.th-drop-target')
+                        .forEach(t => t.classList.remove('th-drop-target'));
+                });
+                th.addEventListener('dragover', e => {
+                    const dstIdx = parseInt(th.dataset.colIdx, 10);
+                    if (_dragReorderSrcIdx === -1 || _dragReorderSrcIdx === dstIdx) return;
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'move';
+                    document.querySelectorAll('th.th-drop-target')
+                        .forEach(t => t.classList.remove('th-drop-target'));
+                    th.classList.add('th-drop-target');
+                });
+                th.addEventListener('dragleave', () => {
+                    th.classList.remove('th-drop-target');
+                });
+                th.addEventListener('drop', e => {
+                    e.preventDefault();
+                    th.classList.remove('th-drop-target');
+                    const srcIdx = _dragReorderSrcIdx;
+                    const dstIdx = parseInt(th.dataset.colIdx, 10);
+                    _dragReorderSrcIdx = -1;
+                    if (srcIdx === -1 || srcIdx === dstIdx) return;
+
+                    const srcTh  = thead.querySelector(`th[data-col-idx="${srcIdx}"]`);
+                    const srcKey = srcTh?.dataset.colKey;
+                    const dstKey = th.dataset.colKey;
+                    if (!srcKey || !dstKey || srcKey === dstKey) return;
+
+                    // Reorder State.columnOrder
+                    const fromStateIdx = State.columnOrder.indexOf(srcKey);
+                    const toStateIdx   = State.columnOrder.indexOf(dstKey);
+                    if (fromStateIdx === -1 || toStateIdx === -1) return;
+                    const [moved] = State.columnOrder.splice(fromStateIdx, 1);
+                    State.columnOrder.splice(toStateIdx, 0, moved);
+
+                    // Keep State.select sorted by new columnOrder
+                    if (Array.isArray(State.select)) {
+                        State.select.sort((a, b) => {
+                            const ai = State.columnOrder.indexOf(a);
+                            const bi = State.columnOrder.indexOf(b);
+                            return (ai === -1 ? 99999 : ai) - (bi === -1 ? 99999 : bi);
+                        });
+                    }
+
+                    // DOM: move the column across all rows without re-running the query
+                    _reorderResultsColumn(thead, tbody, srcIdx, dstIdx);
+
+                    // Sync SELECT panel + SQL preview
+                    QueryPanel.refresh();
+                    App.updateSQLPreview();
                 });
             }
 

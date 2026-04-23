@@ -3078,7 +3078,8 @@ body.is-resizing-results #resizer-results {
 #results-table td[draggable="true"] { cursor: grab; }
 #results-table th[draggable="true"]:active,
 #results-table td[draggable="true"]:active { cursor: grabbing; }
-#results-table th.th-dragging { opacity: 0.6; }
+#results-table th.th-dragging { opacity: 0.4; }
+#results-table th.th-drop-target { box-shadow: inset 2px 0 0 var(--accent), inset -2px 0 0 var(--accent); }
 
 #results-table th.th-alias {
     background: color-mix(in srgb, var(--surface3) 88%, #c8a000 12%);
