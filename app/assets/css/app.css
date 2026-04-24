@@ -3156,6 +3156,24 @@ body.is-resizing-results #resizer-results {
 #results-table tr:hover .td-copy-formatted { opacity: 0.45; }
 #results-table .td-copy-formatted:hover    { opacity: 1 !important; color: var(--accent); }
 
+/* Column sort button in result table headers */
+.th-sort-btn {
+    display: block;
+    margin: 5px -10px -5px -10px;
+    padding: 4px 0;
+    text-align: center;
+    font-size: 11px;
+    line-height: 1;
+    background: var(--surface2);
+    opacity: 0.4;
+    cursor: pointer;
+    user-select: none;
+    transition: opacity 0.15s, color 0.15s, background 0.15s;
+}
+#results-table th:hover .th-sort-btn { opacity: 0.85; }
+.th-sort-btn:hover { opacity: 1 !important; background: var(--surface1); }
+.th-sort-btn.is-active { opacity: 1; color: var(--accent); background: var(--surface1); }
+
 /* Unix timestamp cells: amber tint, monospace, left-aligned */
 #results-table td.td-unix-ts {
     background-color: color-mix(in srgb, var(--surface) 82%, #c47a00 18%);

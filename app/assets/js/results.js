@@ -73,6 +73,11 @@ const Results = (() => {
     // Results-header column drag-to-reorder
     let _dragReorderSrcIdx = -1;
 
+    // Results-table client-side sort
+    let _sortColIdx      = -1;
+    let _sortDir         = 0;   // 0=none, 1=asc, -1=desc
+    let _sortOriginalRows = [];
+
     // Track Alt key state independently — e.altKey is unreliable on Windows
     // (the OS may swallow Alt before mouse events fire).
     let _altKeyHeld = false;
@@ -1389,6 +1394,30 @@ const Results = (() => {
         });
     }
 
+    function _applySortToTbody(tbody, colIdx, dir) {
+        const dataRows = Array.from(tbody.querySelectorAll('tr')).filter(tr => !tr.querySelector('.results-empty'));
+        if (dataRows.length === 0) return;
+        if (dir === 0) {
+            _sortOriginalRows.forEach(tr => tbody.appendChild(tr));
+            return;
+        }
+        dataRows.sort((a, b) => {
+            const aRaw = a.cells[colIdx]?.dataset.raw ?? a.cells[colIdx]?.textContent ?? '';
+            const bRaw = b.cells[colIdx]?.dataset.raw ?? b.cells[colIdx]?.textContent ?? '';
+            const aNull = a.cells[colIdx]?.classList.contains('is-null');
+            const bNull = b.cells[colIdx]?.classList.contains('is-null');
+            if (aNull && bNull) return 0;
+            if (aNull) return 1;
+            if (bNull) return -1;
+            const aNum = parseFloat(aRaw);
+            const bNum = parseFloat(bRaw);
+            const numericSort = isFinite(aNum) && isFinite(bNum) && aRaw !== '' && bRaw !== '';
+            const cmp = numericSort ? aNum - bNum : aRaw.localeCompare(bRaw, undefined, { numeric: true, sensitivity: 'base' });
+            return dir * cmp;
+        });
+        dataRows.forEach(tr => tbody.appendChild(tr));
+    }
+
     function _populateTable(cols, rows, colTables = [], colTypes = []) {
         const thead = document.querySelector('#results-table thead');
         const tbody = document.querySelector('#results-table tbody');
@@ -1404,6 +1433,11 @@ const Results = (() => {
                 _activeResultIds = new Set(State.selectedIslandKey.split('|'));
             }
         }
+
+        // Reset sort state for every new query result
+        _sortColIdx = -1;
+        _sortDir = 0;
+        _sortOriginalRows = [];
 
         // --- Header ---
         const trHead = document.createElement('tr');
@@ -1642,10 +1676,39 @@ const Results = (() => {
                 });
             });
 
+            th.dataset.colIdx = String(colIdx);
+
+            // Sort button — click to cycle asc → desc → none
+            const sortBtn = document.createElement('span');
+            sortBtn.className = 'th-sort-btn';
+            sortBtn.textContent = '⇅';
+            sortBtn.title = 'Sort';
+            sortBtn.addEventListener('click', e => {
+                e.stopPropagation();
+                e.preventDefault();
+                const clickedIdx = parseInt(th.dataset.colIdx, 10);
+                if (_sortColIdx === clickedIdx) {
+                    _sortDir = _sortDir === 1 ? -1 : (_sortDir === -1 ? 0 : 1);
+                    if (_sortDir === 0) _sortColIdx = -1;
+                } else {
+                    _sortColIdx = clickedIdx;
+                    _sortDir = 1;
+                }
+                thead.querySelectorAll('th').forEach(t => {
+                    const btn = t.querySelector('.th-sort-btn');
+                    if (!btn) return;
+                    const idx    = parseInt(t.dataset.colIdx, 10);
+                    const active = idx === _sortColIdx && _sortDir !== 0;
+                    btn.textContent = active ? (_sortDir === 1 ? '▲' : '▼') : '⇅';
+                    btn.classList.toggle('is-active', active);
+                });
+                _applySortToTbody(tbody, _sortColIdx, _sortDir);
+            });
+            th.appendChild(sortBtn);
+
             // Drag: reorder columns in results table + WHERE / GROUP BY / HAVING / ORDER BY drop zones
             if (th.dataset.colKey) {
                 th.draggable = true;
-                th.dataset.colIdx = String(colIdx);
                 th.addEventListener('dragstart', e => {
                     e.dataTransfer.effectAllowed = 'copyMove';
                     e.dataTransfer.setData('text/x-col-key', th.dataset.colKey);
@@ -1703,6 +1766,14 @@ const Results = (() => {
 
                     // DOM: move the column across all rows without re-running the query
                     _reorderResultsColumn(thead, tbody, srcIdx, dstIdx);
+
+                    // Clear sort state — column indices changed, sort would be stale
+                    _sortColIdx = -1;
+                    _sortDir = 0;
+                    thead.querySelectorAll('.th-sort-btn').forEach(btn => {
+                        btn.textContent = '⇅';
+                        btn.classList.remove('is-active');
+                    });
 
                     // Sync SELECT panel + SQL preview
                     QueryPanel.refresh();
@@ -1908,6 +1979,9 @@ const Results = (() => {
             });
             tbody.appendChild(tr);
         });
+
+        // Snapshot original row order so sort can be cleared back to it
+        _sortOriginalRows = Array.from(tbody.querySelectorAll('tr'));
 
         // Re-apply any active column highlights after the table is rebuilt
         _reapplyHighlights();
