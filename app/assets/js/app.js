@@ -4043,6 +4043,14 @@ const App = (() => {
         document.getElementById('btn-copy-sql')
             .addEventListener('click', _copySql);
 
+        document.getElementById('btn-load-csv').addEventListener('click', () => {
+            document.getElementById('csv-file-input').click();
+        });
+        document.getElementById('csv-file-input').addEventListener('change', e => {
+            const file = e.target.files[0];
+            if (file) { Results.loadCsvFile(file); e.target.value = ''; }
+        });
+
         document.getElementById('btn-load-context')
             .addEventListener('click', () => Modals.openContext());
 

@@ -214,6 +214,13 @@ h3 {
 }
 #topbar-notes-title:empty { display: none; }
 
+/* CSV load button — subtle separator before the Contexts group */
+#btn-load-csv {
+    border-right: 1px solid var(--border);
+    padding-right: 8px;
+    margin-right: 2px;
+}
+
 /* Save context button — grayed out when no context was loaded from list */
 #btn-save-context {
     font-size: 1em;

@@ -5805,6 +5805,139 @@ async function _copyAsSqlSelect() {
     }
 
     // -------------------------------------------------------------------------
+    // CSV loader
+    // -------------------------------------------------------------------------
+
+    /**
+     * RFC 4180-compliant CSV parser.
+     * Handles quoted fields (with embedded commas/newlines/doubled-quote escapes),
+     * strips a leading UTF-8 BOM, and auto-detects the delimiter from the first line.
+     *
+     * @param  {string} text  raw file contents
+     * @returns {{ cols:string[], rows:any[][], delim:string } | { error:string }}
+     */
+    function _parseCsv(text) {
+        // Strip UTF-8 BOM
+        if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+        if (!text.trim()) return { error: 'The file is empty.' };
+
+        // Auto-detect delimiter from the first line
+        const firstLine = text.slice(0, text.indexOf('\n') === -1 ? undefined : text.indexOf('\n'));
+        const candidates = [',', ';', '\t'];
+        const delim = candidates.reduce((best, d) =>
+            (firstLine.split(d).length > firstLine.split(best).length ? d : best), ',');
+
+        // Character-by-character RFC 4180 parse
+        const rows   = [];
+        let   row    = [];
+        let   field  = '';
+        let   inQ    = false;
+        const n      = text.length;
+
+        for (let i = 0; i < n; i++) {
+            const ch = text[i];
+
+            if (inQ) {
+                if (ch === '"') {
+                    if (text[i + 1] === '"') { field += '"'; i++; }   // escaped "
+                    else inQ = false;                                   // closing "
+                } else {
+                    field += ch;
+                }
+            } else if (ch === '"') {
+                inQ = true;
+            } else if (ch === delim) {
+                row.push(field); field = '';
+            } else if (ch === '\n') {
+                row.push(field); field = '';
+                // Skip bare \r preceding \n
+                if (row.length === 1 && row[0] === '\r') { row = []; continue; }
+                // Strip trailing \r from last field if present (Windows CRLF)
+                if (row.length > 0) {
+                    row[row.length - 1] = row[row.length - 1].replace(/\r$/, '');
+                }
+                rows.push(row); row = [];
+            } else if (ch === '\r') {
+                // \r without \n — treat as line ending
+                if (text[i + 1] !== '\n') {
+                    row.push(field); field = '';
+                    rows.push(row);  row   = [];
+                }
+                // \r\n — the \n branch handles it; just skip \r
+            } else {
+                field += ch;
+            }
+        }
+        // Flush last field / row
+        if (field || row.length) { row.push(field); rows.push(row); }
+
+        // Remove completely blank trailing rows
+        while (rows.length && rows[rows.length - 1].every(c => c === '')) rows.pop();
+
+        if (rows.length < 1) return { error: 'The file contains no data.' };
+
+        const cols     = rows[0].map(c => c.trim());
+        const dataRows = rows.slice(1);
+
+        if (cols.length === 0) return { error: 'Could not detect any columns.' };
+
+        // Infer column types: if every non-empty value in a column is a finite
+        // number, mark it as numeric so the table renders it right-aligned.
+        const colTypes = cols.map((_, ci) => {
+            const allNumeric = dataRows.every(r => {
+                const v = (r[ci] ?? '').trim();
+                return v === '' || (v !== '' && isFinite(Number(v)));
+            });
+            return allNumeric ? 'DECIMAL' : 'VARCHAR';
+        });
+
+        // Convert numeric columns to numbers (or null for empty cells)
+        const typedRows = dataRows.map(r =>
+            cols.map((_, ci) => {
+                const v = (r[ci] ?? '').trim();
+                if (v === '') return null;
+                return colTypes[ci] === 'DECIMAL' ? Number(v) : v;
+            })
+        );
+
+        return { cols, rows: typedRows, colTypes, delim };
+    }
+
+    /**
+     * Read a File object as text, parse it as CSV, and populate the results table.
+     * Does not touch the SQL preview or the right-hand query panel.
+     *
+     * @param {File} file
+     */
+    function loadCsvFile(file) {
+        const reader = new FileReader();
+        reader.onerror = () => renderError('Could not read the file.');
+        reader.onload  = e => {
+            const parsed = _parseCsv(e.target.result);
+            if (parsed.error) { renderError(parsed.error); return; }
+
+            const delimLabel = parsed.delim === '\t' ? 'TAB' : parsed.delim;
+            render({
+                cols:       parsed.cols,
+                rows:       parsed.rows,
+                count:      parsed.rows.length,
+                col_types:  parsed.colTypes,
+                col_tables: [],          // no table mapping → right panel untouched
+                sql:        null,        // don't overwrite the SQL preview
+                _csvSource: `${file.name} (delimiter: ${delimLabel})`,
+            });
+
+            // Show the file name in the meta bar instead of just the row count
+            const metaEl = document.getElementById('results-meta');
+            if (metaEl) {
+                const rowLabel = `${parsed.rows.length.toLocaleString()} row${parsed.rows.length !== 1 ? 's' : ''}`;
+                metaEl.textContent = `${rowLabel} — ${file.name}`;
+            }
+        };
+        reader.readAsText(file, 'UTF-8');
+    }
+
+    // -------------------------------------------------------------------------
     return {
         init,
         render,
@@ -5842,6 +5975,8 @@ async function _copyAsSqlSelect() {
         },
         /** Destroy all Calculus expression rows. */
         calcClear: _calcClearAll,
+        /** Parse a CSV File object and load it into the results table. */
+        loadCsvFile,
     };
 })();
 

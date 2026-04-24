@@ -21,12 +21,14 @@
                 <button id="btn-menu-trigger" title="More options">⋯</button>
                 <ul class="topbar-menu-dropdown" id="topbar-menu-dropdown">
                     <li id="btn-new-context-shortcut" title="Save as a new context">+ New</li>
+                    <li id="btn-load-csv" title="Load a CSV file into the results table">📂 CSV</li>
                     <li id="btn-manage-profiles">⚙ Profiles</li>
                     <li id="menu-test-connection">↯ Test Connection</li>
                     <li id="menu-show-shortcuts">⌨ Shortcuts</li>
                     <li id="menu-about">(: About</li>
                 </ul>
             </div>
+            <input type="file" id="csv-file-input" accept=".csv" style="display:none">
             <button id="btn-load-context" title="Save/Load previously copied context">🗂 Contexts</button>
             <button id="btn-show-notes" title="Open notes">✎ Notes</button>
             <button id="btn-save-context" class="btn-save-context" title="Save as a new context">💾</button>
