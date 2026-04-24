@@ -6042,6 +6042,56 @@ function _sqlSplitAndOr(str) {
 }
 
 /**
+ * Walk formatted SQL lines and add one extra tab of indentation for each level
+ * of subquery nesting.  A line that ends with '(' opens a subquery block; the
+ * matching ')' (on a line of its own or embedded mid-line) closes it.
+ *
+ * Called AFTER step 4 of _formatBackdropSQL, while literals are still
+ * protected as \x00N\x00 placeholders (so no stray ')' inside strings).
+ */
+function _applySubqueryIndent(s) {
+    if (!s.includes('(')) return s;
+
+    const X   = '\t';          // one extra indent level per subquery depth
+    const out = [];
+    let sqDepth = 0;
+    const openIndents = [];    // stack: indent string of the '(' opener line
+
+    for (const line of s.split('\n')) {
+        const trimmed = line.trimEnd();
+
+        // ── Subquery opener: line ends with '(' ──────────────────────────────
+        if (trimmed.endsWith('(')) {
+            const extraPfx     = X.repeat(sqDepth);
+            const existingTabs = trimmed.match(/^(\t*)/)[1];
+            out.push(extraPfx + trimmed);
+            openIndents.push(extraPfx + existingTabs); // closing ')' aligns here
+            sqDepth++;
+            continue;
+        }
+
+        // ── Subquery closer: first ')' on a line while inside a subquery ─────
+        if (sqDepth > 0) {
+            const ci = trimmed.indexOf(')');
+            if (ci !== -1) {
+                const before        = trimmed.slice(0, ci).trimEnd();
+                const after         = trimmed.slice(ci + 1).trim();
+                const closingIndent = openIndents.pop() ?? '';
+                if (before) out.push(X.repeat(sqDepth) + before);
+                sqDepth--;
+                out.push(closingIndent + ')' + (after ? ' ' + after : ''));
+                continue;
+            }
+        }
+
+        // ── Regular line: prepend current extra indent ────────────────────────
+        out.push(X.repeat(sqDepth) + line);
+    }
+
+    return out.join('\n');
+}
+
+/**
  * Format a SQL string using the same visual conventions as the query builder.
  * Safe to call on arbitrary SQL — literals / backtick identifiers / comments
  * are protected from re-formatting and restored verbatim afterward.
@@ -6160,6 +6210,9 @@ function _formatBackdropSQL(rawSql) {
         }
     }
     s = result.join('\n');
+
+    // ── Step 4.5: indent content inside subquery parentheses ──────────────────
+    s = _applySubqueryIndent(s);
 
     // ── Step 5: restore protected literals / comments ─────────────────────────
     s = s.replace(/\x00(\d+)\x00/g, (_, idx) => saved[+idx]);
