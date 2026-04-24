@@ -1409,8 +1409,8 @@ const Results = (() => {
             if (aNull && bNull) return 0;
             if (aNull) return 1;
             if (bNull) return -1;
-            const aNum = parseFloat(aRaw);
-            const bNum = parseFloat(bRaw);
+            const aNum = Number(aRaw);
+            const bNum = Number(bRaw);
             const numericSort = isFinite(aNum) && isFinite(bNum) && aRaw !== '' && bRaw !== '';
             const cmp = numericSort ? aNum - bNum : aRaw.localeCompare(bRaw, undefined, { numeric: true, sensitivity: 'base' });
             return dir * cmp;
