@@ -1038,10 +1038,21 @@ const Results = (() => {
     function _applyColFilter() {
         const tbody = document.querySelector('#results-table tbody');
         if (!tbody) return;
+        const ths = Array.from(document.querySelectorAll('#results-table thead th'));
+
+        // Restore all rows first so widths are measured with full data visible
         tbody.querySelectorAll('tr.row-col-filter-hidden')
             .forEach(tr => tr.classList.remove('row-col-filter-hidden'));
+
         const entries = Object.entries(_colFilters).filter(([, v]) => v.trim());
-        if (!entries.length) return;
+        if (!entries.length) {
+            ths.forEach(th => (th.style.minWidth = ''));
+            return;
+        }
+
+        // Lock column widths before hiding rows (offsetWidth forces a layout flush)
+        ths.forEach(th => (th.style.minWidth = th.offsetWidth + 'px'));
+
         Array.from(tbody.querySelectorAll('tr')).forEach(tr => {
             const tds = Array.from(tr.querySelectorAll('td'));
             const passes = entries.every(([idx, text]) => {
