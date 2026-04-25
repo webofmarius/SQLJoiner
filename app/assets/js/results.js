@@ -1032,7 +1032,7 @@ const Results = (() => {
 
     function _likeToRegex(pattern) {
         const escaped = pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&');
-        return new RegExp('^' + escaped.replace(/%/g, '.*').replace(/_/g, '.') + '$', 'i');
+        return new RegExp('^' + escaped.replace(/%/g, '.*') + '$', 'i');
     }
 
     function _applyColFilter() {
