@@ -3163,6 +3163,28 @@ body.is-resizing-results #resizer-results {
 #results-table tr:hover .td-copy-formatted { opacity: 0.45; }
 #results-table .td-copy-formatted:hover    { opacity: 1 !important; color: var(--accent); }
 
+/* Column filter input in result table headers */
+.th-filter-input {
+    display: block;
+    margin: 3px -10px -5px -10px;
+    width: calc(100% + 20px);
+    box-sizing: border-box;
+    padding: 3px 8px;
+    background: var(--surface1);
+    border: none;
+    border-top: 1px solid var(--border);
+    color: var(--text);
+    font-size: 10px;
+    font-weight: 400;
+    font-style: normal;
+    outline: none;
+    transition: border-color 0.15s, background 0.15s;
+}
+.th-filter-input::placeholder { color: var(--text-faint); opacity: 1; }
+.th-filter-input:focus { background: var(--surface); border-top-color: var(--accent); }
+.th-filter-input.has-value { border-top-color: var(--accent); color: var(--accent); }
+tr.row-col-filter-hidden { display: none !important; }
+
 /* Column sort button in result table headers */
 .th-sort-btn {
     display: block;

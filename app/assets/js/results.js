@@ -67,6 +67,9 @@ const Results = (() => {
     let _filterJsonEvalMode = 'static'; // 'static' | 'eval'
     let _filterJsonActive   = false; // mirrors the checkbox state
 
+    // Inline column filter inputs
+    let _colFilters = {}; // colIdx (number) → filter text
+
     // Column highlight (SELECT box ☆ checkbox)
     const _highlightedCols = new Set();
 
@@ -524,6 +527,7 @@ const Results = (() => {
                           'cols:', result.cols?.slice(0, result.col_types.length));
         }
 
+        _colFilters = {};
         _populateTable(result.cols, result.rows, result.col_tables || [], result.col_types || []);
         _applyExplainColors(result.cols, result.rows);
 
@@ -571,6 +575,7 @@ const Results = (() => {
             btnDup.title = 'Highlight duplicate cell values';
         }
         document.getElementById('results-panel').classList.add('hidden');
+        _colFilters = {};
         document.querySelector('#results-table thead').innerHTML = '';
         document.querySelector('#results-table tbody').innerHTML = '';
         document.getElementById('results-meta').textContent = '';
@@ -1023,6 +1028,30 @@ const Results = (() => {
             if (!matches) tr.classList.add('row-json-hidden');
         });
         _calcApplyAllActiveHighlights();
+    }
+
+    function _likeToRegex(pattern) {
+        const escaped = pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&');
+        return new RegExp('^' + escaped.replace(/%/g, '.*').replace(/_/g, '.') + '$', 'i');
+    }
+
+    function _applyColFilter() {
+        const tbody = document.querySelector('#results-table tbody');
+        if (!tbody) return;
+        tbody.querySelectorAll('tr.row-col-filter-hidden')
+            .forEach(tr => tr.classList.remove('row-col-filter-hidden'));
+        const entries = Object.entries(_colFilters).filter(([, v]) => v.trim());
+        if (!entries.length) return;
+        Array.from(tbody.querySelectorAll('tr')).forEach(tr => {
+            const tds = Array.from(tr.querySelectorAll('td'));
+            const passes = entries.every(([idx, text]) => {
+                const cell = tds[+idx];
+                const val  = cell?.dataset.raw ?? cell?.textContent ?? '';
+                return _likeToRegex(text).test(val);
+            });
+            if (!passes) tr.classList.add('row-col-filter-hidden');
+        });
+        _calcApplyAllActiveHighlights?.();
     }
 
     function _dimPinCol(colIdx) {
@@ -1705,6 +1734,23 @@ const Results = (() => {
                 _applySortToTbody(tbody, _sortColIdx, _sortDir);
             });
             th.appendChild(sortBtn);
+
+            // Inline filter input — stops propagation so header click handlers don't fire
+            const filterInput = document.createElement('input');
+            filterInput.type = 'text';
+            filterInput.placeholder = '%like%';
+            filterInput.className = 'th-filter-input';
+            ['click', 'dblclick', 'mousedown'].forEach(evt =>
+                filterInput.addEventListener(evt, e => e.stopPropagation())
+            );
+            filterInput.addEventListener('input', () => {
+                const v = filterInput.value;
+                if (v) _colFilters[colIdx] = v;
+                else   delete _colFilters[colIdx];
+                filterInput.classList.toggle('has-value', v.length > 0);
+                _applyColFilter();
+            });
+            th.appendChild(filterInput);
 
             // Drag: reorder columns in results table + WHERE / GROUP BY / HAVING / ORDER BY drop zones
             if (th.dataset.colKey) {
@@ -2570,7 +2616,7 @@ async function _copyAsSqlSelect() {
         const trs = Array.from(document.querySelectorAll('#results-table tbody tr'));
         const visibleRowIndices = trs
             .map((tr, i) => ({ tr, i }))
-            .filter(({ tr }) => !tr.classList.contains('row-json-hidden'))
+            .filter(({ tr }) => !tr.classList.contains('row-json-hidden') && !tr.classList.contains('row-col-filter-hidden'))
             .map(({ i }) => i);
 
         // Columns: Dim sets display:none on header and data cells
@@ -5122,8 +5168,9 @@ async function _copyAsSqlSelect() {
      */
     function _calcEvalForResultTr(rowData, tr, rowEl) {
         if (!tr) return null;
-        if (tr.classList.contains('row-json-hidden')) return null;
-        if (tr.classList.contains('dim-row-hidden'))  return null;
+        if (tr.classList.contains('row-json-hidden'))        return null;
+        if (tr.classList.contains('row-col-filter-hidden')) return null;
+        if (tr.classList.contains('dim-row-hidden'))         return null;
 
         const ths      = Array.from(document.querySelectorAll('#results-table thead tr th'));
         const thLabels = ths.map(th => _thGetLabel(th));
