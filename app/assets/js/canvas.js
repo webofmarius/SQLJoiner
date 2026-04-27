@@ -1237,6 +1237,30 @@ const Canvas = (() => {
         card.querySelector('.table-card__resize-l') .addEventListener('mousedown', e => _startResize(e, 'l'));
         card.querySelector('.table-card__resize-t') .addEventListener('mousedown', e => _startResize(e, 't'));
         card.querySelector('.table-card__resize-b') .addEventListener('mousedown', e => _startResize(e, 'b'));
+
+        // Double-click any resize handle → fit height to content, dblclick again to restore
+        const _toggleFitHeight = () => {
+            if (!card.classList.contains('is-fit-height')) {
+                // Expand: save current state, then let the card size to its content
+                card.dataset.savedHeight    = card.style.height || '';
+                card.dataset.savedIsResized = card.classList.contains('is-resized') ? '1' : '';
+                card.style.height = '';
+                card.classList.remove('is-resized');
+                card.classList.add('is-fit-height');
+            } else {
+                // Restore: go back to whatever height the card had before
+                card.classList.remove('is-fit-height');
+                const h = card.dataset.savedHeight || '';
+                card.style.height = h;
+                if (h && card.dataset.savedIsResized === '1') card.classList.add('is-resized');
+            }
+            if (typeof Joins   !== 'undefined') Joins.redrawForTable(tableData.id);
+            if (typeof Islands !== 'undefined') Islands.redrawPositions();
+        };
+
+        card.querySelectorAll('[class*="table-card__resize"]').forEach(h =>
+            h.addEventListener('dblclick', e => { e.stopPropagation(); _toggleFitHeight(); })
+        );
     }
 
     // =========================================================================
