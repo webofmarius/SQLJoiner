@@ -273,8 +273,7 @@
                 <button id="btn-duplicates" title="Highlight duplicate cell values">⧉ Duplicates</button>
                 <button id="btn-toggle-dim" title="Dim unhighlighted cells">☾ Dim</button>
                 <button id="btn-calculus" title="Run a query first to enable Calculus mode" disabled>∑ Calculus</button>
-                <input type="checkbox" id="chk-filter-json" title="Keep JSON filter active">
-                <button id="btn-filter-json" title="Filter rows by JSON key→value pairs">↑ Filter JSON</button>
+                <button id="btn-search-cols" class="btn-toggle-mode" title="Toggle column search inputs">⌕ Search</button>
             </div>
             <span id="results-meta"></span>
             <div id="results-actions">
@@ -384,32 +383,6 @@
                 <textarea id="calculus-note-textarea" placeholder="Write your Calculus notes here…" spellcheck="false"></textarea>
                 <div class="form-actions">
                     <button type="button" id="btn-calculus-note-save" class="primary">Save</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- ==================== MODAL: Filter JSON ==================== -->
-    <div id="modal-filter-json" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modal-filter-json-title">
-        <div class="modal-box modal-box--filter-json">
-            <div class="modal-header">
-                <h2 id="modal-filter-json-title">Filter JSON</h2>
-                <button class="modal-close" aria-label="Close">✕</button>
-            </div>
-            <div class="modal-body">
-                <p class="modal-hint">Paste a JSON object. Rows where every matching key equals its value (AND) or at least one does (OR) will be kept visible.</p>
-                <textarea id="filter-json-textarea" placeholder='{"col1": "val1", "col2": "val2"}' rows="10" spellcheck="false"></textarea>
-                <div class="form-actions">
-                    <span class="modal-hint-inline">Shift+Enter to apply</span>
-                    <select id="filter-json-eval-mode" title="How to interpret filter values">
-                        <option value="static" selected>static</option>
-                        <option value="eval">eval</option>
-                    </select>
-                    <select id="filter-json-operator" title="Logical operator between conditions">
-                        <option value="AND" selected>AND</option>
-                        <option value="OR">OR</option>
-                    </select>
-                    <button type="button" id="btn-filter-json-apply" class="primary">Apply</button>
                 </div>
             </div>
         </div>

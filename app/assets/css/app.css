@@ -3163,9 +3163,9 @@ body.is-resizing-results #resizer-results {
 #results-table tr:hover .td-copy-formatted { opacity: 0.45; }
 #results-table .td-copy-formatted:hover    { opacity: 1 !important; color: var(--accent); }
 
-/* Column filter input in result table headers */
+/* Column filter input in result table headers — hidden until Search is toggled on */
 .th-filter-input {
-    display: block;
+    display: none;
     margin: 3px -10px -5px -10px;
     width: calc(100% + 20px);
     box-sizing: border-box;
@@ -3183,6 +3183,7 @@ body.is-resizing-results #resizer-results {
 .th-filter-input::placeholder { color: var(--text-faint); opacity: 1; }
 .th-filter-input:focus { background: var(--surface); border-top-color: var(--accent); }
 .th-filter-input.has-value { border-top-color: var(--accent); color: var(--accent); }
+#results-panel.search-active .th-filter-input { display: block; }
 tr.row-col-filter-hidden { display: none !important; }
 
 /* Column sort button in result table headers */
@@ -3241,9 +3242,6 @@ tr.row-highlighted td:not(.col-highlight-1):not(.col-highlight-2):not(.col-highl
     background-color: rgba(0, 188, 212, 0.22) !important;
 }
 
-/* --- JSON row filter --- */
-tr.row-json-hidden { display: none !important; }
-
 /* --- Dim row-mode --- */
 tr.dim-row-hidden { display: none !important; }
 tr.row-hl-faded td { opacity: 0.28; }
@@ -3254,40 +3252,6 @@ tr.calculus-hl > td {
     outline-offset: -1px;
 }
 
-#btn-filter-json {
-    font-size: 11px;
-    padding: 3px 8px;
-    background: var(--surface3);
-    border: 1px solid var(--border2);
-    border-radius: 4px;
-    color: var(--text-muted);
-    cursor: pointer;
-    transition: color 0.15s, border-color 0.15s;
-}
-#btn-filter-json:hover { color: #90caf9; border-color: #90caf9; }
-
-
-.modal-box--filter-json { width: 560px; max-width: 92vw; height: 380px; min-height: 260px; resize: both; overflow: hidden; display: flex; flex-direction: column; }
-.modal-box--filter-json .modal-body { display: flex; flex-direction: column; gap: 10px; overflow: hidden; }
-.modal-box--filter-json .modal-body .modal-hint { flex-shrink: 0; }
-.modal-box--filter-json .modal-body .form-actions { flex-shrink: 0; }
-.modal-box--filter-json #filter-json-textarea {
-    width: 100%;
-    box-sizing: border-box;
-    flex: 1;
-    min-height: 120px;
-    resize: none;
-    background: var(--bg);
-    color: var(--text);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    padding: 10px;
-    font-family: var(--font-mono, monospace);
-    font-size: 13px;
-    line-height: 1.55;
-    outline: none;
-}
-.modal-box--filter-json #filter-json-textarea:focus { border-color: #90caf9; }
 
 /* --- Dimming Feature --- */
 /* Columns without a custom color are hidden via JS (display:none) when is-dimmed is active */
@@ -3332,6 +3296,8 @@ tr.calculus-hl > td {
     white-space: pre;
     box-sizing: border-box;
 }
+
+#btn-search-cols { border-radius: 4px; }
 
 #btn-toggle-dim.is-active {
     background: var(--accent);

@@ -61,12 +61,6 @@ const Results = (() => {
     // Calculus highlight feature — set of calculus row ids with highlight active
     let _calcHighlightActiveIds = new Set();
 
-    // JSON row filter (Filter JSON feature)
-    let _filterJsonText     = '';    // persists across queries
-    let _filterJsonOperator = 'AND';
-    let _filterJsonEvalMode = 'static'; // 'static' | 'eval'
-    let _filterJsonActive   = false; // mirrors the checkbox state
-
     // Inline column filter inputs
     let _colFilters = {}; // colIdx (number) → filter text
 
@@ -147,47 +141,20 @@ const Results = (() => {
         document.getElementById('btn-toggle-dim')
             .addEventListener('click', _toggleDimmed);
 
-        // ---- Filter JSON ----
-        const _filterJsonModal = document.getElementById('modal-filter-json');
-        const _filterJsonTa    = document.getElementById('filter-json-textarea');
-        const _filterJsonChk   = document.getElementById('chk-filter-json');
-
-        if (typeof SqlBackdrop !== 'undefined') SqlBackdrop.attach(_filterJsonTa);
-
-        const _closeFilterJsonModal = () => _filterJsonModal.classList.add('hidden');
-
-        document.getElementById('btn-filter-json').addEventListener('click', () => {
-            _filterJsonTa.value = _filterJsonText;
-            document.getElementById('filter-json-operator').value  = _filterJsonOperator;
-            document.getElementById('filter-json-eval-mode').value = _filterJsonEvalMode;
-            _filterJsonModal.classList.remove('hidden');
-            _filterJsonTa.focus();
-        });
-
-        _filterJsonChk.addEventListener('change', () => {
-            _filterJsonActive = _filterJsonChk.checked;
-            _applyJsonFilter();
-        });
-
-        _filterJsonModal.querySelector('.modal-close').addEventListener('click', _closeFilterJsonModal);
-        _filterJsonModal.addEventListener('click', e => {
-            if (e.target === _filterJsonModal) _closeFilterJsonModal();
-        });
-
-        document.getElementById('btn-filter-json-apply').addEventListener('click', () => {
-            _filterJsonText     = _filterJsonTa.value.trim();
-            _filterJsonOperator = document.getElementById('filter-json-operator').value;
-            _filterJsonEvalMode = document.getElementById('filter-json-eval-mode').value;
-            _filterJsonActive   = true;
-            _filterJsonChk.checked = true;
-            _applyJsonFilter();
-            _closeFilterJsonModal();
-        });
-
-        _filterJsonTa.addEventListener('keydown', e => {
-            if (e.key === 'Enter' && e.shiftKey) {
-                e.preventDefault();
-                document.getElementById('btn-filter-json-apply').click();
+        // ---- Search toggle ----
+        document.getElementById('btn-search-cols').addEventListener('click', () => {
+            const panel = document.getElementById('results-panel');
+            const btn   = document.getElementById('btn-search-cols');
+            const isOn  = panel.classList.toggle('search-active');
+            btn.classList.toggle('active', isOn);
+            if (!isOn) {
+                // Hide — clear all filter inputs and rerun filter
+                _colFilters = {};
+                document.querySelectorAll('#results-table .th-filter-input').forEach(inp => {
+                    inp.value = '';
+                    inp.classList.remove('has-value');
+                });
+                _applyColFilter();
             }
         });
 
@@ -925,111 +892,6 @@ const Results = (() => {
     }
 
     /**
-     * Show/hide result rows based on the active JSON filter.
-     * Rows whose cells don't match every (AND) or any (OR) condition are hidden
-     * with the CSS class `row-json-hidden`. A fresh call always clears old marks first.
-     */
-    function _applyJsonFilter() {
-        const tbody = document.querySelector('#results-table tbody');
-        if (!tbody) return;
-
-        // Always clear previous marks first
-        tbody.querySelectorAll('tr.row-json-hidden')
-            .forEach(tr => tr.classList.remove('row-json-hidden'));
-
-        if (!_filterJsonActive || !_filterJsonText.trim()) return;
-
-        let obj;
-        try { obj = JSON.parse(_filterJsonText); }
-        catch { App.notify?.('Filter JSON — invalid JSON, filter not applied', 'warn'); return; }
-
-        const entries = Object.entries(obj);
-        if (!entries.length) return;
-
-        // Map column labels → indices using the rendered header text
-        const ths = Array.from(document.querySelectorAll('#results-table thead tr th'));
-        const colMap   = {};   // label (lowercase) → colIndex
-        const colLabels = [];  // original-cased labels, for substitution
-        ths.forEach((th, i) => {
-            const clone = th.cloneNode(true);
-            clone.querySelectorAll('.th-table-origin, .col-badge').forEach(el => el.remove());
-            const label = clone.textContent.trim();
-            colMap[label.toLowerCase()] = i;
-            colLabels.push(label);
-        });
-
-        const conditions = entries
-            .map(([key, val]) => ({
-                colIdx: colMap[key.toLowerCase()] ?? -1,
-                val:    String(val === null ? 'NULL' : val),
-            }))
-            .filter(c => c.colIdx !== -1);
-
-        if (!conditions.length) return;
-
-        const useAnd   = _filterJsonOperator === 'AND';
-        const useEval  = _filterJsonEvalMode === 'eval';
-
-        // Sort labels longest-first so e.g. "col10" is replaced before "col1"
-        const sortedLabels = colLabels.slice().sort((a, b) => b.length - a.length);
-
-        Array.from(tbody.querySelectorAll('tr')).forEach(tr => {
-            const tds = Array.from(tr.querySelectorAll('td'));
-
-            // In eval mode, build a label → numeric value map for this row
-            let rowNumMap = null;
-            if (useEval) {
-                rowNumMap = {};
-                sortedLabels.forEach(lbl => {
-                    const idx = colMap[lbl.toLowerCase()];
-                    if (idx === undefined) return;
-                    const raw = tds[idx]?.dataset.raw ?? tds[idx]?.textContent ?? '';
-                    const n   = parseFloat(raw);
-                    if (isFinite(n)) rowNumMap[lbl] = n;
-                });
-            }
-
-            // Evaluate one condition against its cell
-            const testCondition = (c) => {
-                const cellRaw = String(tds[c.colIdx]?.dataset.raw ?? tds[c.colIdx]?.textContent ?? '');
-
-                if (!useEval) return cellRaw === c.val;
-
-                // Try to evaluate the filter value as an arithmetic expression
-                // with column references substituted from this row
-                let expr = c.val;
-                sortedLabels.forEach(lbl => {
-                    if (rowNumMap[lbl] !== undefined) {
-                        // Replace whole-word occurrences only
-                        expr = expr.replace(new RegExp(`(?<![\\w.])${lbl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\w.])`, 'g'),
-                                            String(rowNumMap[lbl]));
-                    }
-                });
-
-                let evaluated;
-                try {
-                    // eslint-disable-next-line no-new-func
-                    evaluated = new Function('return (' + expr + ')')();
-                } catch { return cellRaw === c.val; } // fall back to string on error
-
-                if (!isFinite(evaluated)) return cellRaw === c.val; // fall back
-
-                const cellNum = parseFloat(cellRaw);
-                if (isFinite(cellNum)) {
-                    return Math.abs(cellNum - evaluated) < 1e-9;
-                }
-                // Cell is non-numeric — fall back to string comparison
-                return cellRaw === String(evaluated);
-            };
-
-            const matches = useAnd
-                ? conditions.every(testCondition)
-                : conditions.some(testCondition);
-            if (!matches) tr.classList.add('row-json-hidden');
-        });
-        _calcApplyAllActiveHighlights();
-    }
-
     function _likeToRegex(pattern) {
         const escaped = pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&');
         return new RegExp('^' + escaped.replace(/%/g, '.*') + '$', 'i');
@@ -2048,8 +1910,6 @@ const Results = (() => {
         // Re-apply dim visibility in case dim mode was already active
         _applyDimVisibility();
         _applyDimRowVisibility();
-        // Re-apply JSON row filter if the checkbox is still checked
-        _applyJsonFilter();
         // Re-apply calculus row highlights
         _calcApplyAllActiveHighlights();
     }
@@ -2616,18 +2476,18 @@ async function _copyAsSqlSelect() {
 
     /**
      * Returns the indices of rows and columns that are currently visible in the
-     * results table, accounting for Filter JSON (row-json-hidden) and Dim
+     * results table, accounting for column filters (row-col-filter-hidden) and Dim
      * (inline display:none on cells). Exports use this so they only include
      * what the user can actually see.
      */
     function _getVisibleIndices() {
         if (!_lastResult) return { visibleRowIndices: [], visibleColIndices: [] };
 
-        // Rows: Filter JSON marks hidden rows with 'row-json-hidden'
+        // Rows: column filter hides rows with 'row-col-filter-hidden'
         const trs = Array.from(document.querySelectorAll('#results-table tbody tr'));
         const visibleRowIndices = trs
             .map((tr, i) => ({ tr, i }))
-            .filter(({ tr }) => !tr.classList.contains('row-json-hidden') && !tr.classList.contains('row-col-filter-hidden'))
+            .filter(({ tr }) => !tr.classList.contains('row-col-filter-hidden'))
             .map(({ i }) => i);
 
         // Columns: Dim sets display:none on header and data cells
@@ -5179,9 +5039,8 @@ async function _copyAsSqlSelect() {
      */
     function _calcEvalForResultTr(rowData, tr, rowEl) {
         if (!tr) return null;
-        if (tr.classList.contains('row-json-hidden'))        return null;
         if (tr.classList.contains('row-col-filter-hidden')) return null;
-        if (tr.classList.contains('dim-row-hidden'))         return null;
+        if (tr.classList.contains('dim-row-hidden'))        return null;
 
         const ths      = Array.from(document.querySelectorAll('#results-table thead tr th'));
         const thLabels = ths.map(th => _thGetLabel(th));
