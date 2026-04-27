@@ -64,6 +64,9 @@ const Results = (() => {
     // Inline column filter inputs
     let _colFilters = {}; // colIdx (number) → filter text
 
+    // True when the current result came from a CSV file (drives Excel-style header letters)
+    let _lastResultIsCsv = false;
+
     // Column highlight (SELECT box ☆ checkbox)
     const _highlightedCols = new Set();
 
@@ -495,6 +498,7 @@ const Results = (() => {
         }
 
         _colFilters = {};
+        _lastResultIsCsv = !!result._csvSource;
         _populateTable(result.cols, result.rows, result.col_tables || [], result.col_types || []);
         _applyExplainColors(result.cols, result.rows);
 
@@ -543,6 +547,7 @@ const Results = (() => {
         }
         document.getElementById('results-panel').classList.add('hidden');
         _colFilters = {};
+        _lastResultIsCsv = false;
         document.querySelector('#results-table thead').innerHTML = '';
         document.querySelector('#results-table tbody').innerHTML = '';
         document.getElementById('results-meta').textContent = '';
@@ -951,6 +956,17 @@ const Results = (() => {
             }
         }
         return best;
+    }
+
+    /** Convert a 0-based column index to an Excel-style letter label (A, B, … Z, AA, AB, …). */
+    function _excelCol(idx) {
+        let label = '';
+        let n = idx;
+        do {
+            label = String.fromCharCode(65 + (n % 26)) + label;
+            n = Math.floor(n / 26) - 1;
+        } while (n >= 0);
+        return label;
     }
 
     /**
@@ -1389,16 +1405,17 @@ const Results = (() => {
             // If the column has a user-defined alias, render it in italic so it's
             // visually distinct from real column names.
             const labelText = _formatHeaderLabel(col, colIdx, cols, colTables[colIdx] || '', colTables, _activeResultIds);
+            const displayLabel = _lastResultIsCsv ? `${_excelCol(colIdx)} - ${labelText}` : labelText;
             if (_isCustomExprColumn(col)) {
                 th.classList.add('th-custom-expr');
-                th.appendChild(document.createTextNode(labelText));
+                th.appendChild(document.createTextNode(displayLabel));
             } else if (_isColumnAlias(col)) {
                 th.classList.add('th-alias');
                 const em = document.createElement('em');
-                em.textContent = labelText;
+                em.textContent = displayLabel;
                 th.appendChild(em);
             } else {
-                th.appendChild(document.createTextNode(labelText));
+                th.appendChild(document.createTextNode(displayLabel));
             }
 
             // DB Table Name origin label — shown below the header text when enabled.
@@ -2356,18 +2373,15 @@ const Results = (() => {
             return;
         }
 
-        // Alt+C — clear math input if it is focused; otherwise toggle compare mode
+        // Alt+C — clear math input if it is focused; otherwise open the Load CSV dialog
         if (e.altKey && e.code === 'KeyC') {
             const mathInput = document.getElementById('calculus-math-input');
             if (mathInput && document.activeElement === mathInput) {
                 // handled by the input's own keydown listener — do nothing here
                 return;
             }
-            const panel = document.getElementById('results-panel');
-            if (panel && !panel.classList.contains('hidden')) {
-                e.preventDefault();
-                _toggleCompareMode();
-            }
+            e.preventDefault();
+            document.getElementById('csv-file-input')?.click();
             return;
         }
 

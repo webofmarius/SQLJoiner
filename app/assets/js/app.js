@@ -953,7 +953,7 @@ const App = (() => {
         // Overlay shown while dragging a file over the canvas
         const canvasFileOverlay = document.createElement('div');
         canvasFileOverlay.className = 'canvas-file-drop-overlay';
-        canvasFileOverlay.textContent = 'Drop .sql or .csv to create a new sub-query';
+        canvasFileOverlay.textContent = 'Drop .sql to create sub-query · Drop .csv to load into results';
         document.body.appendChild(canvasFileOverlay);
 
         const _isFileDrag = dt => dt?.types?.includes('Files');
@@ -1003,7 +1003,7 @@ const App = (() => {
                 addTableToCanvas(tableName, position, null, true);
                 return;
             }
-            // File drop → create new subquery with red island color
+            // File drop — CSV → load into results table; SQL → create new subquery
             canvasFileOverlay.classList.remove('visible');
             const file = [...(e.dataTransfer.files || [])].find(f => {
                 const n = f.name.toLowerCase();
@@ -1011,7 +1011,11 @@ const App = (() => {
             });
             if (file) {
                 e.preventDefault();
-                _loadFileIntoNewSubquery(file, '#f47c7c');
+                if (file.name.toLowerCase().endsWith('.csv') || file.type === 'text/csv') {
+                    Results.loadCsvFile(file);
+                } else {
+                    _loadFileIntoNewSubquery(file, '#f47c7c');
+                }
             }
         });
     }

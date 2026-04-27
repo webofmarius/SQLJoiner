@@ -288,7 +288,7 @@
             </div>
         </div>
         <div class="results-legend">
-            <span class="legend-default">Click to select · Right-click to cycle cell color · Alt+Right-click to highlight/unhighlight row · Double-click a number to add to Calculus · Alt+J to copy row as JSON · Alt+click to copy cell as JSON · <strong>Header:</strong> Double-click to add to WHERE · Click to toggle SELECT checkbox · Right-click highlight SELECT checkbox · Alt+click to copy `alias`.`column`</span>
+            <span class="legend-default">Click to select · Right-click to cycle cell color · Alt+Right-click to highlight/unhighlight row · Double-click a number to add to Calculus · Alt+J to copy row as JSON · Alt+click to copy cell as JSON · Alt+C to load CSV · <strong>Header:</strong> Double-click to add to WHERE · Click to toggle SELECT checkbox · Right-click highlight SELECT checkbox · Alt+click to copy `alias`.`column`</span>
             <span id="legend-compare" class="hidden"> · <strong>Compare mode:</strong> click header to compare column · right-click cell to compare row</span>
             <span id="legend-duplicates" class="hidden"> · <strong>Duplicates mode:</strong> click header to scan column for duplicates · right-click cell to scan row for duplicates</span>
         </div>
@@ -787,7 +787,7 @@
                     <li><kbd>Alt</kbd> + <kbd>3</kbd> <span>Toggle Results Panel</span></li>
                     <li><kbd>Alt</kbd> + <kbd>F</kbd> <span>Focus canvas table search</span></li>
                     <li><kbd>Alt</kbd> + <kbd>N</kbd> <span>Open Notes</span></li>
-                    <li><kbd>Alt</kbd> + <kbd>C</kbd> <span>Toggle Compare mode</span></li>
+                    <li><kbd>Alt</kbd> + <kbd>C</kbd> <span>Open Load CSV dialog</span></li>
                     <li><kbd>Alt</kbd> + <kbd>V</kbd> <span>Toggle Duplicates mode</span></li>
                     <li><kbd>Alt</kbd> + <kbd>X</kbd> / <kbd>U</kbd> <span>Toggle Calculus mode</span></li>
                     <li><kbd>Alt</kbd> + <kbd>K</kbd> <span>Toggle Calculus Note</span></li>
