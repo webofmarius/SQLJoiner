@@ -502,6 +502,12 @@ const Results = (() => {
         _populateTable(result.cols, result.rows, result.col_tables || [], result.col_types || []);
         _applyExplainColors(result.cols, result.rows);
 
+        // Lock column widths after the initial layout so filtering never resizes columns
+        requestAnimationFrame(() => {
+            document.querySelectorAll('#results-table thead th')
+                .forEach(th => { th.style.minWidth = th.offsetWidth + 'px'; });
+        });
+
         document.getElementById('results-meta').textContent =
             `${result.count.toLocaleString()} row${result.count !== 1 ? 's' : ''}`;
 
@@ -911,13 +917,7 @@ const Results = (() => {
             .forEach(tr => tr.classList.remove('row-col-filter-hidden'));
 
         const entries = Object.entries(_colFilters).filter(([, v]) => v.trim());
-        if (!entries.length) {
-            ths.forEach(th => (th.style.minWidth = ''));
-            return;
-        }
-
-        // Lock column widths before hiding rows (offsetWidth forces a layout flush)
-        ths.forEach(th => (th.style.minWidth = th.offsetWidth + 'px'));
+        if (!entries.length) return;
 
         Array.from(tbody.querySelectorAll('tr')).forEach(tr => {
             const tds = Array.from(tr.querySelectorAll('td:not(.td-row-num)'));
