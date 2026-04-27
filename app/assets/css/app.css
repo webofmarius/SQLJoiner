@@ -3186,13 +3186,17 @@ body.is-resizing-results #resizer-results {
 #results-table .td-copy-formatted:hover    { opacity: 1 !important; color: var(--accent); }
 
 /* Column filter input in result table headers — hidden until Search is toggled on */
-.th-filter-input {
+.th-filter-wrap {
     display: none;
-    margin: 3px -10px -5px -10px;
-    width: calc(100% + 20px);
+    position: relative;
+    margin: 5px -10px -5px -10px;
+}
+#results-panel.search-active .th-filter-wrap { display: block; }
+.th-filter-input {
+    width: 100%;
     box-sizing: border-box;
     padding: 3px 8px;
-    background: var(--surface1);
+    background: var(--surface2);
     border: none;
     border-top: 1px solid var(--border);
     color: var(--text);
@@ -3204,8 +3208,29 @@ body.is-resizing-results #resizer-results {
 }
 .th-filter-input::placeholder { color: var(--text-faint); opacity: 1; }
 .th-filter-input:focus { background: var(--surface); border-top-color: var(--accent); }
-.th-filter-input.has-value { border-top-color: var(--accent); color: var(--accent); }
-#results-panel.search-active .th-filter-input { display: block; }
+.th-filter-input.has-value { border-top-color: var(--accent); color: var(--accent); padding-right: 22px; }
+.th-filter-clear {
+    display: none;
+    position: absolute;
+    right: 4px;
+    top: 50%;
+    transform: translateY(-50%);
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 14px;
+    padding: 0;
+    border-radius: 50%;
+    background: var(--accent-dim);
+    border: none;
+    color: var(--accent);
+    font-size: 11px;
+    line-height: 1;
+    cursor: pointer;
+    transition: background 0.1s, color 0.1s;
+}
+.th-filter-input.has-value ~ .th-filter-clear { display: flex; }
+.th-filter-clear:hover { background: var(--accent); color: var(--bg); }
 tr.row-col-filter-hidden { display: none !important; }
 
 /* Column sort button in result table headers */
@@ -3261,7 +3286,7 @@ tr.row-col-filter-hidden { display: none !important; }
 /* --- Row highlight (Alt+click) --- */
 /* Apply a teal tint to all cells in the row that don't already have an individual cell colour */
 tr.row-highlighted td:not(.col-highlight-1):not(.col-highlight-2):not(.col-highlight-3):not(.col-highlight-4) {
-    background-color: rgba(0, 188, 212, 0.22) !important;
+    background-color: rgba(59, 130, 246, 0.35) !important;
 }
 
 /* --- Dim row-mode --- */

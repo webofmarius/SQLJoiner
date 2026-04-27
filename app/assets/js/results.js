@@ -896,7 +896,6 @@ const Results = (() => {
         if (table?.classList.contains('is-dimmed')) _dimRefreshModeIfDimmed();
     }
 
-    /**
     function _likeToRegex(pattern) {
         const escaped = pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&');
         return new RegExp('^' + escaped.replace(/%/g, '.*') + '$', 'i');
@@ -1633,12 +1632,31 @@ const Results = (() => {
             th.appendChild(sortBtn);
 
             // Inline filter input — stops propagation so header click handlers don't fire
+            const filterWrap  = document.createElement('div');
+            filterWrap.className = 'th-filter-wrap';
+
             const filterInput = document.createElement('input');
             filterInput.type = 'text';
             filterInput.placeholder = '%like%';
             filterInput.className = 'th-filter-input';
+
+            const filterClear = document.createElement('button');
+            filterClear.type = 'text';
+            filterClear.className = 'th-filter-clear';
+            filterClear.textContent = '×';
+            filterClear.tabIndex = -1;
+            filterClear.title = 'Clear filter';
+
+            const _clearFilterInput = () => {
+                filterInput.value = '';
+                delete _colFilters[colIdx];
+                filterInput.classList.remove('has-value');
+                _applyColFilter();
+                filterInput.focus();
+            };
+
             ['click', 'dblclick', 'mousedown'].forEach(evt =>
-                filterInput.addEventListener(evt, e => e.stopPropagation())
+                filterWrap.addEventListener(evt, e => e.stopPropagation())
             );
             filterInput.addEventListener('input', () => {
                 const v = filterInput.value;
@@ -1647,7 +1665,14 @@ const Results = (() => {
                 filterInput.classList.toggle('has-value', v.length > 0);
                 _applyColFilter();
             });
-            th.appendChild(filterInput);
+            filterInput.addEventListener('keydown', e => {
+                if (e.key === 'Escape') { e.preventDefault(); _clearFilterInput(); }
+            });
+            filterClear.addEventListener('click', () => _clearFilterInput());
+
+            filterWrap.appendChild(filterInput);
+            filterWrap.appendChild(filterClear);
+            th.appendChild(filterWrap);
 
             // Drag: reorder columns in results table + WHERE / GROUP BY / HAVING / ORDER BY drop zones
             if (th.dataset.colKey) {
