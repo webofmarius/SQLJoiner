@@ -273,7 +273,7 @@
                 <button id="btn-duplicates" title="Highlight duplicate cell values">⧉ Duplicates</button>
                 <button id="btn-toggle-dim" title="Dim unhighlighted cells">☾ Dim</button>
                 <button id="btn-calculus" title="Run a query first to enable Calculus mode" disabled>∑ Calculus</button>
-                <button id="btn-search-cols" class="btn-toggle-mode" title="Toggle column search inputs">⌕ Search</button>
+                <button id="btn-search-cols" title="Toggle column search inputs">⌕ Search</button>
             </div>
             <span id="results-meta"></span>
             <div id="results-actions">

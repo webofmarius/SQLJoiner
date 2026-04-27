@@ -3081,6 +3081,28 @@ body.is-resizing-results #resizer-results {
     letter-spacing: 0;
     color: var(--text);
 }
+/* Row-number column */
+#results-table th.th-row-num,
+#results-table td.td-row-num {
+    background: var(--surface2) !important;
+    color: var(--text-faint);
+    font-size: 10px;
+    font-weight: 400;
+    text-align: right;
+    min-width: 2ch;
+    white-space: nowrap;
+    user-select: none;
+    border-right: 2px solid var(--border);
+    padding-right: 8px;
+}
+#results-table th.th-row-num {
+    font-weight: 600;
+    font-size: 11px;
+    text-align: center;
+    padding-right: 10px;
+    cursor: default;
+}
+
 #results-table th[draggable="true"] { cursor: grab; }
 #results-table td[draggable="true"] { cursor: grab; }
 #results-table th[draggable="true"]:active,
@@ -3298,6 +3320,7 @@ tr.calculus-hl > td {
 }
 
 #btn-search-cols { border-radius: 4px; }
+#btn-search-cols.active { background: var(--accent-dim); color: var(--accent); border-color: var(--accent); }
 
 #btn-toggle-dim.is-active {
     background: var(--accent);

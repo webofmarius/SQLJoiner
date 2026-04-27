@@ -92,7 +92,7 @@ const Results = (() => {
         e.preventDefault();
         const tr   = _selectedCell.closest('tr');
         if (!tr) return;
-        const tds  = Array.from(tr.querySelectorAll('td'));
+        const tds  = Array.from(tr.querySelectorAll('td:not(.td-row-num)'));
         const keys = _buildJsonKeys();
         const row  = Object.fromEntries(keys.map((k, i) => [k, tds[i]?.dataset.raw ?? tds[i]?.textContent ?? null]));
         const payload = { table: _lastResult.tableRef || '', rows: [row] };
@@ -765,7 +765,7 @@ const Results = (() => {
                 if (_lastResult) {
                     _lastResult.cols.forEach((_col, colIdx) => {
                         if (_colThemes[colIdx]) { _dimPinnedCols.add(colIdx); return; }
-                        const nth = colIdx + 1;
+                        const nth = colIdx + 2;
                         if (tbody && THEMES.some(t => tbody.querySelector(`tr td:nth-child(${nth}).${t}`)))
                             _dimPinnedCols.add(colIdx);
                     });
@@ -796,7 +796,7 @@ const Results = (() => {
         // In row-mode, columns are all visible
         _lastResult.cols.forEach((_col, colIdx) => {
             const hide = isDimmed && !_dimRowMode && !_dimPinnedCols.has(colIdx);
-            const nth = colIdx + 1;
+            const nth = colIdx + 2;
             table.querySelectorAll(`th:nth-child(${nth}), td:nth-child(${nth})`).forEach(cell => {
                 cell.style.display = hide ? 'none' : '';
             });
@@ -850,7 +850,7 @@ const Results = (() => {
                 if (_lastResult) {
                     _lastResult.cols.forEach((_col, colIdx) => {
                         if (_colThemes[colIdx]) { _dimPinnedCols.add(colIdx); return; }
-                        const nth = colIdx + 1;
+                        const nth = colIdx + 2;
                         if (tbody && THEMES.some(t => tbody.querySelector(`tr td:nth-child(${nth}).${t}`)))
                             _dimPinnedCols.add(colIdx);
                     });
@@ -921,7 +921,7 @@ const Results = (() => {
         ths.forEach(th => (th.style.minWidth = th.offsetWidth + 'px'));
 
         Array.from(tbody.querySelectorAll('tr')).forEach(tr => {
-            const tds = Array.from(tr.querySelectorAll('td'));
+            const tds = Array.from(tr.querySelectorAll('td:not(.td-row-num)'));
             const passes = entries.every(([idx, text]) => {
                 const cell = tds[+idx];
                 const val  = cell?.dataset.raw ?? cell?.textContent ?? '';
@@ -1200,7 +1200,7 @@ const Results = (() => {
         if (colIdx === -1) return;
 
         ths[colIdx].classList.toggle('col-deselected', isDeselected);
-        tbody.querySelectorAll(`tr td:nth-child(${colIdx + 1})`).forEach(td => {
+        tbody.querySelectorAll(`tr td:nth-child(${colIdx + 2})`).forEach(td => {
             td.classList.toggle('col-deselected', isDeselected);
         });
     }
@@ -1243,7 +1243,7 @@ const Results = (() => {
         if (colIdx === -1) return;
 
         ths[colIdx].classList.toggle('col-highlighted', on);
-        tbody.querySelectorAll(`tr td:nth-child(${colIdx + 1})`).forEach(td => {
+        tbody.querySelectorAll(`tr td:nth-child(${colIdx + 2})`).forEach(td => {
             td.classList.toggle('col-highlighted', on);
         });
 
@@ -1296,19 +1296,22 @@ const Results = (() => {
             if (!section) return;
             Array.from(section.rows).forEach(row => {
                 const cells = Array.from(row.cells);
-                if (fromIdx >= cells.length || toIdx >= cells.length) return;
-                const moving = cells[fromIdx];
-                const ref    = cells[toIdx];
+                // +1 to skip the leading # column
+                const fromCell = cells[fromIdx + 1];
+                const toCell   = cells[toIdx   + 1];
+                if (!fromCell || !toCell) return;
                 if (fromIdx < toIdx) {
-                    row.insertBefore(moving, ref.nextSibling);
+                    row.insertBefore(fromCell, toCell.nextSibling);
                 } else {
-                    row.insertBefore(moving, ref);
+                    row.insertBefore(fromCell, toCell);
                 }
             });
         });
-        // Keep data-col-idx in sync so subsequent drags use correct positions
-        Array.from(thead.querySelectorAll('th')).forEach((th, i) => {
-            th.dataset.colIdx = String(i);
+        // Keep data-col-idx in sync (skip the # column, re-number data ths from 0)
+        let dataIdx = 0;
+        Array.from(thead.querySelectorAll('th')).forEach(th => {
+            if (th.classList.contains('th-row-num')) return;
+            th.dataset.colIdx = String(dataIdx++);
         });
     }
 
@@ -1320,10 +1323,10 @@ const Results = (() => {
             return;
         }
         dataRows.sort((a, b) => {
-            const aRaw = a.cells[colIdx]?.dataset.raw ?? a.cells[colIdx]?.textContent ?? '';
-            const bRaw = b.cells[colIdx]?.dataset.raw ?? b.cells[colIdx]?.textContent ?? '';
-            const aNull = a.cells[colIdx]?.classList.contains('is-null');
-            const bNull = b.cells[colIdx]?.classList.contains('is-null');
+            const aRaw = a.cells[colIdx + 1]?.dataset.raw ?? a.cells[colIdx + 1]?.textContent ?? '';
+            const bRaw = b.cells[colIdx + 1]?.dataset.raw ?? b.cells[colIdx + 1]?.textContent ?? '';
+            const aNull = a.cells[colIdx + 1]?.classList.contains('is-null');
+            const bNull = b.cells[colIdx + 1]?.classList.contains('is-null');
             if (aNull && bNull) return 0;
             if (aNull) return 1;
             if (bNull) return -1;
@@ -1359,6 +1362,10 @@ const Results = (() => {
 
         // --- Header ---
         const trHead = document.createElement('tr');
+        const thRowNum = document.createElement('th');
+        thRowNum.className = 'th-row-num';
+        thRowNum.textContent = '#';
+        trHead.appendChild(thRowNum);
         cols.forEach((col, colIdx) => {
             const th  = document.createElement('th');
             const key = _getColKey(col);
@@ -1549,7 +1556,7 @@ const Results = (() => {
                     }
                     const deselected = chk && !chk.checked;
                     th.classList.toggle('col-deselected', deselected);
-                    tbody.querySelectorAll(`tr td:nth-child(${colIdx + 1})`).forEach(td => {
+                    tbody.querySelectorAll(`tr td:nth-child(${colIdx + 2})`).forEach(td => {
                         td.classList.toggle('col-deselected', deselected);
                     });
 
@@ -1736,8 +1743,12 @@ const Results = (() => {
             return;
         }
 
-        rows.forEach(row => {
+        rows.forEach((row, rowIdx) => {
             const tr = document.createElement('tr');
+            const tdRowNum = document.createElement('td');
+            tdRowNum.className = 'td-row-num';
+            tdRowNum.textContent = String(rowIdx + 1);
+            tr.appendChild(tdRowNum);
             cols.forEach((col, colIdx) => {
                 const td = document.createElement('td');
                 // Rows are positional arrays (FETCH_NUM) so that duplicate column
@@ -1782,7 +1793,7 @@ const Results = (() => {
                     if (e.altKey) {
                         e.preventDefault();
                         e.stopPropagation();
-                        const tds  = Array.from(tr.querySelectorAll('td'));
+                        const tds  = Array.from(tr.querySelectorAll('td:not(.td-row-num)'));
                         const keys = _buildJsonKeys();
                         const row  = Object.fromEntries(keys.map((k, i) => [k, tds[i]?.dataset.raw ?? tds[i]?.textContent ?? null]));
                         navigator.clipboard.writeText(JSON.stringify(row, null, 2))
@@ -2008,7 +2019,7 @@ const Results = (() => {
         trs.forEach((tr, rowIdx) => {
             const row = rows[rowIdx];
             if (!row) return;
-            const tds = tr.querySelectorAll('td');
+            const tds = tr.querySelectorAll('td:not(.td-row-num)');
             tds.forEach((td, colIdx) => {
                 const score = _explainScore(cols[colIdx], row[colIdx]);
                 if (score) td.classList.add('explain-' + score);
@@ -2203,7 +2214,7 @@ const Results = (() => {
 
     // Compare all cells in a column against the first value cell (triggered by header click)
     function _compareColumn(colIdx, tbody) {
-        const cells = [...tbody.querySelectorAll(`tr td:nth-child(${colIdx + 1})`)];
+        const cells = [...tbody.querySelectorAll(`tr td:nth-child(${colIdx + 2})`)];
         if (!cells.length) return;
         document.querySelectorAll('#results-table td.cell-compare-ref, #results-table td.cell-compare-match, #results-table td.cell-compare-diff')
             .forEach(td => td.classList.remove('cell-compare-ref', 'cell-compare-match', 'cell-compare-diff'));
@@ -2225,7 +2236,7 @@ const Results = (() => {
         _compareRefValue = refVal;
         _compareRefCell  = referenceTd;
         referenceTd.classList.add('cell-compare-ref');
-        tr.querySelectorAll('td').forEach(td => {
+        tr.querySelectorAll('td:not(.td-row-num)').forEach(td => {
             if (td === referenceTd) return;
             const val = td.dataset.raw ?? td.textContent;
             td.classList.add(val === refVal ? 'cell-compare-match' : 'cell-compare-diff');
@@ -2289,7 +2300,7 @@ const Results = (() => {
     // Duplicate search scoped to a single column (triggered by header click).
     // Every cell in the column gets coloured: origin / match / unique (not a duplicate).
     function _duplicateColumn(colIdx, tbody) {
-        const cells = [...tbody.querySelectorAll(`tr td:nth-child(${colIdx + 1})`)];
+        const cells = [...tbody.querySelectorAll(`tr td:nth-child(${colIdx + 2})`)];
         if (!cells.length) return;
         _clearDupHighlights();
         const origin = cells[0];
@@ -2318,7 +2329,7 @@ const Results = (() => {
         referenceTd.classList.add('cell-dup-origin');
         _duplicateOriginCell = referenceTd;
         let count = 1;
-        tr.querySelectorAll('td').forEach(td => {
+        tr.querySelectorAll('td:not(.td-row-num)').forEach(td => {
             if (td === referenceTd) return;
             const v = td.dataset.raw ?? td.textContent;
             if (v === refVal) {
@@ -2480,7 +2491,7 @@ async function _copyAsSqlSelect() {
      * they stay in sync with whatever the table currently shows.
      */
     function _getRenderedHeaders() {
-        const ths = document.querySelectorAll('#results-table thead th');
+        const ths = document.querySelectorAll('#results-table thead th:not(.th-row-num)');
         return Array.from(ths).map(th => {
             const clone = th.cloneNode(true);
             clone.querySelectorAll('.th-table-origin, .col-badge').forEach(el => el.remove());
@@ -2508,7 +2519,7 @@ async function _copyAsSqlSelect() {
         const colCount = _lastResult.cols.length;
         const visibleColIndices = [];
         for (let i = 0; i < colCount; i++) {
-            const th = document.querySelector(`#results-table thead th:nth-child(${i + 1})`);
+            const th = document.querySelector(`#results-table thead th[data-col-idx="${i}"]`);
             if (!th || th.style.display !== 'none') {
                 visibleColIndices.push(i);
             }
