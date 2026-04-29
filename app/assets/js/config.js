@@ -987,6 +987,8 @@ const QueryPanel = (() => {
             <textarea class="expr-popup-ta" spellcheck="false" placeholder="SQL expression…"></textarea>
             <input type="text" class="expr-popup-input" spellcheck="false" placeholder="Label…">
             <div class="expr-popup-actions">
+                <label class="scope-exclusive-label"><input type="checkbox" class="expr-popup-scope-exclusive" checked disabled> multiple</label>
+                <button type="button" class="btn-outline-blue btn-scope-mode expr-popup-scope-btn">Scope</button>
                 <button type="button" class="btn-outline-blue expr-popup-explain">⚙ Explain</button>
                 <button type="button" class="primary expr-popup-run">▶ Run</button>
             </div>`;
@@ -1073,6 +1075,35 @@ const QueryPanel = (() => {
         _exprPopupTA.addEventListener('keydown',    _altEClose);
         _exprPopupInput.addEventListener('keydown', _altEClose);
 
+        // F2 — rename the active (highlighted) word in the expression textarea.
+        _exprPopupTA.addEventListener('keydown', async e => {
+            if (e.key !== 'F2') return;
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            const activeWord = (typeof SqlBackdrop !== 'undefined') ? SqlBackdrop.getActiveWord(_exprPopupTA) : null;
+            if (!activeWord) return;
+            const newName = await Dialog.prompt('Rename item?', activeWord);
+            if (newName === null) return;
+            const trimmed = newName.trim();
+            if (!trimmed) return;
+            const esc = activeWord.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const result = _exprPopupTA.value.replace(new RegExp(`\\b${esc}\\b`, 'gi'), trimmed);
+            if (result === _exprPopupTA.value) return;
+            if (typeof UndoManager !== 'undefined') UndoManager.push(_exprPopupTA);
+            _exprPopupTA.value = result;
+            _exprPopupTA.dispatchEvent(new Event('input', { bubbles: true }));
+            if (typeof UndoManager !== 'undefined') UndoManager.push(_exprPopupTA);
+        });
+
+        // Scope mode
+        if (typeof _bindScopeMode === 'function') {
+            _bindScopeMode(
+                _exprPopupTA,
+                _exprPopup.querySelector('.expr-popup-scope-btn'),
+                _exprPopup.querySelector('.expr-popup-scope-exclusive')
+            );
+        }
+
         document.addEventListener('keydown', e => {
             if (_exprPopup.style.display === 'none') return;
             if (e.key === 'Escape') {
@@ -1145,7 +1176,12 @@ const QueryPanel = (() => {
     }
 
     function _closeExprPopup() {
-        if (_exprPopup) _exprPopup.style.display = 'none';
+        if (_exprPopup) {
+            _exprPopup.style.display = 'none';
+            if (_exprPopupTA?.classList.contains('scope-mode-on') && typeof SqlBackdrop !== 'undefined') {
+                SqlBackdrop.toggleScopeMode(_exprPopupTA);
+            }
+        }
         _exprPopupOnShiftEnter = null;
         const cb = _exprPopupOnClose;
         _exprPopupOnClose = null;
