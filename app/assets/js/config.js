@@ -407,6 +407,49 @@ const QueryPanel = (() => {
         colLegend.textContent = 'Right-click to center canvas on column';
         container.appendChild(colLegend);
 
+        // --- Search Columns bar (under select-expr-legend, above all tables) ---
+        const searchWrap = document.createElement('div');
+        searchWrap.id = 'select-col-search-wrap';
+        searchWrap.style.cssText = 'padding: 4px 0 6px; position: relative; display: flex; align-items: center;';
+        const searchInput = document.createElement('input');
+        searchInput.type = 'text';
+        searchInput.id = 'select-col-search';
+        searchInput.className = 'col-search';
+        searchInput.placeholder = 'Search columns…';
+        searchInput.setAttribute('autocomplete', 'off');
+        searchInput.value = prevSearch;
+
+        const searchClearBtn = document.createElement('button');
+        searchClearBtn.type = 'button';
+        searchClearBtn.className = 'col-search-clear';
+        searchClearBtn.textContent = '✕';
+        searchClearBtn.title = 'Clear search';
+        searchClearBtn.style.display = prevSearch ? '' : 'none';
+        searchClearBtn.addEventListener('click', () => {
+            searchInput.value = '';
+            searchClearBtn.style.display = 'none';
+            _filterSelectColumns();
+            searchInput.focus();
+        });
+
+        searchInput.addEventListener('keydown', e => {
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                e.stopPropagation();
+                searchInput.value = '';
+                searchClearBtn.style.display = 'none';
+                _filterSelectColumns();
+            }
+        });
+        searchInput.addEventListener('input', () => {
+            _filterSelectColumns();
+            searchClearBtn.style.display = searchInput.value ? '' : 'none';
+            searchInput.scrollIntoView({ block: 'nearest', behavior: 'instant' });
+        });
+        searchWrap.appendChild(searchInput);
+        searchWrap.appendChild(searchClearBtn);
+        container.appendChild(searchWrap);
+
         // Group columns by table alias for display
         const grouped = [];
         State.columnOrder.forEach(key => {
@@ -835,48 +878,6 @@ const QueryPanel = (() => {
             });
         });
 
-        // --- Search Columns bar (above Custom Expressions) ---
-        const searchWrap = document.createElement('div');
-        searchWrap.id = 'select-col-search-wrap';
-        searchWrap.style.cssText = 'padding: 4px 0 6px; position: relative; display: flex; align-items: center;';
-        const searchInput = document.createElement('input');
-        searchInput.type = 'text';
-        searchInput.id = 'select-col-search';
-        searchInput.className = 'col-search';
-        searchInput.placeholder = 'Search columns\u2026';
-        searchInput.setAttribute('autocomplete', 'off');
-        searchInput.value = prevSearch;
-
-        const searchClearBtn = document.createElement('button');
-        searchClearBtn.type = 'button';
-        searchClearBtn.className = 'col-search-clear';
-        searchClearBtn.textContent = '✕';
-        searchClearBtn.title = 'Clear search';
-        searchClearBtn.style.display = prevSearch ? '' : 'none';
-        searchClearBtn.addEventListener('click', () => {
-            searchInput.value = '';
-            searchClearBtn.style.display = 'none';
-            _filterSelectColumns();
-            searchInput.focus();
-        });
-
-        searchInput.addEventListener('keydown', e => {
-            if (e.key === 'Escape') {
-                e.preventDefault();
-                e.stopPropagation();
-                searchInput.value = '';
-                searchClearBtn.style.display = 'none';
-                _filterSelectColumns();
-            }
-        });
-        searchInput.addEventListener('input', () => {
-            _filterSelectColumns();
-            searchClearBtn.style.display = searchInput.value ? '' : 'none';
-            searchInput.scrollIntoView({ block: 'nearest', behavior: 'instant' });
-        });
-        searchWrap.appendChild(searchInput);
-        searchWrap.appendChild(searchClearBtn);
-        container.appendChild(searchWrap);
 
         // --- Custom Expressions section ---
         const exprs = State.selectCustomExprs ?? [];
