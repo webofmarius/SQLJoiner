@@ -1555,7 +1555,8 @@ const Results = (() => {
                     }
                     const deselected = chk && !chk.checked;
                     th.classList.toggle('col-deselected', deselected);
-                    tbody.querySelectorAll(`tr td:nth-child(${colIdx + 2})`).forEach(td => {
+                    const currentIdx = parseInt(th.dataset.colIdx, 10);
+                    tbody.querySelectorAll(`tr td:nth-child(${currentIdx + 2})`).forEach(td => {
                         td.classList.toggle('col-deselected', deselected);
                     });
 
