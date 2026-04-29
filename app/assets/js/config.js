@@ -1391,9 +1391,11 @@ const QueryPanel = (() => {
                 if (visible) groupVisible = true;
             });
 
-            // Keep header visible when the per-group search is active (even with 0 matches)
-            hdr.style.display = (groupVisible || groupTerm) ? '' : 'none';
-            if (groupVisible || groupTerm) anyVisible = true;
+            // Keep header (and its group search wrap) visible when the per-group search is active (even with 0 matches)
+            const hdrVisible = groupVisible || groupTerm;
+            hdr.style.display = hdrVisible ? '' : 'none';
+            if (grpWrap) grpWrap.style.display = hdrVisible ? '' : 'none';
+            if (hdrVisible) anyVisible = true;
         });
 
         // "no match" message
