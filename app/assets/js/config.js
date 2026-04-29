@@ -392,11 +392,12 @@ const QueryPanel = (() => {
         minimizeAllBtn.addEventListener('click', () => {
             _allMinimized = !_allMinimized;
             minimizeAllBtn.classList.toggle('active', _allMinimized);
-            document.querySelectorAll('.btn-select-minimize').forEach(b => {
-                const isMinimized = b.textContent.trim() === '▸';
-                if (_allMinimized && !isMinimized) b.click();
-                if (!_allMinimized && isMinimized) b.click();
+            const aliases = [...new Set(State.columnOrder.map(k => k.split('.')[0]))];
+            aliases.forEach(alias => {
+                if (_allMinimized) _minimizedGroups.add(alias);
+                else _minimizedGroups.delete(alias);
             });
+            _filterSelectColumns();
         });
         listHeader.appendChild(minimizeAllBtn);
         listHeader.appendChild(checkedOnlyBtn);
@@ -483,7 +484,7 @@ const QueryPanel = (() => {
             dragHandleHdr.title = 'Drag to reorder table';
             hdr.appendChild(dragHandleHdr);
 
-            const lblHdr = document.createElement('label');
+            const lblHdr = document.createElement('span');
             const chkHdr = document.createElement('input');
             chkHdr.type = 'checkbox';
             chkHdr.checked = groupAllChecked;
@@ -521,6 +522,11 @@ const QueryPanel = (() => {
             const txtHdr = document.createElement('span');
             txtHdr.className = 'select-table-hdr-txt' + (groupNoneChecked ? ' select-table-hdr-txt--none' : '');
             txtHdr.innerHTML = `<span class="sel-alias">${_esc(group.alias)}</span> <span class="sel-tname">(${_esc(tableName)})</span>`;
+            txtHdr.style.cursor = 'pointer';
+            txtHdr.addEventListener('click', e => {
+                e.stopPropagation();
+                chkHdr.click();
+            });
             lblHdr.appendChild(txtHdr);
 
             const locateBtn = document.createElement('button');
@@ -570,28 +576,18 @@ const QueryPanel = (() => {
                 hdr.appendChild(colorChk);
             }
 
-            const minimizeBtn = document.createElement('button');
-            minimizeBtn.className = 'btn-select-locate btn-select-minimize';
-            const isMinimized = _minimizedGroups.has(group.alias);
-            minimizeBtn.textContent = isMinimized ? '▸' : '▾';
-            minimizeBtn.title = isMinimized ? 'Expand columns' : 'Collapse columns';
-            minimizeBtn.addEventListener('mousedown', e => e.stopPropagation());
-            minimizeBtn.addEventListener('click', e => {
-                e.stopPropagation();
+            hdr.appendChild(lblHdr);
+
+            // Clicking the header row toggles collapse/expand (ignore clicks on buttons/inputs)
+            hdr.addEventListener('click', e => {
+                if (e.target.closest('button, input')) return;
                 if (_minimizedGroups.has(group.alias)) {
                     _minimizedGroups.delete(group.alias);
-                    minimizeBtn.textContent = '▾';
-                    minimizeBtn.title = 'Collapse columns';
                 } else {
                     _minimizedGroups.add(group.alias);
-                    minimizeBtn.textContent = '▸';
-                    minimizeBtn.title = 'Expand columns';
                 }
                 _filterSelectColumns();
             });
-            hdr.appendChild(minimizeBtn);
-
-            hdr.appendChild(lblHdr);
             if (table?.color && !_colorDisabledGroups.has(group.alias)) {
                 hdr.style.backgroundColor = table.color;
                 hdr.style.color = _readableTextColor(table.color);
@@ -3003,11 +2999,12 @@ const QueryPanel = (() => {
         setAllMinimized: (val) => {
             _allMinimized = !!val;
             document.getElementById('btn-minimize-all')?.classList.toggle('active', _allMinimized);
-            document.querySelectorAll('.btn-select-minimize').forEach(b => {
-                const isMinimized = b.textContent.trim() === '▸';
-                if (_allMinimized && !isMinimized) b.click();
-                if (!_allMinimized && isMinimized) b.click();
+            const aliases = [...new Set(State.columnOrder.map(k => k.split('.')[0]))];
+            aliases.forEach(alias => {
+                if (_allMinimized) _minimizedGroups.add(alias);
+                else _minimizedGroups.delete(alias);
             });
+            _filterSelectColumns();
         },
     };
 

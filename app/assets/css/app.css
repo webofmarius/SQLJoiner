@@ -2470,12 +2470,13 @@ body.is-cut-mode * { cursor: crosshair !important; }
     border-bottom: 1px solid var(--border);
     font-size: 11px;
     font-weight: 600;
+    cursor: pointer;
 }
-.select-table-hdr label {
+.select-table-hdr > span {
     display: flex;
     align-items: center;
+    justify-content: center;
     gap: 6px;
-    cursor: pointer;
     flex: 1;
 }
 .select-table-hdr input[type="checkbox"] {
