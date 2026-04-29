@@ -1659,6 +1659,8 @@ const Results = (() => {
             ['click', 'dblclick', 'mousedown'].forEach(evt =>
                 filterWrap.addEventListener(evt, e => e.stopPropagation())
             );
+            filterInput.addEventListener('focus', () => { th.draggable = false; });
+            filterInput.addEventListener('blur',  () => { if (th.dataset.colKey) th.draggable = true; });
             filterInput.addEventListener('input', () => {
                 const v = filterInput.value;
                 if (v) _colFilters[colIdx] = v;
