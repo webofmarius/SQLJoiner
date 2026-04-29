@@ -777,7 +777,8 @@
                     <li><kbd>F3</kbd> <span>Toggle Timestamp Converter</span></li>
                     <li><kbd>F4</kbd> <span>Toggle Overview Zoom</span></li>
                     <li><kbd>F5</kbd> <span>Focus mode — hide all panels / press again to restore</span></li>
-                    <li><kbd>F7</kbd> <span>Toggle Results panel minimize / restore</span></li>
+                    <li><kbd>F6</kbd> <span>Toggle Results panel minimize / restore</span></li>
+                    <li><kbd>F7</kbd> <span>Toggle Results panel stretch height</span></li>
                     <li><kbd>F8</kbd> <span>Toggle Results panel fullscreen (maximize)</span></li>
                     <li><kbd>F9</kbd> <span>Toggle Config (right) panel show / hide</span></li>
                     <li><kbd>Cmd/Ctrl</kbd> + <kbd>F9</kbd> <span>Open Run Custom Query</span></li>

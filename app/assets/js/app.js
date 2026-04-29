@@ -529,10 +529,17 @@ const App = (() => {
                 return;
             }
 
-            // F7 — Toggle results panel minimize / restore
-            if (e.code === 'F7' && !isMod) {
+            // F6 — Toggle results panel minimize / restore
+            if (e.code === 'F6' && !isMod) {
                 e.preventDefault();
                 Results.toggle?.();
+                return;
+            }
+
+            // F7 — Toggle results panel stretch height
+            if (e.code === 'F7' && !isMod) {
+                e.preventDefault();
+                Results.toggleTall?.();
                 return;
             }
 
