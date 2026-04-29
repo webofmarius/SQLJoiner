@@ -1518,7 +1518,7 @@ const Canvas = (() => {
             s.startsWith(oldAlias + '.') ? newAlias + s.slice(oldAlias.length) : s
         );
 
-        // Cascade: WHERE (visual conditions)
+        // Cascade: WHERE (visual conditions — col selector)
         State.where.forEach(cond => {
             if (cond.col?.startsWith(oldAlias + '.')) {
                 cond.col = newAlias + cond.col.slice(oldAlias.length);
@@ -1536,6 +1536,18 @@ const Canvas = (() => {
         State.joins.forEach(j => {
             if (j.fromAlias === oldAlias) j.fromAlias = newAlias;
             if (j.toAlias   === oldAlias) j.toAlias   = newAlias;
+        });
+
+        // Cascade: free-form SQL strings (WHERE expr inputs, WHERE raw, Custom Expressions)
+        const _aliasRe = new RegExp('\\b' + oldAlias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\.', 'g');
+        State.where.forEach(cond => {
+            if (cond.expr) cond.expr = cond.expr.replace(_aliasRe, newAlias + '.');
+        });
+        if (State.whereRaw) {
+            State.whereRaw = State.whereRaw.replace(_aliasRe, newAlias + '.');
+        }
+        (State.selectCustomExprs ?? []).forEach(ce => {
+            if (ce.expr) ce.expr = ce.expr.replace(_aliasRe, newAlias + '.');
         });
 
         App.updateSQLPreview();
