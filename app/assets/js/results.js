@@ -2413,7 +2413,7 @@ const Results = (() => {
         }
 
         // Alt+C — clear math input if it is focused; otherwise open the Load CSV dialog
-        if (e.altKey && e.code === 'KeyC') {
+        if (e.altKey && !e.shiftKey && e.code === 'KeyC') {
             const mathInput = document.getElementById('calculus-math-input');
             if (mathInput && document.activeElement === mathInput) {
                 // handled by the input's own keydown listener — do nothing here
@@ -2421,6 +2421,13 @@ const Results = (() => {
             }
             e.preventDefault();
             document.getElementById('csv-file-input')?.click();
+            return;
+        }
+
+        // Alt+Shift+C — open the CSV (memory) popup
+        if (e.altKey && e.shiftKey && e.code === 'KeyC') {
+            e.preventDefault();
+            document.getElementById('btn-load-csv-memory')?.click();
             return;
         }
 
@@ -5947,6 +5954,27 @@ async function _copyAsSqlSelect() {
         calcClear: _calcClearAll,
         /** Parse a CSV File object and load it into the results table. */
         loadCsvFile,
+        /** Parse a CSV string and load it into the results table. Returns an error string or null. */
+        loadCsvText(text) {
+            const parsed = _parseCsv(text);
+            if (parsed.error) return parsed.error;
+            const delimLabel = parsed.delim === '\t' ? 'TAB' : parsed.delim;
+            render({
+                cols:       parsed.cols,
+                rows:       parsed.rows,
+                count:      parsed.rows.length,
+                col_types:  parsed.colTypes,
+                col_tables: [],
+                sql:        null,
+                _csvSource: `memory (delimiter: ${delimLabel})`,
+            });
+            const metaEl = document.getElementById('results-meta');
+            if (metaEl) {
+                const rowLabel = `${parsed.rows.length.toLocaleString()} row${parsed.rows.length !== 1 ? 's' : ''}`;
+                metaEl.textContent = `${rowLabel} — CSV (memory)`;
+            }
+            return null;
+        },
     };
 })();
 

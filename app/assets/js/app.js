@@ -4062,6 +4062,43 @@ const App = (() => {
             if (file) { Results.loadCsvFile(file); e.target.value = ''; }
         });
 
+        // CSV (memory) popup
+        (() => {
+            const modal   = document.getElementById('modal-csv-memory');
+            const ta      = document.getElementById('csv-memory-textarea');
+            const _open   = () => { modal.classList.remove('hidden'); ta.focus(); };
+            const _close  = () => { modal.classList.add('hidden'); };
+
+            document.getElementById('btn-load-csv-memory').addEventListener('click', _open);
+            document.getElementById('btn-csv-memory-x').addEventListener('click', _close);
+            document.getElementById('btn-csv-memory-cancel').addEventListener('click', _close);
+
+            document.getElementById('btn-csv-memory-apply').addEventListener('click', async () => {
+                const text = ta.value;
+                if (!text.trim()) { _notify('Textarea is empty.', 'warn'); return; }
+
+                // Count data rows (excluding header)
+                const lines = text.split('\n').filter(l => l.trim());
+                const dataRows = lines.length > 1 ? lines.length - 1 : 0;
+                if (dataRows > 1000) {
+                    const ok = await Dialog.confirm(`The CSV contains ${dataRows.toLocaleString()} rows. Load anyway?`);
+                    if (!ok) return;
+                }
+
+                const err = Results.loadCsvText(text);
+                if (err) { _notify(`Could not load CSV: ${err}`, 'error'); return; }
+                _close();
+            });
+
+            // Close on backdrop click
+            modal.addEventListener('click', e => { if (e.target === modal) _close(); });
+
+            // Esc to close
+            modal.addEventListener('keydown', e => {
+                if (e.key === 'Escape') { e.stopPropagation(); _close(); }
+            });
+        })();
+
         document.getElementById('btn-load-context')
             .addEventListener('click', () => Modals.openContext());
 

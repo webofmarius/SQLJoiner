@@ -22,6 +22,7 @@
                 <ul class="topbar-menu-dropdown" id="topbar-menu-dropdown">
                     <li id="btn-new-context-shortcut" title="Save as a new context">+ New</li>
                     <li id="btn-load-csv" title="Load a CSV file into the results table">📂 CSV</li>
+                    <li id="btn-load-csv-memory" title="Paste CSV text and load into the results table">📋 CSV (memory)</li>
                     <li id="btn-manage-profiles">⚙ Profiles</li>
                     <li id="menu-test-connection">↯ Test Connection</li>
                     <li id="menu-show-shortcuts">⌨ Shortcuts</li>
@@ -587,6 +588,22 @@
     </div>
 
     <!-- ==================== MODAL: Notes ==================== -->
+    <div id="modal-csv-memory" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modal-csv-memory-title">
+        <div class="modal-box modal-box--notes">
+            <div class="modal-header">
+                <h2 id="modal-csv-memory-title">CSV (memory)</h2>
+                <button id="btn-csv-memory-x" aria-label="Close">✕</button>
+            </div>
+            <div class="modal-body">
+                <textarea id="csv-memory-textarea" placeholder="Paste CSV data here…" spellcheck="false"></textarea>
+                <div class="form-actions">
+                    <button type="button" id="btn-csv-memory-cancel">Cancel</button>
+                    <button type="button" id="btn-csv-memory-apply" class="primary">Apply</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div id="modal-notes" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modal-notes-title">
         <div class="modal-box modal-box--notes">
             <div class="modal-header">
@@ -789,6 +806,7 @@
                     <li><kbd>Alt</kbd> + <kbd>F</kbd> <span>Focus canvas table search</span></li>
                     <li><kbd>Alt</kbd> + <kbd>N</kbd> <span>Open Notes</span></li>
                     <li><kbd>Alt</kbd> + <kbd>C</kbd> <span>Open Load CSV dialog</span></li>
+                    <li><kbd>Alt</kbd> + <kbd>Shift</kbd> + <kbd>C</kbd> <span>Open CSV (memory) dialog</span></li>
                     <li><kbd>Alt</kbd> + <kbd>V</kbd> <span>Toggle Duplicates mode</span></li>
                     <li><kbd>Alt</kbd> + <kbd>X</kbd> / <kbd>U</kbd> <span>Toggle Calculus mode</span></li>
                     <li><kbd>Alt</kbd> + <kbd>K</kbd> <span>Toggle Calculus Note</span></li>

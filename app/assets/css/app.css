@@ -4838,7 +4838,8 @@ th.calc-nop { opacity: 0.1; font-weight: bold; }
 }
 .modal-box--notes #notes-title-input:focus { border-color: var(--accent); }
 .modal-box--calculus-note #calculus-note-textarea,
-.modal-box--notes #notes-textarea {
+.modal-box--notes #notes-textarea,
+.modal-box--notes #csv-memory-textarea {
     width: 100%;
     flex: 1;
     min-height: 0;
