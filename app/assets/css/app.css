@@ -3081,7 +3081,7 @@ body.is-resizing-results #resizer-results {
     letter-spacing: 0;
     color: var(--text);
 }
-/* Row-number column */
+/* Row-number column — fixed width for up to 5-digit row numbers */
 #results-table th.th-row-num,
 #results-table td.td-row-num {
     background: var(--surface2) !important;
@@ -3089,17 +3089,18 @@ body.is-resizing-results #resizer-results {
     font-size: 10px;
     font-weight: 400;
     text-align: right;
-    min-width: 2ch;
+    width: 5ch;
+    min-width: 5ch;
+    max-width: 5ch;
     white-space: nowrap;
     user-select: none;
     border-right: 2px solid var(--border);
-    padding-right: 8px;
+    padding: 2px 4px;
 }
 #results-table th.th-row-num {
     font-weight: 600;
-    font-size: 11px;
     text-align: center;
-    padding-right: 10px;
+    padding: 3px 4px;
     cursor: default;
 }
 
