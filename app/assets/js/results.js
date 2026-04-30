@@ -2752,12 +2752,19 @@ async function _copyAsSqlSelect() {
     function _getVisibleIndices() {
         if (!_lastResult) return { visibleRowIndices: [], visibleColIndices: [] };
 
-        // Rows: column filter hides rows with 'row-col-filter-hidden'
+        // Rows: skip the compare banner (not a data row), exclude column-filter-hidden
+        // and dim-row-hidden rows. dataIdx tracks the position in _lastResult.rows.
         const trs = Array.from(document.querySelectorAll('#results-table tbody tr'));
-        const visibleRowIndices = trs
-            .map((tr, i) => ({ tr, i }))
-            .filter(({ tr }) => !tr.classList.contains('row-col-filter-hidden'))
-            .map(({ i }) => i);
+        const visibleRowIndices = [];
+        let dataIdx = 0;
+        trs.forEach(tr => {
+            if (tr.classList.contains('compare-banner-row')) return; // not a data row
+            if (!tr.classList.contains('row-col-filter-hidden') &&
+                !tr.classList.contains('dim-row-hidden')) {
+                visibleRowIndices.push(dataIdx);
+            }
+            dataIdx++;
+        });
 
         // Columns: Dim sets display:none on header and data cells
         const colCount = _lastResult.cols.length;
