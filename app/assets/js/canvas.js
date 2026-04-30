@@ -15,8 +15,8 @@ const Canvas = (() => {
     // =========================================================================
     const CARD_COLORS = [
         { hex: '#b71c1c', label: 'Red'       },
-        { hex: '#bf360c', label: 'Orange'    },
-        { hex: '#f57f17', label: 'Amber'     },
+        { hex: '#8a2500', label: 'Orange'    },
+        { hex: '#7a4510', label: 'Amber'     },
         { hex: '#33691e', label: 'Green'     },
         { hex: '#006064', label: 'Teal'      },
         { hex: '#1565c0', label: 'Blue'      },
