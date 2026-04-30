@@ -1852,11 +1852,9 @@ const Results = (() => {
             filterClear.title = 'Clear filter';
 
             const _clearFilterInput = () => {
-                filterInput.value = '';
-                delete _colFilters[colIdx];
-                filterInput.classList.remove('has-value');
-                _applyColFilter();
                 filterInput.focus();
+                filterInput.select();
+                document.execCommand('insertText', false, '');
             };
 
             ['click', 'dblclick', 'mousedown'].forEach(evt =>
@@ -2732,7 +2730,7 @@ async function _copyAsSqlSelect() {
         const ths = document.querySelectorAll('#results-table thead th:not(.th-row-num)');
         return Array.from(ths).map(th => {
             const clone = th.cloneNode(true);
-            clone.querySelectorAll('.th-table-origin, .col-badge').forEach(el => el.remove());
+            clone.querySelectorAll('.th-table-origin, .col-badge, .th-sort-btn, .th-filter-wrap').forEach(el => el.remove());
             return clone.textContent.trim();
         });
     }

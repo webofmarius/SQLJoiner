@@ -2529,10 +2529,8 @@ body.is-cut-mode * { cursor: crosshair !important; }
     border-radius: 3px;
 }
 .col-alias-input {
-    margin-left: auto;
-    width: 35% !important;
-    flex: 0 0 35%;
-    min-width: 24px;
+    width: 100%;
+    box-sizing: border-box;
     font-size: 10px;
     padding: 1px 4px;
     height: 18px;
@@ -2547,21 +2545,40 @@ body.is-cut-mode * { cursor: crosshair !important; }
     border-color: var(--accent);
     color: var(--text);
 }
+.col-alias-input.has-value { padding-right: 18px; }
+.col-alias-wrap {
+    position: relative;
+    margin-left: auto;
+    flex: 0 0 35%;
+    min-width: 24px;
+}
+.col-alias-wrap .col-alias-input {
+    margin-left: 0;
+    width: 100%;
+    flex: none;
+}
 .col-alias-clear {
-    flex-shrink: 0;
-    width: 14px;
-    height: 14px;
+    display: none;
+    position: absolute;
+    right: 3px;
+    top: 50%;
+    transform: translateY(-50%);
+    align-items: center;
+    justify-content: center;
+    width: 12px;
+    height: 12px;
     padding: 0;
-    margin-left: 2px;
+    border-radius: 50%;
+    background: var(--accent-dim);
     border: none;
-    background: transparent;
-    color: var(--text-muted);
-    font-size: 13px;
+    color: var(--accent);
+    font-size: 10px;
     line-height: 1;
     cursor: pointer;
-    opacity: 0.55;
+    transition: background 0.1s, color 0.1s;
 }
-.col-alias-clear:hover { opacity: 1; color: var(--text); }
+.col-alias-input.has-value ~ .col-alias-clear { display: flex; }
+.col-alias-clear:hover { background: var(--accent); color: var(--bg); }
 .col-highlight-chk {
     flex-shrink: 0;
     width: auto !important;

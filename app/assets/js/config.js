@@ -787,9 +787,12 @@ const QueryPanel = (() => {
                 row.appendChild(lbl);
 
                 // Alias input (visual mode only)
+                const aliasWrap = document.createElement('div');
+                aliasWrap.className = 'col-alias-wrap';
+
                 const aliasInput = document.createElement('input');
                 aliasInput.type = 'text';
-                aliasInput.className = 'col-alias-input';
+                aliasInput.className = 'col-alias-input' + ((State.selectAliases || {})[key] ? ' has-value' : '');
                 aliasInput.placeholder = 'AS …';
                 aliasInput.value = (State.selectAliases || {})[key] || '';
                 aliasInput.title = 'Column alias (AS …)';
@@ -800,8 +803,8 @@ const QueryPanel = (() => {
                     if (e.key === 'Escape') {
                         e.preventDefault();
                         e.stopPropagation();
-                        aliasInput.value = '';
-                        aliasInput.dispatchEvent(new Event('input', { bubbles: true }));
+                        aliasInput.select();
+                        document.execCommand('insertText', false, '');
                     }
                 });
                 aliasInput.addEventListener('input', () => {
@@ -812,25 +815,26 @@ const QueryPanel = (() => {
                     } else {
                         delete State.selectAliases[key];
                     }
-                    aliasClearBtn.style.display = v ? '' : 'none';
+                    aliasInput.classList.toggle('has-value', !!v);
                     App.updateSQLPreview();
                 });
-                row.appendChild(aliasInput);
 
                 const aliasClearBtn = document.createElement('button');
                 aliasClearBtn.className = 'col-alias-clear';
                 aliasClearBtn.textContent = '×';
                 aliasClearBtn.title = 'Clear alias';
-                aliasClearBtn.style.display = aliasInput.value ? '' : 'none';
                 aliasClearBtn.addEventListener('mousedown', e => { e.stopPropagation(); e.preventDefault(); });
                 aliasClearBtn.addEventListener('click', e => {
                     e.stopPropagation();
-                    aliasInput.value = '';
-                    aliasInput.dispatchEvent(new Event('input', { bubbles: true }));
                     aliasInput.focus();
+                    aliasInput.select();
+                    document.execCommand('insertText', false, '');
                 });
                 aliasClearBtn.addEventListener('dragstart', e => e.stopPropagation());
-                row.appendChild(aliasClearBtn);
+
+                aliasWrap.appendChild(aliasInput);
+                aliasWrap.appendChild(aliasClearBtn);
+                row.appendChild(aliasWrap);
 
                 // Highlight checkbox — lights up the matching results column
                 const highlightChk = document.createElement('input');
