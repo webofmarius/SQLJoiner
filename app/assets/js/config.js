@@ -796,17 +796,41 @@ const QueryPanel = (() => {
                 aliasInput.addEventListener('mousedown', e => e.stopPropagation());
                 aliasInput.addEventListener('focus', () => { if (typeof UndoRedo !== 'undefined') UndoRedo.snapshot(); });
                 aliasInput.addEventListener('dragstart', e => e.stopPropagation());
+                aliasInput.addEventListener('keydown', e => {
+                    if (e.key === 'Escape') {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        aliasInput.value = '';
+                        aliasInput.dispatchEvent(new Event('input', { bubbles: true }));
+                    }
+                });
                 aliasInput.addEventListener('input', () => {
                     const v = aliasInput.value.trim();
-                    if (!State.selectAliases) State.selectAliases = {};
+                    if (!State.selectAliases || Array.isArray(State.selectAliases)) State.selectAliases = {};
                     if (v) {
                         State.selectAliases[key] = v;
                     } else {
                         delete State.selectAliases[key];
                     }
+                    aliasClearBtn.style.display = v ? '' : 'none';
                     App.updateSQLPreview();
                 });
                 row.appendChild(aliasInput);
+
+                const aliasClearBtn = document.createElement('button');
+                aliasClearBtn.className = 'col-alias-clear';
+                aliasClearBtn.textContent = '×';
+                aliasClearBtn.title = 'Clear alias';
+                aliasClearBtn.style.display = aliasInput.value ? '' : 'none';
+                aliasClearBtn.addEventListener('mousedown', e => { e.stopPropagation(); e.preventDefault(); });
+                aliasClearBtn.addEventListener('click', e => {
+                    e.stopPropagation();
+                    aliasInput.value = '';
+                    aliasInput.dispatchEvent(new Event('input', { bubbles: true }));
+                    aliasInput.focus();
+                });
+                aliasClearBtn.addEventListener('dragstart', e => e.stopPropagation());
+                row.appendChild(aliasClearBtn);
 
                 // Highlight checkbox — lights up the matching results column
                 const highlightChk = document.createElement('input');

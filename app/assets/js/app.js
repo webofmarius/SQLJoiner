@@ -1570,7 +1570,7 @@ const App = (() => {
             selectMode:         snap.selectMode         ?? 'visual',
             selectCustomExprs:     snap.selectCustomExprs     ?? [],
             selectCustomExprsMode: snap.selectCustomExprsMode ?? 'exclude',
-            selectAliases:         snap.selectAliases         ?? {},
+            selectAliases:         (snap.selectAliases && !Array.isArray(snap.selectAliases)) ? snap.selectAliases : {},
             selectNone:            snap.selectNone            ?? false,
             selectAddDelimiter: snap.selectAddDelimiter ?? false,
             selectSortAlpha:    snap.selectSortAlpha    ?? false,
@@ -1767,7 +1767,7 @@ const App = (() => {
             selectMode:         sources[0].selectMode         ?? 'visual',
             selectCustomExprs:  unionArr([...sources.map(s => s.selectCustomExprs ?? []), cachedOnlyExprs]),
             selectCustomExprsMode: sources[0].selectCustomExprsMode ?? 'exclude',
-            selectAliases:      Object.assign({}, ...sources.map(s => s.selectAliases ?? {})),
+            selectAliases:      Object.assign({}, ...sources.map(s => (s.selectAliases && !Array.isArray(s.selectAliases)) ? s.selectAliases : {})),
             selectNone:         false,
             selectAddDelimiter: sources[0].selectAddDelimiter ?? false,
             selectSortAlpha:    sources[0].selectSortAlpha    ?? false,
@@ -1878,7 +1878,7 @@ const App = (() => {
                 selectCustomExprs:  (source.selectCustomExprs ?? []).filter(e => fragmentExprIds[targetKey].has(e.id)),
                 selectCustomExprsMode: State.islandConfigs[targetKey]?.selectCustomExprsMode ?? source.selectCustomExprsMode ?? 'exclude',
                 selectAliases:      Object.fromEntries(
-                    Object.entries(source.selectAliases ?? {})
+                    Object.entries((source.selectAliases && !Array.isArray(source.selectAliases)) ? source.selectAliases : {})
                         .filter(([k]) => myAliases.has(k.split('.')[0]))
                 ),
                 selectNone:         source.selectNone         ?? false,
@@ -3436,7 +3436,7 @@ const App = (() => {
             selectMode:         'visual',
             selectCustomExprs:     parsed.selectCustomExprs     ?? [],
             selectCustomExprsMode: parsed.selectCustomExprsMode ?? 'exclude',
-            selectAliases:      parsed.selectAliases ?? {},
+            selectAliases:      (parsed.selectAliases && !Array.isArray(parsed.selectAliases)) ? parsed.selectAliases : {},
             // selectNone=true when there are only custom exprs and no alias.col items,
             // so the query doesn't produce "SELECT *, custom_expr"
             selectNone:         !hasVisualSelect && hasCustomExprs,
@@ -3640,7 +3640,7 @@ const App = (() => {
             selectMode:         'visual',
             selectCustomExprs:     parsed.selectCustomExprs     ?? [],
             selectCustomExprsMode: parsed.selectCustomExprsMode ?? 'exclude',
-            selectAliases:         parsed.selectAliases         ?? {},
+            selectAliases:         (parsed.selectAliases && !Array.isArray(parsed.selectAliases)) ? parsed.selectAliases : {},
             selectNone:            !hasVisualSelect && hasCustomExprs,
             selectAddDelimiter: false,
             selectSortAlpha:    false,
@@ -3743,7 +3743,7 @@ const App = (() => {
                 selectTableName:    parsed.selectTableName    ?? false,
                 selectCustomExprs:     parsed.selectCustomExprs     ?? [],
                 selectCustomExprsMode: parsed.selectCustomExprsMode ?? 'exclude',
-                selectAliases:         parsed.selectAliases         ?? {},
+                selectAliases:         (parsed.selectAliases && !Array.isArray(parsed.selectAliases)) ? parsed.selectAliases : {},
                 where:          parsed.where          ?? [],
                 orderBy:        parsed.orderBy        ?? [],
                 orderByRaw:     parsed.orderByRaw     ?? '',
