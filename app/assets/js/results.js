@@ -26,6 +26,12 @@ const Results = (() => {
     let _compareRefValue = null; // raw value of the first clicked cell in compare mode
     let _compareRefCell  = null; // the actual first TD element (reference)
 
+    // Dataset compare state
+    let _datasetCompareActive     = false;
+    let _datasetCompareTrs        = []; // <tr> elements marked row-highlighted by compare
+    let _datasetCompareTds        = []; // <td> elements marked col-highlight-4 by compare
+    let _datasetCompareBannerTr   = null; // injected status banner row (green = all equal, red = diffs)
+
     // Duplicates mode
     let _duplicateMode = false;
     let _duplicateOriginCell = null; // the originally clicked cell
@@ -160,6 +166,84 @@ const Results = (() => {
                 _applyColFilter();
             }
         });
+
+        // ---- Dataset compare modal ----
+        (function () {
+            const modal       = document.getElementById('modal-compare-datasets');
+            const btnOpen     = document.getElementById('btn-compare-datasets');
+            const btnExit     = document.getElementById('btn-exit-compare-datasets');
+            const btnClose    = document.getElementById('btn-compare-ds-x');
+            const btnCancel   = document.getElementById('btn-compare-ds-cancel');
+            const btnRun      = document.getElementById('btn-compare-ds-run');
+            const btnLoadFile = document.getElementById('btn-compare-ds-load-file');
+            const fileInput   = document.getElementById('compare-ds-file-input');
+            const pasteArea   = document.getElementById('compare-ds-paste-area');
+            const infoA       = document.getElementById('compare-ds-info-a');
+            const infoB       = document.getElementById('compare-ds-info-b');
+            const errEl       = document.getElementById('compare-ds-error');
+            const chkHeader   = document.getElementById('chk-compare-csv-header');
+
+            function _resetModal() {
+                btnRun.disabled = true;
+                pasteArea.value = '';
+                infoB.textContent = '';
+                errEl.classList.add('hidden');
+                errEl.textContent = '';
+            }
+
+            function _close() { modal.classList.add('hidden'); }
+
+            btnOpen.addEventListener('click', () => {
+                if (!_lastResult) {
+                    App.notify?.('Run a query or load a CSV first.', 'error');
+                    return;
+                }
+                _resetModal();
+                const rc = _lastResult.count;
+                const cc = _lastResult.cols.length;
+                infoA.textContent = `Dataset A (current result): ${rc.toLocaleString()} row${rc !== 1 ? 's' : ''} × ${cc} col${cc !== 1 ? 's' : ''}`;
+                modal.classList.remove('hidden');
+                pasteArea.focus();
+            });
+
+            btnClose.addEventListener('click', _close);
+            btnCancel.addEventListener('click', _close);
+            modal.addEventListener('click', e => { if (e.target === modal) _close(); });
+
+            btnLoadFile.addEventListener('click', () => fileInput.click());
+            fileInput.addEventListener('change', () => {
+                const file = fileInput.files[0];
+                if (!file) return;
+                fileInput.value = '';
+                const reader = new FileReader();
+                reader.onload = ev => {
+                    pasteArea.value = ev.target.result;
+                    infoB.textContent = `File: ${file.name}`;
+                    btnRun.disabled = false;
+                    errEl.classList.add('hidden');
+                    pasteArea.focus();
+                };
+                reader.readAsText(file, 'UTF-8');
+            });
+
+            pasteArea.addEventListener('input', () => {
+                btnRun.disabled = !pasteArea.value.trim();
+                infoB.textContent = '';
+                errEl.classList.add('hidden');
+            });
+
+            btnRun.addEventListener('click', () => {
+                const err = _runDatasetCompare(pasteArea.value, chkHeader.checked);
+                if (err) {
+                    errEl.textContent = err;
+                    errEl.classList.remove('hidden');
+                } else {
+                    _close();
+                }
+            });
+
+            btnExit.addEventListener('click', _exitDatasetCompare);
+        })();
 
         document.getElementById('btn-calculus')
             .addEventListener('click', _toggleCalculusMode);
@@ -485,6 +569,17 @@ const Results = (() => {
      * Always expands the panel so fresh results are immediately visible.
      */
     function render(result) {
+        // If a dataset compare is active, clean it up — the table is being replaced
+        if (_datasetCompareActive) {
+            _datasetCompareTrs = [];
+            _datasetCompareTds = [];
+            _datasetCompareBannerTr = null; // tbody is about to be wiped
+            _datasetCompareActive = false;
+            document.getElementById('btn-exit-compare-datasets')?.classList.add('hidden');
+            document.getElementById('btn-compare-datasets')?.classList.remove('hidden');
+            _setDimmed(false);
+        }
+
         // Clear any previous error banner
         const errEl = document.getElementById('results-error');
         if (errEl) { errEl.textContent = ''; errEl.classList.add('hidden'); }
@@ -532,6 +627,14 @@ const Results = (() => {
 
     /** Hide the panel and wipe all content. */
     function clear() {
+        if (_datasetCompareActive) {
+            _datasetCompareTrs = [];
+            _datasetCompareTds = [];
+            _datasetCompareBannerTr = null; // tbody is about to be wiped
+            _datasetCompareActive = false;
+            document.getElementById('btn-exit-compare-datasets')?.classList.add('hidden');
+            document.getElementById('btn-compare-datasets')?.classList.remove('hidden');
+        }
         _lastResult = null;
         _colThemes = {};
         _selectedCell = null;
@@ -830,12 +933,118 @@ const Results = (() => {
             const isHighlighted = tr.classList.contains('row-highlighted');
             const isFaded       = tr.classList.contains('row-hl-faded');
             const isCalculusHl  = tr.classList.contains('calculus-hl');
-            if (isHighlighted || isFaded || isCalculusHl) {
+            const isCompareBanner = tr.classList.contains('compare-banner-row');
+            if (isHighlighted || isFaded || isCalculusHl || isCompareBanner) {
                 tr.classList.remove('dim-row-hidden');
             } else {
                 tr.classList.add('dim-row-hidden');
             }
         });
+    }
+
+    /**
+     * Compare the current result table (Dataset A) against a CSV string (Dataset B).
+     * Highlights mismatched rows with row-highlighted and mismatched cells with
+     * col-highlight-4 (red), then auto-activates DIM in row-mode.
+     * Returns an error string on failure, or null on success.
+     */
+    function _runDatasetCompare(csvText, hasHeader) {
+        if (!_lastResult) return 'No current result to compare against.';
+
+        const parsed = _parseCsv(csvText);
+        if (parsed.error) return parsed.error;
+
+        // _parseCsv always treats row 0 as cols (header) and rest as data rows.
+        // When hasHeader=false the first CSV row is real data — prepend it back.
+        const bRows = hasHeader
+            ? parsed.rows
+            : [parsed.cols, ...parsed.rows];
+
+        const tbody   = document.querySelector('#results-table tbody');
+        const aTrs    = Array.from(tbody.querySelectorAll('tr'));
+        const aColCnt = _lastResult.cols.length;
+        const bColCnt = parsed.cols.length;
+
+        if (aColCnt !== bColCnt) {
+            return `Column count mismatch: Dataset A has ${aColCnt} column${aColCnt !== 1 ? 's' : ''}, Dataset B has ${bColCnt} column${bColCnt !== 1 ? 's' : ''}.`;
+        }
+
+        const aRowCnt = aTrs.length;
+        const bRowCnt = bRows.length;
+        if (aRowCnt !== bRowCnt) {
+            return `Row count mismatch: Dataset A has ${aRowCnt.toLocaleString()} row${aRowCnt !== 1 ? 's' : ''}, Dataset B has ${bRowCnt.toLocaleString()} row${bRowCnt !== 1 ? 's' : ''}.`;
+        }
+
+        _datasetCompareTrs = [];
+        _datasetCompareTds = [];
+
+        aTrs.forEach((tr, ri) => {
+            const tds  = Array.from(tr.querySelectorAll('td:not(.td-row-num)'));
+            const bRow = bRows[ri];
+            let mismatch = false;
+
+            tds.forEach((td, ci) => {
+                const aVal = String(td.dataset.raw ?? '');
+                const bVal = String(bRow[ci] ?? '');
+                if (aVal === bVal) return;
+                // Numeric fallback: "0.4500" (from DB) vs 0.45 (parsed by _parseCsv)
+                const aNum = Number(aVal);
+                const bNum = Number(bVal);
+                if (aVal !== '' && bVal !== '' && !isNaN(aNum) && !isNaN(bNum) && aNum === bNum) return;
+                td.classList.add('col-highlight-4');
+                _datasetCompareTds.push(td);
+                mismatch = true;
+            });
+
+            if (mismatch) {
+                tr.classList.add('row-highlighted');
+                _datasetCompareTrs.push(tr);
+            }
+        });
+
+        _datasetCompareActive = true;
+        document.getElementById('btn-compare-datasets').classList.add('hidden');
+        document.getElementById('btn-exit-compare-datasets').classList.remove('hidden');
+
+        const colSpan = (_lastResult.cols.length || 1) + 1; // +1 for row-num col
+        const bannerTr = document.createElement('tr');
+        const bannerTd = document.createElement('td');
+        bannerTd.colSpan = colSpan;
+        tbody.insertBefore(bannerTr, tbody.firstChild);
+        _datasetCompareBannerTr = bannerTr;
+
+        if (_datasetCompareTrs.length === 0) {
+            // All rows matched
+            bannerTr.className = 'compare-banner-row compare-banner-row--ok';
+            bannerTd.textContent = '✓ All rows are equal';
+        } else {
+            // Differences found
+            const rc = _datasetCompareTrs.length;
+            const dc = new Set(_datasetCompareTds.map(td => td.cellIndex)).size;
+            const ec = _datasetCompareTds.length;
+            bannerTr.className = 'compare-banner-row compare-banner-row--diff';
+            bannerTd.textContent = `✕ ${rc.toLocaleString()} row${rc !== 1 ? 's' : ''}, ${dc.toLocaleString()} column${dc !== 1 ? 's' : ''}, ${ec.toLocaleString()} cell${ec !== 1 ? 's' : ''} have differences`;
+            // row-highlighted marks are already set — _dimWantRowMode will pick up row-mode
+            _setDimmed(true);
+        }
+        bannerTr.appendChild(bannerTd);
+
+        return null;
+    }
+
+    function _exitDatasetCompare() {
+        _datasetCompareTrs.forEach(tr => tr.classList.remove('row-highlighted'));
+        _datasetCompareTds.forEach(td => td.classList.remove('col-highlight-4'));
+        _datasetCompareTrs = [];
+        _datasetCompareTds = [];
+        _datasetCompareBannerTr?.remove();
+        _datasetCompareBannerTr = null;
+        _datasetCompareActive = false;
+
+        _setDimmed(false);
+
+        document.getElementById('btn-exit-compare-datasets').classList.add('hidden');
+        document.getElementById('btn-compare-datasets').classList.remove('hidden');
     }
 
     /**
@@ -5952,6 +6161,8 @@ async function _copyAsSqlSelect() {
         },
         /** Destroy all Calculus expression rows. */
         calcClear: _calcClearAll,
+        /** Exit dataset compare mode, stripping all compare highlights and turning off Dim. */
+        exitDatasetCompare: _exitDatasetCompare,
         /** Parse a CSV File object and load it into the results table. */
         loadCsvFile,
         /** Parse a CSV string and load it into the results table. Returns an error string or null. */

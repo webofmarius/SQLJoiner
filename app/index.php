@@ -274,6 +274,8 @@
                 <button id="btn-duplicates" title="Highlight duplicate cell values">⧉ Duplicates</button>
                 <button id="btn-toggle-dim" title="Dim unhighlighted cells">☾ Dim</button>
                 <button id="btn-calculus" title="Run a query first to enable Calculus mode" disabled>∑ Calculus</button>
+                <button id="btn-compare-datasets" title="Compare current result against a CSV">⇌ Compare Datasets</button>
+                <button id="btn-exit-compare-datasets" class="hidden is-active" title="Exit dataset comparison">✕ Exit Compare</button>
                 <button id="btn-search-cols" title="Toggle column search inputs">⌕ Search</button>
             </div>
             <span id="results-meta"></span>
@@ -599,6 +601,38 @@
                 <div class="form-actions">
                     <button type="button" id="btn-csv-memory-cancel">Cancel</button>
                     <button type="button" id="btn-csv-memory-apply" class="primary">Apply</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-compare-datasets" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modal-compare-datasets-title">
+        <div class="modal-box modal-box--small">
+            <div class="modal-header">
+                <h2 id="modal-compare-datasets-title">Compare Datasets</h2>
+                <button id="btn-compare-ds-x" aria-label="Close">✕</button>
+            </div>
+            <div class="modal-body">
+                <div id="compare-ds-info-a" class="compare-ds-info"></div>
+                <div class="compare-ds-b">
+                    <div class="compare-ds-b-header">
+                        <strong>Dataset B — CSV</strong>
+                        <label class="compare-ds-header-chk">
+                            <input type="checkbox" id="chk-compare-csv-header" checked>
+                            First row is header
+                        </label>
+                    </div>
+                    <div class="compare-ds-b-actions">
+                        <button type="button" id="btn-compare-ds-load-file">↑ Load CSV file</button>
+                        <input type="file" id="compare-ds-file-input" accept=".csv" class="hidden">
+                    </div>
+                    <textarea id="compare-ds-paste-area" placeholder="Paste CSV data here…" spellcheck="false" rows="6"></textarea>
+                    <div id="compare-ds-info-b" class="compare-ds-info"></div>
+                </div>
+                <div id="compare-ds-error" class="compare-ds-error hidden"></div>
+                <div class="form-actions">
+                    <button type="button" id="btn-compare-ds-cancel">Cancel</button>
+                    <button type="button" id="btn-compare-ds-run" class="primary" disabled>Compare</button>
                 </div>
             </div>
         </div>
