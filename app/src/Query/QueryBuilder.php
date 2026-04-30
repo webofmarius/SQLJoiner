@@ -719,7 +719,12 @@ class QueryBuilder
      */
     private function containsVariables(string $sql): bool
     {
-        return (bool) preg_match('/@[a-zA-Z_][a-zA-Z0-9_]*/', $sql);
+        // Allow queries that declare variables via SET @var (spaces/tabs/newlines between SET and @)
+        if (!preg_match('/\bSET[\s]{0,}@[a-zA-Z_]/i', $sql)) {
+            return false;
+        }
+
+        return true;
     }
 
     /** Escape backticks inside a MySQL identifier (double them). */
