@@ -3771,6 +3771,8 @@ const App = (() => {
                 State.whereMode = 'raw';
             }
 
+            if (typeof Results !== 'undefined') Results.clearDim?.();
+
             // Ensure every table has a join-order value (old contexts won't have it)
             State.tables.forEach((t, i) => { if (t.order == null) t.order = i + 1; });
 

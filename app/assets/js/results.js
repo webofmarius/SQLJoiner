@@ -554,11 +554,6 @@ const Results = (() => {
             _setTall(true);
         }
 
-        // Restore persisted dim state
-        if (localStorage.getItem('results-dimmed') === 'true') {
-            _setDimmed(true);
-        }
-
         // Global copy listener
         window.addEventListener('keydown', _onKeyDown);
     }
@@ -862,7 +857,6 @@ const Results = (() => {
         const btn   = document.getElementById('btn-toggle-dim');
         table.classList.toggle('is-dimmed', dimmed);
         btn.classList.toggle('is-active', dimmed);
-        localStorage.setItem('results-dimmed', dimmed);
 
         if (dimmed) {
             const tbody = table.querySelector('tbody');
@@ -6168,6 +6162,8 @@ async function _copyAsSqlSelect() {
         },
         /** Destroy all Calculus expression rows. */
         calcClear: _calcClearAll,
+        /** Turn off Dim (called on context load/reset). */
+        clearDim: () => _setDimmed(false),
         /** Exit dataset compare mode, stripping all compare highlights and turning off Dim. */
         exitDatasetCompare: _exitDatasetCompare,
         /** Parse a CSV File object and load it into the results table. */
