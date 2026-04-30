@@ -3435,7 +3435,7 @@ const App = (() => {
             selectRaw:          parsed.selectRaw ?? '',
             selectMode:         'visual',
             selectCustomExprs:     parsed.selectCustomExprs     ?? [],
-            selectCustomExprsMode: parsed.selectCustomExprsMode ?? 'exclude',
+            selectCustomExprsMode: hasCustomExprs ? (parsed.selectCustomExprsMode ?? 'combined') : 'exclude',
             selectAliases:      (parsed.selectAliases && !Array.isArray(parsed.selectAliases)) ? parsed.selectAliases : {},
             // selectNone=true when there are only custom exprs and no alias.col items,
             // so the query doesn't produce "SELECT *, custom_expr"
@@ -3639,7 +3639,7 @@ const App = (() => {
             selectRaw:          parsed.selectRaw          ?? '',
             selectMode:         'visual',
             selectCustomExprs:     parsed.selectCustomExprs     ?? [],
-            selectCustomExprsMode: parsed.selectCustomExprsMode ?? 'exclude',
+            selectCustomExprsMode: hasCustomExprs ? (parsed.selectCustomExprsMode ?? 'combined') : 'exclude',
             selectAliases:         (parsed.selectAliases && !Array.isArray(parsed.selectAliases)) ? parsed.selectAliases : {},
             selectNone:            !hasVisualSelect && hasCustomExprs,
             selectAddDelimiter: false,
@@ -3742,7 +3742,7 @@ const App = (() => {
                 selectSchemaAlias:  parsed.selectSchemaAlias  ?? true,
                 selectTableName:    parsed.selectTableName    ?? false,
                 selectCustomExprs:     parsed.selectCustomExprs     ?? [],
-                selectCustomExprsMode: parsed.selectCustomExprsMode ?? 'exclude',
+                selectCustomExprsMode: (Array.isArray(parsed.selectCustomExprs) && parsed.selectCustomExprs.length > 0) ? (parsed.selectCustomExprsMode ?? 'combined') : 'exclude',
                 selectAliases:         (parsed.selectAliases && !Array.isArray(parsed.selectAliases)) ? parsed.selectAliases : {},
                 where:          parsed.where          ?? [],
                 orderBy:        parsed.orderBy        ?? [],
@@ -4020,6 +4020,7 @@ const App = (() => {
             State.loadedContextId   = null;
             State.loadedContextName = null;
             _updateSaveContextButton();
+            Results.clear();
         });
 
         document.getElementById('topbar-notes-title').addEventListener('click', () => {
