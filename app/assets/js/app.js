@@ -3743,6 +3743,7 @@ const App = (() => {
                 selectTableName:    parsed.selectTableName    ?? false,
                 selectCustomExprs:     parsed.selectCustomExprs     ?? [],
                 selectCustomExprsMode: parsed.selectCustomExprsMode ?? 'exclude',
+                selectAliases:         parsed.selectAliases         ?? {},
                 where:          parsed.where          ?? [],
                 orderBy:        parsed.orderBy        ?? [],
                 orderByRaw:     parsed.orderByRaw     ?? '',
