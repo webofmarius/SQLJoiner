@@ -484,6 +484,23 @@ const QueryPanel = (() => {
             dragHandleHdr.title = 'Drag to reorder table';
             hdr.appendChild(dragHandleHdr);
 
+            // Visibility icon — right of drag handle, shows if columns are expanded or collapsed
+            const visBtn = document.createElement('button');
+            visBtn.className = 'btn-select-vis';
+            visBtn.textContent = _minimizedGroups.has(group.alias) ? '▶' : '▼';
+            visBtn.title = _minimizedGroups.has(group.alias) ? 'Columns hidden — click to show' : 'Columns visible — click to hide';
+            visBtn.addEventListener('mousedown', e => e.stopPropagation());
+            visBtn.addEventListener('click', e => {
+                e.stopPropagation();
+                if (_minimizedGroups.has(group.alias)) {
+                    _minimizedGroups.delete(group.alias);
+                } else {
+                    _minimizedGroups.add(group.alias);
+                }
+                _filterSelectColumns();
+            });
+            hdr.appendChild(visBtn);
+
             const lblHdr = document.createElement('span');
             const chkHdr = document.createElement('input');
             chkHdr.type = 'checkbox';
@@ -527,14 +544,12 @@ const QueryPanel = (() => {
                 e.stopPropagation();
                 chkHdr.click();
             });
+
             lblHdr.appendChild(txtHdr);
 
-            const locateBtn = document.createElement('button');
-            locateBtn.className = 'btn-select-locate';
-            locateBtn.textContent = '⊙';
-            locateBtn.title = 'Highlight this table on the canvas';
-            locateBtn.addEventListener('mousedown', e => e.stopPropagation());
-            locateBtn.addEventListener('click', e => {
+            // Right-click on header → highlight and scroll to the table on the canvas
+            hdr.addEventListener('contextmenu', e => {
+                e.preventDefault();
                 e.stopPropagation();
                 const t = State.tables.find(t => t.alias === group.alias);
                 if (!t) return;
@@ -543,16 +558,13 @@ const QueryPanel = (() => {
                 if (typeof Canvas !== 'undefined' && Canvas.scrollToLogicalBoundingBox) {
                     const x = parseInt(card.style.left, 10) || 0;
                     const y = parseInt(card.style.top, 10) || 0;
-                    Canvas.scrollToLogicalBoundingBox(
-                        x, y, x + card.offsetWidth, y + card.offsetHeight
-                    );
+                    Canvas.scrollToLogicalBoundingBox(x, y, x + card.offsetWidth, y + card.offsetHeight);
                 }
                 card.classList.remove('table-card--flash');
                 void card.offsetWidth;
                 card.classList.add('table-card--flash');
                 setTimeout(() => card.classList.remove('table-card--flash'), 2000);
             });
-            hdr.appendChild(locateBtn);
 
             if (table?.color) {
                 const colorChk = document.createElement('input');
@@ -573,7 +585,7 @@ const QueryPanel = (() => {
                         hdr.style.color = '';
                     }
                 });
-                hdr.appendChild(colorChk);
+                hdr.insertBefore(colorChk, visBtn);
             }
 
             hdr.appendChild(lblHdr);
@@ -1384,6 +1396,12 @@ const QueryPanel = (() => {
             }
 
             const minimized = _minimizedGroups.has(alias);
+
+            const vb = hdr.querySelector('.btn-select-vis');
+            if (vb) {
+                vb.textContent = minimized ? '▶' : '▼';
+                vb.title = minimized ? 'Columns hidden — click to show' : 'Columns visible — click to hide';
+            }
 
             if (minimized) {
                 // Keep the header visible so the user can expand; hide rows and group search

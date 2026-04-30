@@ -2442,17 +2442,17 @@ body.is-cut-mode * { cursor: crosshair !important; }
     border-color: var(--accent) !important;
 }
 
-.btn-select-locate {
+.btn-select-vis {
     background: transparent;
     border: none;
     color: var(--text-faint);
-    font-size: 13px;
+    font-size: 12px;
     line-height: 1;
     padding: 0 2px;
     cursor: pointer;
     flex-shrink: 0;
 }
-.btn-select-locate:hover { color: var(--accent); }
+.btn-select-vis:hover { color: var(--accent); }
 .hdr-color-chk {
     flex-shrink: 0;
     width: auto !important;
@@ -2487,7 +2487,7 @@ body.is-cut-mode * { cursor: crosshair !important; }
 .select-table-hdr-txt {
     display: flex;
     gap: 4px;
-    align-items: baseline;
+    align-items: center;
 }
 .select-table-hdr-txt--none { color: #ff6b6b; }
 .select-col-row {
