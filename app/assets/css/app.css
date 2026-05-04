@@ -1993,6 +1993,16 @@ body.is-cut-mode * { cursor: crosshair !important; }
     gap: 8px;
     margin-bottom: 12px;
 }
+.table-search-idx-wrap { display: flex; align-items: center; gap: 4px; margin-left: auto; }
+.table-search-idx-chk { cursor: pointer; }
+.table-search-idx-chk:disabled { cursor: default; opacity: 0.5; }
+.table-search-idx-label {
+    font-size: 12px;
+    color: var(--text-faint);
+    cursor: pointer;
+    user-select: none;
+    margin-bottom: 0px !important;
+}
 #table-search-op {
     padding: 4px 6px;
     font-size: 12px;

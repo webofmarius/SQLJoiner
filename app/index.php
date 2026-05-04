@@ -1018,6 +1018,10 @@
                 <div class="form-actions">
                     <button type="button" id="btn-table-search-cancel">Cancel</button>
                     <button type="button" id="btn-table-search-apply" class="primary">Apply to WHERE</button>
+                    <span class="table-search-idx-wrap">
+                        <input type="checkbox" id="table-search-indexed-only" class="table-search-idx-chk" disabled>
+                        <label for="table-search-indexed-only" class="table-search-idx-label">Only columns with indexes</label>
+                    </span>
                 </div>
             </div>
         </div>

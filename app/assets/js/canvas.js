@@ -179,6 +179,7 @@ const Canvas = (() => {
             const modal    = document.getElementById('modal-table-search');
             const nameEl   = document.getElementById('table-search-name');
             const opSel    = document.getElementById('table-search-op');
+            const idxChk   = document.getElementById('table-search-indexed-only');
             const valWrap  = document.getElementById('table-search-value-wrap');
             const valTa    = document.getElementById('table-search-value');
 
@@ -202,6 +203,8 @@ const Canvas = (() => {
                 valTa.value = '';
                 if (typeof SqlBackdrop !== 'undefined') SqlBackdrop.refresh(valTa);
                 valWrap.classList.remove('hidden');
+                idxChk.checked  = false;
+                idxChk.disabled = true;
                 modal.classList.remove('hidden');
                 valTa.focus();
             };
@@ -220,11 +223,14 @@ const Canvas = (() => {
                 const noVal   = NO_VALUE_OPS.has(op);
                 const alias   = tableData.alias || tableData.name;
 
-                // For sub-queries use only manually-exposed columns;
-                // for normal tables use all columns.
+                // Sub-queries: all manually-exposed columns (no index metadata available).
+                // Normal tables: all columns, or only indexed ones when the checkbox is checked.
+                const allCols = tableData.columns || [];
                 const cols = tableData.isSubquery
-                    ? (tableData.columns || []).map(c => c.name)
-                    : (tableData.columns || []).map(c => c.name);
+                    ? allCols.map(c => c.name)
+                    : (idxChk.checked
+                        ? allCols.filter(c => c.key).map(c => c.name)
+                        : allCols.map(c => c.name));
 
                 if (cols.length === 0) { _close(); return; }
 
