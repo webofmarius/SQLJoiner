@@ -1966,7 +1966,7 @@ const Results = (() => {
         if (rows.length === 0) {
             const tr = document.createElement('tr');
             const td = document.createElement('td');
-            td.colSpan = cols.length || 1;
+            td.colSpan = (cols.length || 1) + 1; // +1 for the # column
             td.className = 'results-empty';
             td.textContent = 'No rows returned';
             tr.appendChild(td);
