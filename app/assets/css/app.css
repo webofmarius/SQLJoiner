@@ -272,6 +272,7 @@ h3 {
 }
 
 .topbar-menu-dropdown li:hover { background: var(--surface3, var(--border)); }
+.topbar-menu-dropdown li.menu-sep { padding: 0; height: 1px; background: var(--border); cursor: default; pointer-events: none; margin: 3px 0; }
 
 #app-logo-wrapper {
     display: flex;

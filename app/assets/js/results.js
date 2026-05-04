@@ -6122,6 +6122,238 @@ async function _copyAsSqlSelect() {
         reader.readAsText(file, 'UTF-8');
     }
 
+    // =========================================================================
+    // XLSX reader — vanilla, no third-party libraries
+    // =========================================================================
+
+    // Decompress a raw DEFLATE buffer using the native DecompressionStream API.
+    async function _xlsxDecompress(data) {
+        const ds     = new DecompressionStream('deflate-raw');
+        const writer = ds.writable.getWriter();
+        const reader = ds.readable.getReader();
+        writer.write(data);
+        writer.close();
+        const chunks = [];
+        let total = 0;
+        for (;;) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            chunks.push(value);
+            total += value.length;
+        }
+        const out = new Uint8Array(total);
+        let off = 0;
+        for (const c of chunks) { out.set(c, off); off += c.length; }
+        return out;
+    }
+
+    // Parse a ZIP ArrayBuffer and return a Map<filename, Uint8Array> of all entries.
+    async function _zipRead(buffer) {
+        const view  = new DataView(buffer);
+        const bytes = new Uint8Array(buffer);
+        const len   = buffer.byteLength;
+
+        // Locate End of Central Directory (signature PK\x05\x06 = 0x06054b50).
+        // Search backwards from the end; the optional comment pushes it up by at most 65535 bytes.
+        let eocd = -1;
+        for (let i = len - 22; i >= Math.max(0, len - 65557); i--) {
+            if (view.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+        }
+        if (eocd === -1) throw new Error('Not a valid XLSX file (ZIP signature not found).');
+
+        const cdCount  = view.getUint16(eocd + 10, true);
+        const cdOffset = view.getUint32(eocd + 16, true);
+
+        const entries = new Map();
+        let pos = cdOffset;
+
+        for (let i = 0; i < cdCount; i++) {
+            if (view.getUint32(pos, true) !== 0x02014b50)
+                throw new Error('Corrupt ZIP central directory.');
+
+            const method         = view.getUint16(pos + 10, true);
+            const compressedSz   = view.getUint32(pos + 20, true);
+            const nameLen        = view.getUint16(pos + 28, true);
+            const extraLen       = view.getUint16(pos + 30, true);
+            const commentLen     = view.getUint16(pos + 32, true);
+            const localOffset    = view.getUint32(pos + 42, true);
+            const name           = new TextDecoder().decode(bytes.subarray(pos + 46, pos + 46 + nameLen));
+            pos += 46 + nameLen + extraLen + commentLen;
+
+            // Read the local file header to find where the data starts.
+            const localNameLen  = view.getUint16(localOffset + 26, true);
+            const localExtraLen = view.getUint16(localOffset + 28, true);
+            const dataStart     = localOffset + 30 + localNameLen + localExtraLen;
+            const compressed    = bytes.subarray(dataStart, dataStart + compressedSz);
+
+            if (method === 0) {
+                entries.set(name, compressed);
+            } else if (method === 8) {
+                entries.set(name, await _xlsxDecompress(compressed));
+            }
+            // Other compression methods are rare in XLSX and skipped.
+        }
+        return entries;
+    }
+
+    // Decode a ZIP entry as a UTF-8 string and parse it as XML.
+    function _xlsxXml(entries, path) {
+        const data = entries.get(path);
+        if (!data) return null;
+        return new DOMParser().parseFromString(new TextDecoder().decode(data), 'text/xml');
+    }
+
+    // Build the shared-string table from xl/sharedStrings.xml.
+    function _xlsxSharedStrings(entries) {
+        const doc = _xlsxXml(entries, 'xl/sharedStrings.xml');
+        if (!doc) return [];
+        return Array.from(doc.getElementsByTagName('si')).map(si =>
+            Array.from(si.getElementsByTagName('t')).map(t => t.textContent).join('')
+        );
+    }
+
+    // Resolve the file path of the first sheet via workbook.xml + its rels file.
+    function _xlsxFirstSheetPath(entries) {
+        const wbDoc = _xlsxXml(entries, 'xl/workbook.xml');
+        if (!wbDoc) throw new Error('Missing xl/workbook.xml');
+
+        const sheetEl = wbDoc.getElementsByTagName('sheet')[0];
+        if (!sheetEl) throw new Error('No sheets found in workbook.');
+
+        // r:id lives in the relationships namespace.
+        const R_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+        const rId  = sheetEl.getAttributeNS(R_NS, 'id') || sheetEl.getAttribute('r:id');
+
+        const relsDoc = _xlsxXml(entries, 'xl/_rels/workbook.xml.rels');
+        if (!relsDoc || !rId) return 'xl/worksheets/sheet1.xml'; // safe fallback
+
+        const rel = Array.from(relsDoc.getElementsByTagName('Relationship'))
+            .find(r => r.getAttribute('Id') === rId);
+        if (!rel) return 'xl/worksheets/sheet1.xml';
+
+        const target = rel.getAttribute('Target');
+        // Target is relative to xl/, unless it starts with /
+        return target.startsWith('/') ? target.slice(1) : 'xl/' + target;
+    }
+
+    // Convert a column reference string ("A", "BC") to a 0-based column index.
+    function _xlsxColIndex(ref) {
+        let col = 0;
+        for (let i = 0; i < ref.length; i++) {
+            const ch = ref.charCodeAt(i);
+            if (ch < 65 || ch > 90) break;
+            col = col * 26 + (ch - 64);
+        }
+        return col - 1;
+    }
+
+    // Parse a worksheet XML into { cols, rows, colTypes }, matching _parseCsv output shape.
+    function _xlsxParseSheet(data, sst) {
+        if (!data) throw new Error('Sheet XML not found in file.');
+        const doc = new DOMParser().parseFromString(new TextDecoder().decode(data), 'text/xml');
+
+        // Build sparse grid: grid[rowIndex][colIndex] = string value
+        const grid = [];
+        let maxCol = 0;
+
+        for (const rowEl of doc.getElementsByTagName('row')) {
+            const rowIdx = parseInt(rowEl.getAttribute('r'), 10) - 1;
+            if (!grid[rowIdx]) grid[rowIdx] = [];
+
+            for (const cellEl of rowEl.getElementsByTagName('c')) {
+                const ref    = cellEl.getAttribute('r') || '';
+                const t      = cellEl.getAttribute('t') || '';
+                const vEl    = cellEl.getElementsByTagName('v')[0];
+                // Inline string: <is><t>...</t></is>
+                const isEl   = (cellEl.getElementsByTagName('is')[0] || null);
+                const isT    = isEl ? isEl.getElementsByTagName('t')[0] : null;
+
+                let value = '';
+                if (isT) {
+                    value = isT.textContent;
+                } else if (vEl) {
+                    const raw = vEl.textContent;
+                    if (t === 's') {
+                        value = sst[parseInt(raw, 10)] ?? '';
+                    } else if (t === 'b') {
+                        value = raw === '1' ? 'TRUE' : 'FALSE';
+                    } else {
+                        value = raw; // number or formula-result string
+                    }
+                }
+
+                const colIdx = _xlsxColIndex(ref);
+                grid[rowIdx][colIdx] = value;
+                if (colIdx + 1 > maxCol) maxCol = colIdx + 1;
+            }
+        }
+
+        // Flatten sparse grid, filling missing cells with empty string
+        const flat = [];
+        for (let r = 0; r < grid.length; r++) {
+            const row = [];
+            for (let c = 0; c < maxCol; c++) row.push((grid[r] && grid[r][c] != null) ? grid[r][c] : '');
+            flat.push(row);
+        }
+
+        // Strip trailing all-empty rows
+        while (flat.length && flat[flat.length - 1].every(v => v === '')) flat.pop();
+
+        if (flat.length < 1) throw new Error('The sheet contains no data.');
+
+        const cols     = flat[0].map(v => String(v).trim());
+        const dataRows = flat.slice(1);
+        if (cols.length === 0) throw new Error('Could not detect any columns.');
+
+        // Type inference — same logic as _parseCsv
+        const colTypes = cols.map((_, ci) => {
+            const allNumeric = dataRows.every(r => {
+                const v = String(r[ci] ?? '').trim();
+                return v === '' || isFinite(Number(v));
+            });
+            return allNumeric ? 'DECIMAL' : 'VARCHAR';
+        });
+
+        const typedRows = dataRows.map(r =>
+            cols.map((_, ci) => {
+                const v = String(r[ci] ?? '').trim();
+                if (v === '') return null;
+                return colTypes[ci] === 'DECIMAL' ? Number(v) : v;
+            })
+        );
+
+        return { cols, rows: typedRows, colTypes };
+    }
+
+    // Read a .xlsx File object and populate the results table.
+    async function loadXlsxFile(file) {
+        try {
+            const buffer   = await file.arrayBuffer();
+            const entries  = await _zipRead(buffer);
+            const sst      = _xlsxSharedStrings(entries);
+            const sheetPath = _xlsxFirstSheetPath(entries);
+            const { cols, rows, colTypes } = _xlsxParseSheet(entries.get(sheetPath), sst);
+
+            render({
+                cols,
+                rows,
+                count:      rows.length,
+                col_types:  colTypes,
+                col_tables: [],
+                sql:        null,
+                _csvSource: file.name,
+            });
+
+            const metaEl = document.getElementById('results-meta');
+            if (metaEl) {
+                const rowLabel = `${rows.length.toLocaleString()} row${rows.length !== 1 ? 's' : ''}`;
+                metaEl.textContent = `${rowLabel} — ${file.name}`;
+            }
+        } catch (err) {
+            renderError('Could not read XLSX file: ' + err.message);
+        }
+    }
+
     // -------------------------------------------------------------------------
     return {
         init,
@@ -6166,6 +6398,8 @@ async function _copyAsSqlSelect() {
         exitDatasetCompare: _exitDatasetCompare,
         /** Parse a CSV File object and load it into the results table. */
         loadCsvFile,
+        /** Parse an XLSX File object and load it into the results table. */
+        loadXlsxFile,
         /** Parse a CSV string and load it into the results table. Returns an error string or null. */
         loadCsvText(text) {
             const parsed = _parseCsv(text);

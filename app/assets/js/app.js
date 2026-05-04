@@ -765,6 +765,17 @@ const App = (() => {
                             if (shouldRestore) prevFocused.focus();
                         });
 
+                } else if (e.code === 'KeyC') {
+                    e.preventDefault();
+                    if (e.shiftKey) {
+                        const modal = document.getElementById('modal-csv-memory');
+                        const ta    = document.getElementById('csv-memory-textarea');
+                        modal.classList.remove('hidden');
+                        ta.focus();
+                    } else {
+                        document.getElementById('csv-file-input').click();
+                    }
+
                 }
             }
         });
@@ -960,7 +971,7 @@ const App = (() => {
         // Overlay shown while dragging a file over the canvas
         const canvasFileOverlay = document.createElement('div');
         canvasFileOverlay.className = 'canvas-file-drop-overlay';
-        canvasFileOverlay.textContent = 'Drop .sql to create sub-query · Drop .csv to load into results';
+        canvasFileOverlay.textContent = 'Drop .sql to create sub-query · Drop .csv or .xlsx to load into results';
         document.body.appendChild(canvasFileOverlay);
 
         const _isFileDrag = dt => dt?.types?.includes('Files');
@@ -1010,15 +1021,18 @@ const App = (() => {
                 addTableToCanvas(tableName, position, null, true);
                 return;
             }
-            // File drop — CSV → load into results table; SQL → create new subquery
+            // File drop — XLSX/CSV → load into results table; SQL → create new subquery
             canvasFileOverlay.classList.remove('visible');
             const file = [...(e.dataTransfer.files || [])].find(f => {
                 const n = f.name.toLowerCase();
-                return n.endsWith('.sql') || n.endsWith('.csv') || f.type.startsWith('text/');
+                return n.endsWith('.sql') || n.endsWith('.csv') || n.endsWith('.xlsx') || f.type.startsWith('text/');
             });
             if (file) {
                 e.preventDefault();
-                if (file.name.toLowerCase().endsWith('.csv') || file.type === 'text/csv') {
+                const n = file.name.toLowerCase();
+                if (n.endsWith('.xlsx')) {
+                    Results.loadXlsxFile(file);
+                } else if (n.endsWith('.csv') || file.type === 'text/csv') {
                     Results.loadCsvFile(file);
                 } else {
                     _loadFileIntoNewSubquery(file, '#f47c7c');
@@ -4066,6 +4080,14 @@ const App = (() => {
             if (file) { Results.loadCsvFile(file); e.target.value = ''; }
         });
 
+        document.getElementById('btn-load-xlsx').addEventListener('click', () => {
+            document.getElementById('xlsx-file-input').click();
+        });
+        document.getElementById('xlsx-file-input').addEventListener('change', e => {
+            const file = e.target.files[0];
+            if (file) { Results.loadXlsxFile(file); e.target.value = ''; }
+        });
+
         // CSV (memory) popup
         (() => {
             const modal   = document.getElementById('modal-csv-memory');
@@ -4073,7 +4095,6 @@ const App = (() => {
             const _open   = () => { modal.classList.remove('hidden'); ta.focus(); };
             const _close  = () => { modal.classList.add('hidden'); };
 
-            document.getElementById('btn-load-csv-memory').addEventListener('click', _open);
             document.getElementById('btn-csv-memory-x').addEventListener('click', _close);
             document.getElementById('btn-csv-memory-cancel').addEventListener('click', _close);
 
