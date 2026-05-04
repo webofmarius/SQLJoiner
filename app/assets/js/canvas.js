@@ -466,8 +466,8 @@ const Canvas = (() => {
                 <button class="table-card__remove btn-icon" title="Remove from canvas">✕</button>
             </div>
             <div class="table-card__note-row">
-                <button class="table-card__copy-filtered-btn btn-icon" title="Copy SELECT with WHERE filters for this table">≡</button>
                 <button class="table-card__copy-simple-btn btn-icon" title="Copy SELECT * FROM table ORDER BY id DESC LIMIT 10">⎘</button>
+                <button class="table-card__copy-filtered-btn btn-icon" title="Copy SELECT with WHERE filters for this table">≡</button>
                 <button class="table-card__count-btn btn-icon" title="Copy COUNT(*) query for this table">#</button>
                 <button class="table-card__search-btn btn-icon" title="Search — add WHERE clauses across all columns">🔍</button>
                 <input  class="table-card__quick-note"
