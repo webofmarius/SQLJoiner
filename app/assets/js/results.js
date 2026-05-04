@@ -836,7 +836,8 @@ const Results = (() => {
 
     function _dimWantRowMode(tbody) {
         return (tbody && tbody.querySelector('tr.row-highlighted') !== null)
-            || _calcHighlightActiveIds.size > 0;
+            || _calcHighlightActiveIds.size > 0
+            || (tbody && THEMES.some(t => tbody.querySelector(`td.td-row-num.${t}`) !== null));
     }
 
     function _toggleDimmed() {
@@ -924,11 +925,12 @@ const Results = (() => {
         if (!tbody) return;
 
         tbody.querySelectorAll('tr').forEach(tr => {
-            const isHighlighted = tr.classList.contains('row-highlighted');
-            const isFaded       = tr.classList.contains('row-hl-faded');
-            const isCalculusHl  = tr.classList.contains('calculus-hl');
+            const isHighlighted   = tr.classList.contains('row-highlighted');
+            const isFaded         = tr.classList.contains('row-hl-faded');
+            const isCalculusHl    = tr.classList.contains('calculus-hl');
             const isCompareBanner = tr.classList.contains('compare-banner-row');
-            if (isHighlighted || isFaded || isCalculusHl || isCompareBanner) {
+            const hasRowColor     = THEMES.some(t => tr.querySelector('.td-row-num')?.classList.contains(t));
+            if (isHighlighted || isFaded || isCalculusHl || isCompareBanner || hasRowColor) {
                 tr.classList.remove('dim-row-hidden');
             } else {
                 tr.classList.add('dim-row-hidden');
@@ -1978,6 +1980,27 @@ const Results = (() => {
             tdRowNum.className = 'td-row-num';
             tdRowNum.textContent = String(rowIdx + 1);
             tr.appendChild(tdRowNum);
+
+            // Left-click #: toggle row highlight (identical to Alt+right-click on a data cell).
+            tdRowNum.addEventListener('click', () => _altRightClickRow(tr));
+
+            // Right-click #: cycle the whole row through cell-color themes.
+            tdRowNum.addEventListener('contextmenu', e => {
+                e.preventDefault();
+                e.stopPropagation();
+                const allTds   = Array.from(tr.querySelectorAll('td'));
+                const current  = THEMES.find(t => tdRowNum.classList.contains(t));
+                const nextIdx  = (THEMES.indexOf(current) + 1) % (THEMES.length + 1);
+                THEMES.forEach(t => allTds.forEach(td => td.classList.remove(t)));
+                if (nextIdx < THEMES.length) {
+                    allTds.forEach(td => td.classList.add(THEMES[nextIdx]));
+                    // Register all data columns as pinned (consistent with cell right-click).
+                    _lastResult?.cols.forEach((_, ci) => _dimPinCol(ci));
+                }
+                _applyDimVisibility();
+                _applyDimRowVisibility();
+            });
+
             cols.forEach((col, colIdx) => {
                 const td = document.createElement('td');
                 // Rows are positional arrays (FETCH_NUM) so that duplicate column
@@ -6247,8 +6270,58 @@ async function _copyAsSqlSelect() {
         return col - 1;
     }
 
+    // Return the set of cellXfs indices (style indices) that represent date/time formats.
+    function _xlsxDateStyles(entries) {
+        const doc = _xlsxXml(entries, 'xl/styles.xml');
+        if (!doc) return new Set();
+
+        // Built-in Excel numFmtIds that are date/time (per OOXML spec).
+        const BUILTIN_DATE_IDS = new Set([
+            14, 15, 16, 17, 18, 19, 20, 21, 22,
+            27, 28, 29, 30, 31, 32, 33, 34, 35, 36,
+            45, 46, 47, 50, 51, 52, 53, 54, 55, 56, 57, 58, 81,
+        ]);
+
+        // Collect custom format IDs whose format string looks like a date/time.
+        const customDateIds = new Set();
+        for (const nf of doc.getElementsByTagName('numFmt')) {
+            const id  = parseInt(nf.getAttribute('numFmtId'), 10);
+            const fmt = nf.getAttribute('formatCode') || '';
+            // Strip quoted literals and bracket expressions, then look for date/time tokens.
+            const bare = fmt.replace(/"[^"]*"/g, '').replace(/\[[^\]]*\]/g, '').replace(/\\./g, '');
+            if (/[yYdD]/.test(bare) || /[hH]/.test(bare)) customDateIds.add(id);
+        }
+
+        // Map each cellXfs entry index to a boolean.
+        const dateIdxs = new Set();
+        const xfs = doc.getElementsByTagName('cellXfs')[0];
+        if (xfs) {
+            Array.from(xfs.getElementsByTagName('xf')).forEach((xf, i) => {
+                const fmtId = parseInt(xf.getAttribute('numFmtId') || '0', 10);
+                if (BUILTIN_DATE_IDS.has(fmtId) || customDateIds.has(fmtId)) dateIdxs.add(i);
+            });
+        }
+        return dateIdxs;
+    }
+
+    // Convert an Excel date serial number to a "YYYY-MM-DD" or "YYYY-MM-DD HH:MM" string.
+    function _xlsxSerialToDate(serial) {
+        const days = Math.floor(serial);
+        const frac = serial - days;
+        // Excel epoch: serial 25569 = 1970-01-01 UTC (already corrects for the 1900 leap-year bug).
+        const ms = (days - 25569) * 86400000;
+        const d  = new Date(ms);
+        const p  = n => String(n).padStart(2, '0');
+        const dateStr = `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())}`;
+        if (frac > 1e-6) {
+            const totalSecs = Math.round(frac * 86400);
+            return `${dateStr} ${p(Math.floor(totalSecs / 3600))}:${p(Math.floor((totalSecs % 3600) / 60))}`;
+        }
+        return dateStr;
+    }
+
     // Parse a worksheet XML into { cols, rows, colTypes }, matching _parseCsv output shape.
-    function _xlsxParseSheet(data, sst) {
+    function _xlsxParseSheet(data, sst, dateStyles) {
         if (!data) throw new Error('Sheet XML not found in file.');
         const doc = new DOMParser().parseFromString(new TextDecoder().decode(data), 'text/xml');
 
@@ -6263,6 +6336,7 @@ async function _copyAsSqlSelect() {
             for (const cellEl of rowEl.getElementsByTagName('c')) {
                 const ref    = cellEl.getAttribute('r') || '';
                 const t      = cellEl.getAttribute('t') || '';
+                const sIdx   = parseInt(cellEl.getAttribute('s') || '-1', 10);
                 const vEl    = cellEl.getElementsByTagName('v')[0];
                 // Inline string: <is><t>...</t></is>
                 const isEl   = (cellEl.getElementsByTagName('is')[0] || null);
@@ -6277,6 +6351,8 @@ async function _copyAsSqlSelect() {
                         value = sst[parseInt(raw, 10)] ?? '';
                     } else if (t === 'b') {
                         value = raw === '1' ? 'TRUE' : 'FALSE';
+                    } else if (t === '' && dateStyles.has(sIdx)) {
+                        value = _xlsxSerialToDate(parseFloat(raw));
                     } else {
                         value = raw; // number or formula-result string
                     }
@@ -6330,9 +6406,10 @@ async function _copyAsSqlSelect() {
         try {
             const buffer   = await file.arrayBuffer();
             const entries  = await _zipRead(buffer);
-            const sst      = _xlsxSharedStrings(entries);
-            const sheetPath = _xlsxFirstSheetPath(entries);
-            const { cols, rows, colTypes } = _xlsxParseSheet(entries.get(sheetPath), sst);
+            const sst        = _xlsxSharedStrings(entries);
+            const dateStyles = _xlsxDateStyles(entries);
+            const sheetPath  = _xlsxFirstSheetPath(entries);
+            const { cols, rows, colTypes } = _xlsxParseSheet(entries.get(sheetPath), sst, dateStyles);
 
             render({
                 cols,

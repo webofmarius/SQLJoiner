@@ -3129,6 +3129,7 @@ body.is-resizing-results #resizer-results {
     min-width: 5ch;
     max-width: 5ch;
     white-space: nowrap;
+    cursor: pointer;
     user-select: none;
     border-right: 2px solid var(--border);
     padding: 2px 4px;
