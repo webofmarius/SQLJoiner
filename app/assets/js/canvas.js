@@ -36,6 +36,9 @@ const Canvas = (() => {
     let _colorPopupCard  = null;
     let _colorPopupTable = null;
 
+    // Table search modal — active table id
+    let _tableSearchId = null;
+
     // =========================================================================
     // Canvas table search state
     // =========================================================================
@@ -161,6 +164,104 @@ const Canvas = (() => {
         // Screenshot button
         document.getElementById('btn-screenshot-canvas')
             ?.addEventListener('click', _screenshotCanvas);
+
+        // ── Table search popup ─────────────────────────────────────────────────
+        (() => {
+            const TABLE_SEARCH_OPS = [
+                '=', '!=', '<', '>', '<=', '>=',
+                'LIKE', 'NOT LIKE',
+                'IS NULL', 'IS NOT NULL',
+                'IN', 'NOT IN',
+                'BETWEEN', 'NOT BETWEEN',
+            ];
+            const NO_VALUE_OPS = new Set(['IS NULL', 'IS NOT NULL']);
+
+            const modal    = document.getElementById('modal-table-search');
+            const nameEl   = document.getElementById('table-search-name');
+            const opSel    = document.getElementById('table-search-op');
+            const valWrap  = document.getElementById('table-search-value-wrap');
+            const valTa    = document.getElementById('table-search-value');
+
+            // Populate operator dropdown once
+            TABLE_SEARCH_OPS.forEach(op => {
+                const opt = document.createElement('option');
+                opt.value = op; opt.textContent = op;
+                opSel.appendChild(opt);
+            });
+
+            // Attach SqlBackdrop to the value textarea
+            if (typeof SqlBackdrop !== 'undefined') SqlBackdrop.attach(valTa);
+
+            const _open = (tableId) => {
+                const tableData = (State.tables || []).find(t => t.id === tableId);
+                if (!tableData) return;
+                _tableSearchId = tableId;
+                nameEl.textContent = tableData.alias || tableData.name || tableId;
+                // Reset state
+                opSel.value = '=';
+                valTa.value = '';
+                if (typeof SqlBackdrop !== 'undefined') SqlBackdrop.refresh(valTa);
+                valWrap.classList.remove('hidden');
+                modal.classList.remove('hidden');
+                valTa.focus();
+            };
+
+            const _close = () => {
+                modal.classList.add('hidden');
+                _tableSearchId = null;
+            };
+
+            const _apply = () => {
+                const tableData = (State.tables || []).find(t => t.id === _tableSearchId);
+                if (!tableData) { _close(); return; }
+
+                const op      = opSel.value;
+                const val     = valTa.value.trim();
+                const noVal   = NO_VALUE_OPS.has(op);
+                const alias   = tableData.alias || tableData.name;
+
+                // For sub-queries use only manually-exposed columns;
+                // for normal tables use all columns.
+                const cols = tableData.isSubquery
+                    ? (tableData.columns || []).map(c => c.name)
+                    : (tableData.columns || []).map(c => c.name);
+
+                if (cols.length === 0) { _close(); return; }
+
+                const clauses = cols.map(col => {
+                    const ref = `\`${alias}\`.\`${col}\``;
+                    return noVal ? `${ref} ${op}` : `${ref} ${op} ${val}`;
+                });
+
+                if (typeof UndoRedo !== 'undefined') UndoRedo.snapshot();
+                State.whereRaw  = clauses.join('\nOR ');
+                State.whereMode = 'raw';
+                if (typeof QueryPanel !== 'undefined') QueryPanel.applyModeUI('where');
+                App.updateSQLPreview?.();
+                _close();
+            };
+
+            // Operator change — hide value textarea for no-value operators
+            opSel.addEventListener('change', () => {
+                valWrap.classList.toggle('hidden', NO_VALUE_OPS.has(opSel.value));
+            });
+
+            document.getElementById('btn-table-search-x')
+                .addEventListener('click', _close);
+            document.getElementById('btn-table-search-cancel')
+                .addEventListener('click', _close);
+            document.getElementById('btn-table-search-apply')
+                .addEventListener('click', _apply);
+
+            // Ctrl/Cmd+Enter submits; Escape closes
+            valTa.addEventListener('keydown', e => {
+                if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); _apply(); }
+                if (e.key === 'Escape') { e.stopPropagation(); _close(); }
+            });
+
+            // Store opener so card buttons can call it
+            Canvas._openTableSearch = _open;
+        })();
 
         // Bind background pan on the canvas wrapper itself (right-click drag)
         const wrapper = document.getElementById('canvas-wrapper');
@@ -368,6 +469,7 @@ const Canvas = (() => {
                 <button class="table-card__copy-filtered-btn btn-icon" title="Copy SELECT with WHERE filters for this table">≡</button>
                 <button class="table-card__copy-simple-btn btn-icon" title="Copy SELECT * FROM table ORDER BY id DESC LIMIT 10">⎘</button>
                 <button class="table-card__count-btn btn-icon" title="Copy COUNT(*) query for this table">#</button>
+                <button class="table-card__search-btn btn-icon" title="Search — add WHERE clauses across all columns">🔍</button>
                 <input  class="table-card__quick-note"
                         type="text"
                         value="${_esc(tableData.note ?? '')}"
@@ -1063,6 +1165,11 @@ const Canvas = (() => {
                 ? `SELECT * FROM ${tableRef} WHERE ${where} ORDER BY id DESC LIMIT 10`
                 : `SELECT * FROM ${tableRef} ORDER BY id DESC LIMIT 10`;
             navigator.clipboard.writeText(sql);
+        });
+
+        card.querySelector('.table-card__search-btn').addEventListener('click', e => {
+            e.stopPropagation();
+            Canvas._openTableSearch?.(tableData.id);
         });
 
         // --- Join order dropdown ---

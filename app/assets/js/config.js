@@ -3041,6 +3041,7 @@ const QueryPanel = (() => {
         setShowCheckedOnly: (val) => { _showCheckedOnly = !!val; },
         getCheckedOnlySnapshot: () => _checkedOnlySnapshot ? [..._checkedOnlySnapshot] : null,
         setCheckedOnlySnapshot: (arr) => { _checkedOnlySnapshot = arr ? new Set(arr) : null; },
+        applyModeUI: _applyModeUI,
         getAllMinimized: () => _allMinimized,
         setAllMinimized: (val) => {
             _allMinimized = !!val;

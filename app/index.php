@@ -1001,5 +1001,27 @@
     <script src="assets/js/undo.js"></script>
     <script src="assets/js/sql-backdrop.js"></script>
 
+    <!-- ==================== TABLE SEARCH MODAL ==================== -->
+    <div id="modal-table-search" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modal-table-search-title">
+        <div class="modal-box modal-box--table-search">
+            <div class="modal-header">
+                <h2 id="modal-table-search-title">Search in <span id="table-search-name"></span></h2>
+                <button id="btn-table-search-x" aria-label="Close">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="table-search-controls">
+                    <select id="table-search-op"></select>
+                    <div id="table-search-value-wrap">
+                        <textarea id="table-search-value" placeholder="e.g. 'John'" spellcheck="false" data-sql-backdrop></textarea>
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button type="button" id="btn-table-search-cancel">Cancel</button>
+                    <button type="button" id="btn-table-search-apply" class="primary">Apply to WHERE</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
 </body>
 </html>
