@@ -2086,8 +2086,12 @@ const Results = (() => {
                     const colTableLc   = colTableVal.toLowerCase();
                     const tbl          = (State.tables || []).find(t => t.alias?.toLowerCase() === colTableLc)
                                       ?? (State.tables || []).find(t => t.name?.toLowerCase()  === colTableLc);
+                    // Read the label from the actual <th> so it always matches what _calcTryBind
+                    // sees — including the Excel-column prefix added for CSV/XLSX results.
+                    const ths   = Array.from(td.closest('table').querySelectorAll('thead tr th'));
+                    const thEl  = ths[colIdx + 1]; // +1 to skip the leading # column
                     const headerInfo = {
-                        label:        _formatHeaderLabel(col, colIdx, cols, colTableVal, colTables),
+                        label:        thEl ? _thGetLabel(thEl) : _formatHeaderLabel(col, colIdx, cols, colTableVal, colTables),
                         origin:       tbl
                                         ? (tbl.database ? `${tbl.database}.${tbl.name}` : tbl.name)
                                         : colTableVal,
