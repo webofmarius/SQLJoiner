@@ -947,9 +947,19 @@ const QueryPanel = (() => {
         });
         container.appendChild(exprSectionHdr);
 
-        // Mode radio buttons: Combined / Only / Exclude
+        // Mode bar: "Inclusion" group (3 radios) + "Column Order" group (2 radios)
         const exprModeBar = document.createElement('div');
         exprModeBar.className = 'expr-mode-bar';
+
+        // --- Inclusion group ---
+        const inclusionGroup = document.createElement('div');
+        inclusionGroup.className = 'expr-mode-group';
+        const inclusionTitle = document.createElement('span');
+        inclusionTitle.className = 'expr-mode-group-title';
+        inclusionTitle.textContent = 'Inclusion';
+        inclusionGroup.appendChild(inclusionTitle);
+        const inclusionOptions = document.createElement('div');
+        inclusionOptions.className = 'expr-mode-group-options';
         const currentMode = State.selectCustomExprsMode ?? 'exclude';
         [['combined', '↑↓ Combined'], ['exclude', '↑ Exclude'], ['only', '↓ Only']].forEach(([val, label]) => {
             const lbl = document.createElement('label');
@@ -962,13 +972,48 @@ const QueryPanel = (() => {
             radio.addEventListener('change', () => {
                 if (!radio.checked) return;
                 State.selectCustomExprsMode = val;
+                orderGroup.classList.toggle('expr-order-group--disabled', val === 'only' || val === 'exclude');
                 _refreshSelect();
                 App.updateSQLPreview();
             });
             lbl.appendChild(radio);
             lbl.append(' ' + label);
-            exprModeBar.appendChild(lbl);
+            inclusionOptions.appendChild(lbl);
         });
+        inclusionGroup.appendChild(inclusionOptions);
+        exprModeBar.appendChild(inclusionGroup);
+
+        // --- Column Order group ---
+        const orderGroup = document.createElement('div');
+        orderGroup.className = 'expr-mode-group expr-order-group';
+        if (currentMode === 'only' || currentMode === 'exclude') orderGroup.classList.add('expr-order-group--disabled');
+        const orderTitle = document.createElement('span');
+        orderTitle.className = 'expr-mode-group-title';
+        orderTitle.textContent = 'Column Order';
+        orderGroup.appendChild(orderTitle);
+        const orderOptions = document.createElement('div');
+        orderOptions.className = 'expr-mode-group-options';
+        const currentOrder = State.selectCustomExprsOrder ?? 'first';
+        [['first', '← First'], ['last', 'Last →']].forEach(([val, label]) => {
+            const lbl = document.createElement('label');
+            lbl.className = 'expr-mode-option';
+            const radio = document.createElement('input');
+            radio.type = 'radio';
+            radio.name = 'expr-order';
+            radio.value = val;
+            radio.checked = currentOrder === val;
+            radio.addEventListener('change', () => {
+                if (!radio.checked) return;
+                State.selectCustomExprsOrder = val;
+                App.updateSQLPreview();
+            });
+            lbl.appendChild(radio);
+            lbl.append(' ' + label);
+            orderOptions.appendChild(lbl);
+        });
+        orderGroup.appendChild(orderOptions);
+        exprModeBar.appendChild(orderGroup);
+
         container.appendChild(exprModeBar);
 
         const exprLegend = document.createElement('div');

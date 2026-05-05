@@ -24,7 +24,8 @@ use Database\ProfileManager;
  *   select            : string[],           // empty = SELECT * (ignored in raw mode)
  *   selectRaw         : string,             // used when selectMode='raw'
  *   selectMode        : 'visual'|'raw',
- *   selectCustomExprs : [{id, expr, alias, enabled}],  // custom SQL expressions appended to SELECT
+ *   selectCustomExprs      : [{id, expr, alias, enabled}],  // custom SQL expressions in SELECT
+   selectCustomExprsOrder : 'first'|'last',               // whether custom exprs appear first or last
  *   selectAliases     : object,  // map "alias.col" → column alias (AS name) for visual SELECT
  *   where        : [{ col, op, val }], // visual conditions
  *   whereRaw     : string,             // used when whereMode='raw'
@@ -243,6 +244,7 @@ class QueryBuilder
         $selectNone             = (bool)   $request->get('selectNone',             false);
         $selectCustomExprs      = (array)  $request->get('selectCustomExprs',      []);
         $selectCustomExprsMode  = (string) $request->get('selectCustomExprsMode',  'combined');
+        $selectCustomExprsOrder = (string) $request->get('selectCustomExprsOrder', 'first');
         $selectAliases          = (array)  $request->get('selectAliases',          []);
         $columnOrder        = (array)  $request->get('columnOrder',        []);
         $where       = (array)  $request->get('where',       []);
@@ -400,7 +402,7 @@ class QueryBuilder
         }
 
         [$sql, $warnings] = $this->assembleSql(
-            $pdo, $tables, $joins, $select, $selectRaw, $selectMode, $selectAddDelimiter, $selectSortAlpha, $selectDistinct, $selectNone, $selectCustomExprs, $selectCustomExprsMode, $selectAliases,
+            $pdo, $tables, $joins, $select, $selectRaw, $selectMode, $selectAddDelimiter, $selectSortAlpha, $selectDistinct, $selectNone, $selectCustomExprs, $selectCustomExprsMode, $selectCustomExprsOrder, $selectAliases,
             $where, $whereRaw, $whereMode,
             $groupBy, $groupByRaw, $groupByMode,
             $having, $havingRaw, $havingMode,
@@ -429,6 +431,7 @@ class QueryBuilder
         bool   $selectNone,
         array  $selectCustomExprs,
         string $selectCustomExprsMode,
+        string $selectCustomExprsOrder,
         array  $selectAliases,
         array  $where,
         string $whereRaw,
@@ -482,9 +485,23 @@ class QueryBuilder
             }
             if (!empty($customParts)) {
                 $customSql = implode(', ', array_column($customParts, 'sql'));
-                $selectSql = ($selectCustomExprsMode === 'only' || ($selectNone && $selectSql === '*'))
-                    ? $customSql
-                    : "$selectSql, $customSql";
+                if ($selectCustomExprsMode === 'only' || ($selectNone && $selectSql === '*')) {
+                    $selectSql = $customSql;
+                } else {
+                    $sep = $selectAddDelimiter ? ", '|||', " : ', ';
+                    if ($selectCustomExprsOrder === 'first') {
+                        // 'expr, *' is invalid SQL — expand '*' to alias.* per table
+                        if ($selectSql === '*') {
+                            $selectSql = implode(', ', array_map(
+                                fn($t) => ($t['alias'] ?? '') . '.*',
+                                $tables
+                            ));
+                        }
+                        $selectSql = $customSql . $sep . $selectSql;
+                    } else {
+                        $selectSql = $selectSql . $sep . $customSql;
+                    }
+                }
             }
         }
 
