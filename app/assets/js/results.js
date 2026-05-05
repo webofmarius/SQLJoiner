@@ -2640,25 +2640,6 @@ const Results = (() => {
             return;
         }
 
-        // Alt+C — clear math input if it is focused; otherwise open the Load CSV dialog
-        if (e.altKey && !e.shiftKey && e.code === 'KeyC') {
-            const mathInput = document.getElementById('calculus-math-input');
-            if (mathInput && document.activeElement === mathInput) {
-                // handled by the input's own keydown listener — do nothing here
-                return;
-            }
-            e.preventDefault();
-            document.getElementById('csv-file-input')?.click();
-            return;
-        }
-
-        // Alt+Shift+C — open the CSV (memory) popup
-        if (e.altKey && e.shiftKey && e.code === 'KeyC') {
-            e.preventDefault();
-            document.getElementById('btn-load-csv-memory')?.click();
-            return;
-        }
-
         const isCopy = (e.metaKey || e.ctrlKey) && e.key === 'c';
         if (!isCopy || !_selectedCell) return;
 
