@@ -77,6 +77,10 @@ const Results = (() => {
     let _isExplainResult    = false;
     let _explainGraphVisible = false;
 
+    // Distribution preview state
+    let _distPreviewHandled = false;
+    let _distPopup          = null;
+
     // Column highlight (SELECT box ☆ checkbox)
     const _highlightedCols = new Set();
 
@@ -1679,8 +1683,18 @@ const Results = (() => {
             }
 
             // Right-click: toggle SELECT checkbox · Alt+right-click: cycle column color
+            // Alt+right-click: open Distribution Preview popup
+            th.addEventListener('mousedown', e => {
+                if (e.button !== 2 || !_altKeyHeld) return;
+                e.preventDefault();
+                e.stopPropagation();
+                _distPreviewHandled = true;
+                _showDistributionPopup(th, col, colTables[colIdx] || '');
+            });
+
             th.addEventListener('contextmenu', e => {
                 e.preventDefault();
+                if (_distPreviewHandled) { _distPreviewHandled = false; return; }
 
                 // Normal right-click: find the matching SELECT panel checkbox, toggle it,
                 // scroll the config panel to that row, and flash it.
@@ -2319,6 +2333,192 @@ const Results = (() => {
     function _clearExplainColors() {
         document.querySelectorAll('#results-table td.explain-bad, #results-table td.explain-ok, #results-table td.explain-good')
             .forEach(td => td.classList.remove('explain-bad', 'explain-ok', 'explain-good'));
+    }
+
+    // =========================================================================
+    // Distribution Preview popup
+    // =========================================================================
+
+    function _ensureDistPopup() {
+        if (_distPopup) return;
+        _distPopup = document.createElement('div');
+        _distPopup.id        = 'dist-preview-popup';
+        _distPopup.className = 'dist-popup hidden';
+        document.body.appendChild(_distPopup);
+
+        // Close on outside click
+        document.addEventListener('mousedown', e => {
+            if (_distPopup.classList.contains('hidden')) return;
+            if (!_distPopup.contains(e.target)) _closeDistPopup();
+        });
+        // Close on Escape
+        document.addEventListener('keydown', e => {
+            if (e.key === 'Escape' && !_distPopup.classList.contains('hidden')) _closeDistPopup();
+        });
+    }
+
+    function _closeDistPopup() {
+        _distPopup?.classList.add('hidden');
+    }
+
+    function _positionDistPopup(anchorTh) {
+        const rect = anchorTh.getBoundingClientRect();
+        const pw   = _distPopup.offsetWidth  || 340;
+        const ph   = _distPopup.offsetHeight || 300;
+        let left   = rect.left;
+        let top    = rect.bottom + 4;
+        // Keep within viewport
+        if (left + pw > window.innerWidth  - 8) left = window.innerWidth  - pw - 8;
+        if (top  + ph > window.innerHeight - 8) top  = rect.top - ph - 4;
+        _distPopup.style.left = left + 'px';
+        _distPopup.style.top  = top  + 'px';
+    }
+
+    function _showDistributionPopup(th, col, colAlias) {
+        _ensureDistPopup();
+
+        // Header label
+        const aliasLc = colAlias.toLowerCase();
+        const table   = (State.tables || []).find(t =>
+            (t.alias || '').toLowerCase() === aliasLc ||
+            (t.name  || '').toLowerCase() === aliasLc
+        );
+        const label = table ? `${table.alias || table.name}.${col}` : col;
+
+        _distPopup.innerHTML = '';
+        const hdr = document.createElement('div');
+        hdr.className = 'dist-popup-hdr';
+        const titleEl = document.createElement('span');
+        titleEl.className = 'dist-popup-title';
+        titleEl.textContent = label;
+        const closeBtn = document.createElement('button');
+        closeBtn.className   = 'dist-popup-close';
+        closeBtn.textContent = '✕';
+        closeBtn.addEventListener('click', _closeDistPopup);
+        hdr.appendChild(titleEl);
+        hdr.appendChild(closeBtn);
+        _distPopup.appendChild(hdr);
+
+        const body = document.createElement('div');
+        body.className = 'dist-popup-body';
+        _distPopup.appendChild(body);
+        _distPopup.classList.remove('hidden');
+        _positionDistPopup(th);
+
+        if (!_lastResult) {
+            body.innerHTML = '<span class="dist-popup-unavail">No result data available.</span>';
+            return;
+        }
+
+        // Find the column index in the current result
+        const colIdx = _lastResult.cols.findIndex(c => c === col);
+        if (colIdx === -1) {
+            body.innerHTML = '<span class="dist-popup-unavail">Column not found in current result.</span>';
+            return;
+        }
+
+        // Tally values from the fetched rows
+        const countMap = new Map();
+        for (const row of (_lastResult.rows || [])) {
+            const v = row[colIdx];
+            const key = v === null || v === undefined ? null : String(v);
+            countMap.set(key, (countMap.get(key) || 0) + 1);
+        }
+
+        const total = _lastResult.rows.length;
+        // Sort by count desc, cap at 20
+        const sorted = [...countMap.entries()]
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 20)
+            .map(([val, cnt]) => ({ val: val === null ? null : val, cnt }));
+
+        _buildDistChart(body, sorted, total, col);
+        _positionDistPopup(th);
+    }
+
+    function _buildDistChart(container, rows, total, col) {
+        if (!rows.length) {
+            container.innerHTML = '<span class="dist-popup-unavail">No data in current result.</span>';
+            return;
+        }
+
+        // rows are already {val, cnt} objects computed client-side
+        const parsed  = rows;
+        const denom   = total > 0 ? total : parsed.reduce((s, r) => s + r.cnt, 0);
+        const maxCnt  = parsed[0]?.cnt || 1;
+        const isCapped = rows.length === 20;
+
+        // Skew detection
+        const topPct  = denom > 0 ? parsed[0].cnt / denom : 0;
+        const nullRow = parsed.find(r => r.val === null);
+        const nullPct = nullRow && denom > 0 ? nullRow.cnt / denom : 0;
+
+        // Badges
+        const badges = document.createElement('div');
+        badges.className = 'dist-popup-badges';
+        if (topPct > 0.70) {
+            const b = document.createElement('span');
+            b.className   = 'dist-badge dist-badge--skew';
+            b.textContent = '⚠ High skew';
+            b.title       = `Top value accounts for ${Math.round(topPct * 100)}% of rows — low cardinality may hurt index selectivity`;
+            badges.appendChild(b);
+        }
+        if (nullPct > 0.20) {
+            const b = document.createElement('span');
+            b.className   = 'dist-badge dist-badge--null';
+            b.textContent = '⚠ High NULLs';
+            b.title       = `${Math.round(nullPct * 100)}% of rows are NULL — WHERE ${col} = x will skip these`;
+            badges.appendChild(b);
+        }
+        if (badges.children.length) container.appendChild(badges);
+
+        // Total row count
+        if (total > 0) {
+            const meta = document.createElement('div');
+            meta.className   = 'dist-popup-meta';
+            meta.textContent = `${total.toLocaleString()} total rows`;
+            container.appendChild(meta);
+        }
+
+        // Bar rows
+        const chart = document.createElement('div');
+        chart.className = 'dist-chart';
+        parsed.forEach(({ val, cnt }) => {
+            const isNull = val === null;
+            const pct    = denom > 0 ? cnt / denom : 0;
+            const barW   = Math.max(Math.round((cnt / maxCnt) * 100), 1);
+
+            const row = document.createElement('div');
+            row.className = 'dist-chart-row' + (isNull ? ' dist-chart-row--null' : '');
+
+            const lbl = document.createElement('span');
+            lbl.className   = 'dist-chart-label';
+            lbl.textContent = isNull ? 'NULL' : String(val);
+            lbl.title       = isNull ? 'NULL' : String(val);
+
+            const barWrap = document.createElement('div');
+            barWrap.className = 'dist-chart-bar-wrap';
+            const bar = document.createElement('div');
+            bar.className = 'dist-chart-bar' + (isNull ? ' dist-chart-bar--null' : '');
+            bar.style.width = barW + '%';
+            barWrap.appendChild(bar);
+
+            const stat = document.createElement('span');
+            stat.className   = 'dist-chart-stat';
+            stat.textContent = `${Math.round(pct * 100)}%  ${cnt.toLocaleString()}`;
+
+            row.appendChild(lbl);
+            row.appendChild(barWrap);
+            row.appendChild(stat);
+            chart.appendChild(row);
+        });
+        container.appendChild(chart);
+
+        // Footer
+        const footer = document.createElement('div');
+        footer.className   = 'dist-popup-footer';
+        footer.textContent = isCapped ? 'Top 20 values · based on fetched rows' : 'Based on fetched rows';
+        container.appendChild(footer);
     }
 
     // =========================================================================

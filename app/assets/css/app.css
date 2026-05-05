@@ -4927,6 +4927,146 @@ th.calc-nop { opacity: 0.1; font-weight: bold; }
     border-bottom: 2px solid rgba(255,255,255,0.2);
 }
 
+/* ── Distribution Preview Popup ────────────────────────────── */
+.dist-popup {
+    position: fixed;
+    z-index: 9999;
+    min-width: 280px;
+    max-width: 380px;
+    background: #1a1a2e;
+    border: 1px solid #3a3a5c;
+    border-radius: 6px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+    font-size: 12px;
+    color: #ccc;
+    overflow: hidden;
+}
+.dist-popup-hdr {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 7px 10px 6px;
+    background: #12122a;
+    border-bottom: 1px solid #2d2d50;
+    gap: 6px;
+}
+.dist-popup-title {
+    font-weight: 600;
+    font-size: 12px;
+    color: #e0e0ff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex: 1;
+}
+.dist-popup-close {
+    flex-shrink: 0;
+    background: none;
+    border: none;
+    color: #888;
+    font-size: 15px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0 2px;
+}
+.dist-popup-close:hover { color: #fff; }
+.dist-popup-body {
+    padding: 9px 10px;
+}
+.dist-popup-loading,
+.dist-popup-unavail {
+    padding: 18px 0;
+    text-align: center;
+    color: #777;
+    font-style: italic;
+}
+.dist-popup-unavail { color: #c0392b; }
+.dist-popup-badges {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 8px;
+    flex-wrap: wrap;
+}
+.dist-badge--skew,
+.dist-badge--null {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: 10px;
+    white-space: nowrap;
+}
+.dist-badge--skew {
+    background: #3a1f00;
+    border: 1px solid #c87f0a;
+    color: #ffd488;
+}
+.dist-badge--null {
+    background: #1f1f3a;
+    border: 1px solid #555599;
+    color: #9999dd;
+}
+.dist-popup-meta {
+    font-size: 10px;
+    color: #666;
+    margin-bottom: 8px;
+}
+/* Chart rows */
+.dist-chart {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+.dist-chart-row {
+    display: grid;
+    grid-template-columns: 90px 1fr 42px;
+    align-items: center;
+    gap: 5px;
+}
+.dist-chart-row--null .dist-chart-label {
+    color: #666;
+    font-style: italic;
+}
+.dist-chart-label {
+    font-size: 11px;
+    color: #bbb;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-align: right;
+}
+.dist-chart-bar-wrap {
+    height: 11px;
+    background: #111128;
+    border-radius: 3px;
+    overflow: hidden;
+}
+.dist-chart-bar {
+    height: 100%;
+    background: linear-gradient(90deg, #3b6fd4, #5a9aff);
+    border-radius: 3px;
+    min-width: 2px;
+    transition: width 0.25s ease;
+}
+.dist-chart-bar--null {
+    background: linear-gradient(90deg, #333, #555);
+}
+.dist-chart-stat {
+    font-size: 10px;
+    color: #888;
+    text-align: right;
+    white-space: nowrap;
+}
+.dist-popup-footer {
+    padding: 5px 10px 7px;
+    font-size: 10px;
+    color: #555;
+    border-top: 1px solid #1e1e3a;
+    text-align: right;
+}
+
 /* =============================================================================
    12. Modals
    ============================================================================= */
