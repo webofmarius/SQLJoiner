@@ -296,9 +296,9 @@
             </div>
         </div>
         <div class="results-legend">
-            <span class="legend-default">Click to select · Right-click to cycle cell color · Alt+Right-click to highlight/unhighlight row · Double-click a number to add to Calculus · Alt+J to copy row as JSON · Alt+click to copy cell as JSON · Alt+C to load CSV · <strong>Header:</strong> Double-click to add to WHERE · Click to toggle SELECT checkbox · Right-click highlight SELECT checkbox · Alt+click to copy `alias`.`column` · Alt+Right-click to preview column distribution</span>
-            <span id="legend-compare" class="hidden"> · <strong>Compare mode:</strong> click header to compare column · right-click cell to compare row</span>
-            <span id="legend-duplicates" class="hidden"> · <strong>Duplicates mode:</strong> click header to scan column for duplicates · right-click cell to scan row for duplicates</span>
+            <span class="legend-default">Click to cycle cell color · Right-click to select · Alt+click to highlight/unhighlight row · Alt+Right-click to trace column origin · Double-click a number to add to Calculus · Alt+J to copy row as JSON · Alt+C to load CSV · <strong>Header:</strong> Double-click to add to WHERE · Click to toggle SELECT checkbox · Right-click highlight SELECT checkbox · Alt+click to copy `alias`.`column` · Alt+Right-click to preview column distribution</span>
+            <span id="legend-compare" class="hidden"> · <strong>Compare mode:</strong> click header to compare column · click cell to compare row · right-click cell to compare column</span>
+            <span id="legend-duplicates" class="hidden"> · <strong>Duplicates mode:</strong> click header to scan column for duplicates · click cell to scan row · right-click cell to scan column</span>
         </div>
         <div id="results-error" class="hidden"></div>
         <div id="results-table-wrapper">

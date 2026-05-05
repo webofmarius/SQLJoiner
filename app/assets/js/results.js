@@ -2085,39 +2085,33 @@ const Results = (() => {
                     td.classList.add(_colThemes[colIdx]);
                 }
 
-                // Left-click: eval mode / bind mode intercept, then compare / duplicates / normal
+                // Left-click: cycle color / compare row / duplicate row
                 td.addEventListener('click', e => {
-                    // Alt+click: copy entire row as plain JSON object to clipboard + flash cell
+                    // Alt+click: highlight/unhighlight entire row
                     if (e.altKey) {
                         e.preventDefault();
                         e.stopPropagation();
-                        const tds  = Array.from(tr.querySelectorAll('td:not(.td-row-num)'));
-                        const keys = _buildJsonKeys();
-                        const row  = Object.fromEntries(keys.map((k, i) => [k, tds[i]?.dataset.raw ?? tds[i]?.textContent ?? null]));
-                        navigator.clipboard.writeText(JSON.stringify(row, null, 2))
-                            .then(() => App.notify?.('Row copied as JSON', 'success'));
-                        td.classList.remove('cell-calculus-flash');
-                        void td.offsetWidth; // force reflow so animation restarts on repeat clicks
-                        td.classList.add('cell-calculus-flash');
-                        return;
-                    }
-                    if (_calculusEvalMode) {
-                        e.stopPropagation();
-                        _calcApplyEval(td);
-                        return;
-                    }
-                    if (_calculusBindModeRowId !== null) {
-                        e.stopPropagation();
-                        _calcTryBind(td);
+                        _altRightClickRow(tr);
                         return;
                     }
                     if (_compareMode) {
-                        _compareCell(td);
-                    } else if (_duplicateMode) {
-                        _duplicateCell(td);
-                    } else {
-                        _selectCell(td);
+                        _compareRow(tr, td);
+                        return;
                     }
+                    if (_duplicateMode) {
+                        _duplicateRow(tr, td);
+                        return;
+                    }
+                    const currentTheme = THEMES.find(t => td.classList.contains(t));
+                    const currentIndex = THEMES.indexOf(currentTheme);
+                    if (currentTheme) td.classList.remove(currentTheme);
+                    const nextTheme = THEMES[currentIndex + 1];
+                    if (nextTheme) {
+                        td.classList.add(nextTheme);
+                        _dimPinCol(colIdx);
+                    }
+                    _applyDimVisibility();
+                    _applyDimRowVisibility();
                 });
 
                 // Double-click: Calculus mode — add numeric cell to toolbox
@@ -2157,13 +2151,13 @@ const Results = (() => {
                 // contextmenu event may not carry altKey).
                 td.addEventListener('mousedown', e => {
                     if (e.button === 2 && _altKeyHeld) {
-                        _altRightClickRow(tr);
+                        e.stopPropagation(); // prevent document mousedown from closing the popup it just opened
+                        _showLineagePopup(td, col, colIdx, colTables);
                         _altRightClickHandled = true;
                     }
                 });
 
-                // Right-click to toggle cell color; Alt+right-click to toggle row highlight;
-                // in compare mode: right-click compares all cells in the row against this cell
+                // Right-click: select cell / calculus / compare cell / duplicate cell; Alt+right-click: lineage popup
                 td.addEventListener('contextmenu', e => {
                     e.preventDefault();
                     e.stopPropagation(); // Don't trigger header contextmenu if somehow bubbled
@@ -2173,37 +2167,34 @@ const Results = (() => {
 
                     // Fallback: check our own Alt-key tracker in case mousedown was skipped.
                     if (_altKeyHeld) {
-                        _altRightClickRow(tr);
+                        _showLineagePopup(td, col, colIdx, colTables);
                         return;
                     }
 
-                    // Compare mode: right-click sets this cell as reference and compares the row
+                    if (_calculusEvalMode) {
+                        e.stopPropagation();
+                        _calcApplyEval(td);
+                        return;
+                    }
+                    if (_calculusBindModeRowId !== null) {
+                        e.stopPropagation();
+                        _calcTryBind(td);
+                        return;
+                    }
+
+                    // Compare mode: right-click compares this cell against the column
                     if (_compareMode) {
-                        _compareRow(tr, td);
+                        _compareCell(td);
                         return;
                     }
 
-                    // Duplicate mode: right-click searches for duplicates within the row
+                    // Duplicate mode: right-click scans this cell for duplicates
                     if (_duplicateMode) {
-                        _duplicateRow(tr, td);
+                        _duplicateCell(td);
                         return;
                     }
 
-                    const currentTheme = THEMES.find(t => td.classList.contains(t));
-                    const currentIndex = THEMES.indexOf(currentTheme);
-                    const nextIndex = currentIndex + 1;
-
-                    if (currentTheme) {
-                        td.classList.remove(currentTheme);
-                    }
-
-                    const nextTheme = THEMES[nextIndex];
-                    if (nextTheme) {
-                        td.classList.add(nextTheme);
-                        _dimPinCol(colIdx);
-                    }
-                    _applyDimVisibility();
-                    _applyDimRowVisibility();
+                    _selectCell(td);
                 });
 
                 // Drag to WHERE / GROUP BY / HAVING / ORDER BY drop zones
@@ -2519,6 +2510,193 @@ const Results = (() => {
         footer.className   = 'dist-popup-footer';
         footer.textContent = isCapped ? 'Top 20 values · based on fetched rows' : 'Based on fetched rows';
         container.appendChild(footer);
+    }
+
+    // =========================================================================
+    // Column Lineage Trace
+    // =========================================================================
+
+    let _lineagePopup = null;
+
+    function _ensureLineagePopup() {
+        if (_lineagePopup) return;
+        _lineagePopup = document.createElement('div');
+        _lineagePopup.className = 'lineage-popup hidden';
+        document.body.appendChild(_lineagePopup);
+        document.addEventListener('mousedown', e => {
+            if (_lineagePopup.classList.contains('hidden')) return;
+            if (!_lineagePopup.contains(e.target)) _closeLineagePopup();
+        });
+        document.addEventListener('keydown', e => {
+            if (e.key === 'Escape' && !_lineagePopup.classList.contains('hidden')) _closeLineagePopup();
+        });
+    }
+
+    function _closeLineagePopup() {
+        _lineagePopup?.classList.add('hidden');
+    }
+
+    function _positionLineagePopup(anchorTd) {
+        const rect = anchorTd.getBoundingClientRect();
+        const pw   = _lineagePopup.offsetWidth  || 320;
+        const ph   = _lineagePopup.offsetHeight || 200;
+        const vw   = window.innerWidth;
+        const vh   = window.innerHeight;
+        let left   = rect.left;
+        let top    = rect.bottom + 6;
+        if (left + pw > vw - 8) left = vw - pw - 8;
+        if (top  + ph > vh - 8) top  = rect.top - ph - 6;
+        _lineagePopup.style.left = left + 'px';
+        _lineagePopup.style.top  = top  + 'px';
+    }
+
+    function _showLineagePopup(td, col, colIdx, colTables) {
+        _ensureLineagePopup();
+
+        const colAlias  = colTables[colIdx] || '';
+        const aliasLc   = colAlias.toLowerCase();
+        const tables    = State.tables || [];
+        const joins     = (State.joins  || []).filter(j => j.enabled !== false);
+
+        // Resolve source table
+        const srcTable = tables.find(t =>
+            (t.alias || '').toLowerCase() === aliasLc ||
+            (t.name  || '').toLowerCase() === aliasLc
+        ) || null;
+
+        _lineagePopup.innerHTML = '';
+
+        // Header
+        const hdr = document.createElement('div');
+        hdr.className = 'lineage-popup-hdr';
+        const titleEl = document.createElement('span');
+        titleEl.className   = 'lineage-popup-title';
+        titleEl.textContent = col;
+        const closeBtn = document.createElement('button');
+        closeBtn.className   = 'lineage-popup-close';
+        closeBtn.textContent = '✕';
+        closeBtn.addEventListener('click', _closeLineagePopup);
+        hdr.appendChild(titleEl);
+        hdr.appendChild(closeBtn);
+        _lineagePopup.appendChild(hdr);
+
+        const body = document.createElement('div');
+        body.className = 'lineage-popup-body';
+        _lineagePopup.appendChild(body);
+        _lineagePopup.classList.remove('hidden');
+        _positionLineagePopup(td);
+
+        // No source table metadata (CSV, custom expr, subquery)
+        if (!srcTable) {
+            const unavail = document.createElement('div');
+            unavail.className   = 'lineage-unavail';
+            unavail.textContent = colAlias
+                ? `No table metadata for alias "${colAlias}" — may be a custom expression or subquery.`
+                : 'No table origin info — may be a custom expression or CSV column.';
+            body.appendChild(unavail);
+            _positionLineagePopup(td);
+            return;
+        }
+
+        // Source section
+        const srcOrigin = srcTable.database
+            ? `${srcTable.database}.${srcTable.name}`
+            : srcTable.name;
+
+        const tableRow = _lineageRow('Table', srcOrigin);
+        const tableVal = tableRow.querySelector('.lineage-val');
+        tableVal.classList.add('lineage-val--link');
+        tableVal.title = 'Click to focus on canvas';
+        tableVal.addEventListener('click', () => {
+            if (typeof Canvas !== 'undefined') Canvas.scrollToTableIdTop(srcTable.id);
+            const card = document.querySelector(`.table-card[data-table-id="${srcTable.id}"]`);
+            if (card) {
+                card.classList.remove('explain-card-pulse');
+                void card.offsetWidth;
+                card.classList.add('explain-card-pulse');
+                card.addEventListener('animationend', () => card.classList.remove('explain-card-pulse'), { once: true });
+            }
+            _closeLineagePopup();
+        });
+
+        _lineageSection(body, 'Source', [
+            tableRow,
+            _lineageRow('Alias',  srcTable.alias || '—'),
+        ]);
+
+        // JOINs involving this table
+        const relatedJoins = joins.filter(j =>
+            j.fromTableId === srcTable.id || j.toTableId === srcTable.id
+        );
+
+        if (!relatedJoins.length) {
+            _lineageSection(body, 'JOINs', [
+                _lineageNote('Driving table — no JOINs connect here'),
+            ]);
+        } else {
+            const joinEls = relatedJoins.map(j => {
+                const isFrom   = j.fromTableId === srcTable.id;
+                const otherId  = isFrom ? j.toTableId : j.fromTableId;
+                const otherTbl = tables.find(t => t.id === otherId);
+                const otherAlias = otherTbl?.alias || otherTbl?.name || otherId;
+                const thisAlias  = srcTable.alias || srcTable.name;
+
+                const fromAlias = isFrom ? thisAlias  : otherAlias;
+                const fromCol   = isFrom ? j.fromCol  : j.toCol;
+                const toAlias   = isFrom ? otherAlias : thisAlias;
+                const toCol     = isFrom ? j.toCol    : j.fromCol;
+
+                const lines = [`${j.type || 'JOIN'} ${otherAlias} ON ${fromAlias}.${fromCol} = ${toAlias}.${toCol}`];
+                (j.extraConditions || []).forEach(ec => {
+                    const ef = isFrom ? ec.fromCol : ec.toCol;
+                    const et = isFrom ? ec.toCol   : ec.fromCol;
+                    lines.push(`  AND ${fromAlias}.${ef} = ${toAlias}.${et}`);
+                });
+                return _lineageCode(lines.join('\n'));
+            });
+            _lineageSection(body, 'JOINs', joinEls);
+        }
+
+        _positionLineagePopup(td);
+    }
+
+    function _lineageSection(parent, title, children) {
+        const sec = document.createElement('div');
+        sec.className = 'lineage-section';
+        const lbl = document.createElement('div');
+        lbl.className   = 'lineage-section-title';
+        lbl.textContent = title;
+        sec.appendChild(lbl);
+        children.forEach(c => sec.appendChild(c));
+        parent.appendChild(sec);
+    }
+
+    function _lineageRow(label, value) {
+        const row = document.createElement('div');
+        row.className = 'lineage-row';
+        const k = document.createElement('span');
+        k.className   = 'lineage-key';
+        k.textContent = label;
+        const v = document.createElement('span');
+        v.className   = 'lineage-val';
+        v.textContent = value;
+        row.appendChild(k);
+        row.appendChild(v);
+        return row;
+    }
+
+    function _lineageCode(text) {
+        const pre = document.createElement('pre');
+        pre.className   = 'lineage-code';
+        pre.textContent = text;
+        return pre;
+    }
+
+    function _lineageNote(text) {
+        const el = document.createElement('div');
+        el.className   = 'lineage-note';
+        el.textContent = text;
+        return el;
     }
 
     // =========================================================================

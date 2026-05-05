@@ -5067,6 +5067,114 @@ th.calc-nop { opacity: 0.1; font-weight: bold; }
     text-align: right;
 }
 
+/* ── Column Lineage Trace Popup ─────────────────────────────── */
+.lineage-popup {
+    position: fixed;
+    z-index: 9999;
+    min-width: 260px;
+    max-width: 420px;
+    background: #1a1a2e;
+    border: 1px solid #3a3a5c;
+    border-radius: 6px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+    font-size: 12px;
+    color: #ccc;
+    overflow: hidden;
+}
+.lineage-popup-hdr {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 7px 10px 6px;
+    background: #12122a;
+    border-bottom: 1px solid #2d2d50;
+    gap: 6px;
+}
+.lineage-popup-title {
+    font-weight: 600;
+    font-size: 12px;
+    color: #e0e0ff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex: 1;
+}
+.lineage-popup-close {
+    flex-shrink: 0;
+    background: none;
+    border: none;
+    color: #888;
+    font-size: 15px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0 2px;
+}
+.lineage-popup-close:hover { color: #fff; }
+.lineage-popup-body {
+    padding: 8px 10px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.lineage-unavail {
+    color: #888;
+    font-style: italic;
+    font-size: 11px;
+    padding: 6px 0;
+}
+.lineage-section {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.lineage-section-title {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #6666aa;
+    margin-bottom: 1px;
+}
+.lineage-row {
+    display: flex;
+    gap: 8px;
+    align-items: baseline;
+}
+.lineage-key {
+    font-size: 10px;
+    color: #777;
+    min-width: 38px;
+    flex-shrink: 0;
+}
+.lineage-val {
+    font-size: 12px;
+    color: #d0d0ff;
+    word-break: break-all;
+}
+.lineage-val--link {
+    cursor: pointer;
+    text-decoration: underline dotted #5555aa;
+}
+.lineage-val--link:hover { color: #fff; text-decoration-color: #aaaaff; }
+.lineage-code {
+    margin: 0;
+    padding: 5px 8px;
+    background: #0d0d20;
+    border: 1px solid #2a2a48;
+    border-radius: 4px;
+    font-size: 11px;
+    font-family: monospace;
+    color: #a8d8a8;
+    white-space: pre-wrap;
+    word-break: break-all;
+    line-height: 1.5;
+}
+.lineage-note {
+    font-size: 11px;
+    color: #666;
+    font-style: italic;
+}
+
 /* =============================================================================
    12. Modals
    ============================================================================= */
