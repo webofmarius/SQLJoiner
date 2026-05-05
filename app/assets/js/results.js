@@ -73,6 +73,10 @@ const Results = (() => {
     // True when the current result came from a CSV file (drives Excel-style header letters)
     let _lastResultIsCsv = false;
 
+    // EXPLAIN graph state
+    let _isExplainResult    = false;
+    let _explainGraphVisible = false;
+
     // Column highlight (SELECT box ☆ checkbox)
     const _highlightedCols = new Set();
 
@@ -151,6 +155,10 @@ const Results = (() => {
             .addEventListener('click', _toggleDimmed);
 
         // ---- Search toggle ----
+        document.getElementById('btn-explain-graph').addEventListener('click', () => {
+            _setExplainGraphVisible(!_explainGraphVisible);
+        });
+
         document.getElementById('btn-search-cols').addEventListener('click', () => {
             const panel = document.getElementById('results-panel');
             const btn   = document.getElementById('btn-search-cols');
@@ -591,6 +599,16 @@ const Results = (() => {
         _lastResultIsCsv = !!result._csvSource;
         _populateTable(result.cols, result.rows, result.col_tables || [], result.col_types || []);
         _applyExplainColors(result.cols, result.rows);
+
+        // EXPLAIN graph — show/hide toggle button; refresh graph if it was open
+        _isExplainResult = _detectExplain(result.cols);
+        const _graphBtn  = document.getElementById('btn-explain-graph');
+        if (_graphBtn) _graphBtn.classList.toggle('hidden', !_isExplainResult);
+        if (!_isExplainResult && _explainGraphVisible) {
+            _setExplainGraphVisible(false);
+        } else if (_isExplainResult && _explainGraphVisible) {
+            _renderExplainGraph(result.cols, result.rows);
+        }
 
         // Lock column widths after the initial layout so filtering never resizes columns
         requestAnimationFrame(() => {
@@ -2301,6 +2319,204 @@ const Results = (() => {
     function _clearExplainColors() {
         document.querySelectorAll('#results-table td.explain-bad, #results-table td.explain-ok, #results-table td.explain-good')
             .forEach(td => td.classList.remove('explain-bad', 'explain-ok', 'explain-good'));
+    }
+
+    // =========================================================================
+    // EXPLAIN Graph
+    // =========================================================================
+
+    function _detectExplain(cols) {
+        const lc = cols.map(c => c.toLowerCase());
+        return lc.includes('type') && lc.includes('extra');
+    }
+
+    function _setExplainGraphVisible(visible) {
+        _explainGraphVisible = visible;
+        document.getElementById('results-table-wrapper').classList.toggle('hidden', visible);
+        document.getElementById('explain-graph-wrapper').classList.toggle('hidden', !visible);
+        const btn = document.getElementById('btn-explain-graph');
+        if (btn) btn.classList.toggle('is-active', visible);
+        if (visible && _lastResult) _renderExplainGraph(_lastResult.cols, _lastResult.rows);
+    }
+
+    function _renderExplainGraph(cols, rows) {
+        const wrapper = document.getElementById('explain-graph-wrapper');
+        if (!wrapper) return;
+        wrapper.innerHTML = '';
+
+        const lc  = cols.map(c => c.toLowerCase());
+        const idx = name => lc.indexOf(name);
+
+        const idIdx    = idx('id');
+        const stIdx    = idx('select_type');
+        const tableIdx = idx('table');
+        const typeIdx  = idx('type');
+        const keyIdx   = idx('key');
+        const rowsIdx  = idx('rows');
+        const filtIdx  = idx('filtered');
+        const extraIdx = idx('extra');
+
+        const SCORE_ORDER = { bad: 0, ok: 1, good: 2 };
+
+        const nodes = rows.map(row => {
+            const get  = i => (i >= 0 ? row[i] : null);
+            const rowsVal = parseFloat(get(rowsIdx)) || 0;
+            const filtVal = parseFloat(get(filtIdx) ?? 100);
+            const cost    = Math.max(rowsVal * (1 - filtVal / 100), 1);
+
+            const scores = ['type', 'select_type', 'key', 'rows', 'filtered', 'extra']
+                .map(col => _explainScore(col, get(idx(col))))
+                .filter(Boolean);
+            const worst = scores.length
+                ? scores.reduce((w, s) => SCORE_ORDER[s] < SCORE_ORDER[w] ? s : w, 'good')
+                : 'good';
+
+            return {
+                id:         get(idIdx),
+                selectType: get(stIdx),
+                table:      get(tableIdx),
+                joinType:   get(typeIdx),
+                key:        get(keyIdx),
+                rows:       rowsVal,
+                filtered:   filtVal,
+                extra:      get(extraIdx),
+                cost,
+                score:      worst,
+            };
+        });
+
+        // --- Waterfall bar ---
+        const totalCost = nodes.reduce((s, n) => s + n.cost, 0) || 1;
+        const waterfall = document.createElement('div');
+        waterfall.className = 'explain-waterfall';
+        const wfLabel = document.createElement('span');
+        wfLabel.className = 'explain-waterfall-label';
+        wfLabel.textContent = 'Cost waterfall — estimated rows processed per table:';
+        waterfall.appendChild(wfLabel);
+        const wfBar = document.createElement('div');
+        wfBar.className = 'explain-waterfall-bar';
+        nodes.forEach(n => {
+            const seg = document.createElement('div');
+            seg.className = `explain-wf-seg explain-score-${n.score}`;
+            seg.style.flexGrow = String(n.cost / totalCost * 100);
+            const pct  = Math.round(n.cost / totalCost * 100);
+            const rows = n.rows >= 1000
+                ? (n.rows >= 1_000_000 ? (n.rows / 1_000_000).toFixed(1) + 'M' : (n.rows / 1000).toFixed(0) + 'k')
+                : String(Math.round(n.rows));
+            seg.title = `${n.table ?? '?'}: ~${rows} rows · ${pct}% of total cost`;
+            const lbl = document.createElement('span');
+            lbl.textContent = n.table ?? '';
+            seg.appendChild(lbl);
+            wfBar.appendChild(seg);
+        });
+        waterfall.appendChild(wfBar);
+        wrapper.appendChild(waterfall);
+
+        // --- Group nodes by query-block id ---
+        const groupMap = new Map();
+        nodes.forEach(n => {
+            const gid = String(n.id ?? '1');
+            if (!groupMap.has(gid)) groupMap.set(gid, []);
+            groupMap.get(gid).push(n);
+        });
+
+        groupMap.forEach((group, gid) => {
+            const groupEl = document.createElement('div');
+            groupEl.className = 'explain-graph-group';
+
+            if (gid !== '1' && gid !== String(nodes[0]?.id)) {
+                const lbl = document.createElement('div');
+                lbl.className = 'explain-graph-group-label';
+                const st = group[0]?.selectType ?? '';
+                lbl.textContent = `Block ${gid}${st ? ' — ' + st : ''}`;
+                groupEl.appendChild(lbl);
+            }
+
+            const rowEl = document.createElement('div');
+            rowEl.className = 'explain-graph-row';
+
+            group.forEach((node, ni) => {
+                rowEl.appendChild(_buildExplainNode(node));
+                if (ni < group.length - 1) {
+                    const arrow = document.createElement('div');
+                    arrow.className = 'explain-graph-arrow';
+                    arrow.textContent = '→';
+                    rowEl.appendChild(arrow);
+                }
+            });
+
+            groupEl.appendChild(rowEl);
+            wrapper.appendChild(groupEl);
+        });
+    }
+
+    function _buildExplainNode(node) {
+        const el = document.createElement('div');
+        el.className = `explain-graph-node explain-score-${node.score}`;
+
+        // Click → scroll canvas to the matching table card and pulse it
+        const matchingTable = (State.tables || []).find(t =>
+            t.alias?.toLowerCase() === String(node.table ?? '').toLowerCase() ||
+            t.name?.toLowerCase()  === String(node.table ?? '').toLowerCase()
+        );
+        if (matchingTable) {
+            el.classList.add('explain-graph-node--linked');
+            el.title = `Click to focus "${node.table}" on canvas`;
+            el.addEventListener('click', () => {
+                if (typeof Canvas !== 'undefined') Canvas.scrollToTableIdTop(matchingTable.id);
+                const card = document.querySelector(`.table-card[data-table-id="${matchingTable.id}"]`);
+                if (card) {
+                    card.classList.remove('explain-card-pulse');
+                    void card.offsetWidth;
+                    card.classList.add('explain-card-pulse');
+                    card.addEventListener('animationend', () => card.classList.remove('explain-card-pulse'), { once: true });
+                }
+            });
+        }
+
+        // Table name
+        const nameEl = document.createElement('div');
+        nameEl.className = 'explain-node-name';
+        nameEl.textContent = node.table ?? '(unknown)';
+        el.appendChild(nameEl);
+
+        // Join type badge
+        if (node.joinType) {
+            const badge = document.createElement('span');
+            const typeScore = _explainScore('type', node.joinType) ?? 'good';
+            badge.className = `explain-node-badge explain-score-${typeScore}`;
+            badge.textContent = node.joinType.toUpperCase();
+            el.appendChild(badge);
+        }
+
+        // Key used
+        const hasKey = node.key && node.key !== 'NULL';
+        const keyEl  = document.createElement('div');
+        keyEl.className = 'explain-node-key' + (hasKey ? '' : ' explain-node-key--none');
+        keyEl.textContent = hasKey ? `🔑 ${node.key}` : '⚠ no key';
+        el.appendChild(keyEl);
+
+        // Rows + filtered
+        const rowsFmt = node.rows >= 1_000_000
+            ? (node.rows / 1_000_000).toFixed(1) + 'M'
+            : node.rows >= 1000
+                ? (node.rows / 1000).toFixed(0) + 'k'
+                : String(Math.round(node.rows));
+        const rowsEl = document.createElement('div');
+        rowsEl.className = 'explain-node-rows';
+        rowsEl.textContent = `~${rowsFmt} rows · ${node.filtered}% filtered`;
+        el.appendChild(rowsEl);
+
+        // Extra (truncated with full tooltip)
+        if (node.extra && node.extra !== 'NULL' && node.extra !== '') {
+            const extraEl = document.createElement('div');
+            extraEl.className = 'explain-node-extra';
+            extraEl.textContent = node.extra;
+            extraEl.title = node.extra;
+            el.appendChild(extraEl);
+        }
+
+        return el;
     }
 
     /**

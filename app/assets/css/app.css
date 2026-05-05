@@ -3236,7 +3236,7 @@ body.is-resizing-results #resizer-results {
 #results-table th.th-delimiter,
 #results-table td.td-delimiter {
     background: #000;
-    color: #039baf;
+    color: #006d7c;
     text-align: center;
     font-weight: bold;
     letter-spacing: 0.05em;
@@ -3472,7 +3472,8 @@ tr.calculus-hl > td {
 }
 
 #btn-search-cols { border-radius: 4px; }
-#btn-search-cols.active { background: var(--accent-dim); color: var(--accent); border-color: var(--accent); }
+#btn-search-cols.active   { background: var(--accent-dim); color: var(--accent); border-color: var(--accent); }
+#btn-explain-graph.is-active { background: var(--accent-dim); color: var(--accent); border-color: var(--accent); }
 
 #btn-toggle-dim.is-active {
     background: var(--accent);
@@ -4779,6 +4780,147 @@ th.calc-nop { opacity: 0.1; font-weight: bold; }
 #results-table td.explain-bad  { background-color: #5c1a1a !important; color: #ffb3b3 !important; }
 #results-table td.explain-ok   { background-color: #1a2e4a !important; color: #90c4ff !important; }
 #results-table td.explain-good { background-color: #1a3a1a !important; color: #90ee90 !important; }
+
+/* =========================================================================
+   EXPLAIN Graph
+   ========================================================================= */
+
+#explain-graph-wrapper {
+    padding: 14px 18px;
+    overflow: auto;
+    height: 100%;
+    box-sizing: border-box;
+    background: var(--bg);
+}
+
+/* Score palette — shared by waterfall segments, node borders/backgrounds, badges */
+.explain-score-bad  { background: #2d0e0e; border-color: #c0392b; color: #ffb3b3; }
+.explain-score-ok   { background: #251a00; border-color: #c87f0a; color: #ffd488; }
+.explain-score-good { background: #0b1f0f; border-color: #27ae60; color: #90ee90; }
+
+/* --- Waterfall bar --- */
+.explain-waterfall {
+    margin-bottom: 20px;
+}
+.explain-waterfall-label {
+    display: block;
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-bottom: 5px;
+    user-select: none;
+}
+.explain-waterfall-bar {
+    display: flex;
+    height: 22px;
+    border-radius: 4px;
+    overflow: hidden;
+    gap: 2px;
+}
+.explain-wf-seg {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    min-width: 6px;
+    font-size: 10px;
+    font-weight: 600;
+    padding: 0 5px;
+    border: 1px solid transparent;
+    cursor: default;
+    transition: filter 0.15s;
+}
+.explain-wf-seg:hover { filter: brightness(1.35); }
+.explain-wf-seg span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    pointer-events: none;
+}
+
+/* --- Node groups --- */
+.explain-graph-group {
+    margin-bottom: 22px;
+}
+.explain-graph-group-label {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+    padding-left: 2px;
+    user-select: none;
+}
+.explain-graph-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0;
+}
+.explain-graph-arrow {
+    font-size: 22px;
+    color: var(--text-muted);
+    padding: 0 8px;
+    flex-shrink: 0;
+    user-select: none;
+}
+
+/* --- Individual node --- */
+.explain-graph-node {
+    width: 170px;
+    min-height: 96px;
+    border: 2px solid;
+    border-radius: 7px;
+    padding: 9px 11px;
+    box-sizing: border-box;
+    flex-shrink: 0;
+    transition: filter 0.15s;
+}
+.explain-graph-node--linked { cursor: pointer; }
+.explain-graph-node--linked:hover { filter: brightness(1.25); }
+
+.explain-node-name {
+    font-size: 13px;
+    font-weight: 700;
+    margin-bottom: 5px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.explain-node-badge {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 700;
+    border-radius: 3px;
+    padding: 1px 6px;
+    margin-bottom: 5px;
+    border: 1px solid transparent;
+}
+.explain-node-key {
+    font-size: 10px;
+    margin-bottom: 3px;
+}
+.explain-node-key--none { color: #ffb3b3; }
+.explain-node-rows {
+    font-size: 10px;
+    color: var(--text-muted);
+    margin-bottom: 2px;
+}
+.explain-node-extra {
+    font-size: 9px;
+    color: var(--text-muted);
+    margin-top: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Canvas card pulse when an explain node is clicked */
+@keyframes explain-card-pulse {
+    0%   { box-shadow: 0 0 0 0   rgba(26, 143, 179, 0.85); }
+    60%  { box-shadow: 0 0 0 14px rgba(26, 143, 179, 0); }
+    100% { box-shadow: 0 0 0 0   rgba(26, 143, 179, 0); }
+}
+.table-card.explain-card-pulse {
+    animation: explain-card-pulse 0.75s ease-out forwards;
+}
 
 /* Ensure text is readable on highlight */
 #results-table th.col-highlight-1, #results-table th.col-highlight-2, #results-table th.col-highlight-3, #results-table th.col-highlight-4 {

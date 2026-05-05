@@ -281,6 +281,7 @@
                 <button id="btn-compare-datasets" title="Compare current result against a CSV">⇌ Compare Datasets</button>
                 <button id="btn-exit-compare-datasets" class="hidden is-active" title="Exit dataset comparison">✕ Exit Compare</button>
                 <button id="btn-search-cols" title="Toggle column search inputs">⌕ Search</button>
+                <button id="btn-explain-graph" class="hidden" title="Toggle EXPLAIN graph view">⎇ Explain Graph</button>
             </div>
             <span id="results-meta"></span>
             <div id="results-actions">
@@ -306,6 +307,7 @@
                 <tbody></tbody>
             </table>
         </div>
+        <div id="explain-graph-wrapper" class="hidden"></div>
     </div>
 
     <!-- ==================== CALCULUS TOOLBOX (floating, no backdrop) ==================== -->

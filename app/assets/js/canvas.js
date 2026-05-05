@@ -2227,6 +2227,24 @@ const Canvas = (() => {
         if (card) _scrollToCard(card);
     }
 
+    function _scrollToCardTop(card) {
+        const s       = _canvasContentScale();
+        const wrapper = document.getElementById('canvas-wrapper');
+        if (!wrapper) return;
+        const x = parseInt(card.style.left, 10) || 0;
+        const y = parseInt(card.style.top,  10) || 0;
+        wrapper.scrollTo({
+            left:     x * s - wrapper.clientWidth / 2 + (card.offsetWidth * s) / 2,
+            top:      y * s - 20,
+            behavior: 'smooth',
+        });
+    }
+
+    function _scrollToTableIdTop(tableId) {
+        const card = document.querySelector(`.table-card[data-table-id="${tableId}"]`);
+        if (card) _scrollToCardTop(card);
+    }
+
     /**
      * Scroll the canvas wrapper so all table cards are centered in view.
      * If there are no cards, does nothing.
@@ -2983,6 +3001,7 @@ const Canvas = (() => {
         setOverviewZoom,
         toggleOverviewZoom,
         scrollToTableId:       _scrollToTableId,
+        scrollToTableIdTop:    _scrollToTableIdTop,
         scrollToLogicalBoundingBox,
         startPan(e) {
             const wrapper   = document.getElementById('canvas-wrapper');
