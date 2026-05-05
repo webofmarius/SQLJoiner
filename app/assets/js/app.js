@@ -1031,9 +1031,9 @@ const App = (() => {
                 e.preventDefault();
                 const n = file.name.toLowerCase();
                 if (n.endsWith('.xlsx')) {
-                    Results.loadXlsxFile(file);
+                    Results.loadXlsxFile(file); _enterCsvViewMode();
                 } else if (n.endsWith('.csv') || file.type === 'text/csv') {
-                    Results.loadCsvFile(file);
+                    Results.loadCsvFile(file); _enterCsvViewMode();
                 } else {
                     _loadFileIntoNewSubquery(file, '#f47c7c');
                 }
@@ -4077,7 +4077,7 @@ const App = (() => {
         });
         document.getElementById('csv-file-input').addEventListener('change', e => {
             const file = e.target.files[0];
-            if (file) { Results.loadCsvFile(file); e.target.value = ''; }
+            if (file) { Results.loadCsvFile(file); _enterCsvViewMode(); e.target.value = ''; }
         });
 
         document.getElementById('btn-load-xlsx').addEventListener('click', () => {
@@ -4085,7 +4085,7 @@ const App = (() => {
         });
         document.getElementById('xlsx-file-input').addEventListener('change', e => {
             const file = e.target.files[0];
-            if (file) { Results.loadXlsxFile(file); e.target.value = ''; }
+            if (file) { Results.loadXlsxFile(file); _enterCsvViewMode(); e.target.value = ''; }
         });
 
         // CSV (memory) popup
@@ -5194,6 +5194,18 @@ const App = (() => {
             document.addEventListener('mousemove', onMove);
             document.addEventListener('mouseup',   onUp);
         });
+    }
+
+    function _enterCsvViewMode() {
+        if (!_PANE_DEFAULTS.sidebar.el?.classList.contains('is-collapsed')) {
+            _applyPaneState('sidebar', true);
+            localStorage.setItem('pane-sidebar', 'collapsed');
+        }
+        if (!_PANE_DEFAULTS.config.el?.classList.contains('is-collapsed')) {
+            _applyPaneState('config', true);
+            localStorage.setItem('pane-config', 'collapsed');
+        }
+        Results.setFullscreen?.(true);
     }
 
     function _togglePane(key) {

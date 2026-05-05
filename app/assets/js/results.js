@@ -6426,6 +6426,7 @@ async function _copyAsSqlSelect() {
         toggle:           _toggleCollapsed,
         toggleTall:       _toggleTall,
         toggleFullscreen: _toggleFullscreen,
+        setFullscreen:    _setFullscreen,
         /** Apply or remove col-deselected styling on a result column by its select key. */
         syncColDeselected: _applyColDeselected,
         /** Re-apply table colors to all result header cells (call after a table color changes). */
