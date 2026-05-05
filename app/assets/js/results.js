@@ -1484,6 +1484,11 @@ const Results = (() => {
         });
     }
 
+    /** Returns true when the column is the '|||' table-delimiter sentinel. */
+    function _isDelimiterColumn(colName) {
+        return String(colName ?? '').trim() === '|||';
+    }
+
     /** Returns true when the DB result column name comes from a custom expression. */
     function _isCustomExprColumn(colName) {
         const nameLc = String(colName ?? '').toLowerCase();
@@ -1617,7 +1622,10 @@ const Results = (() => {
             // visually distinct from real column names.
             const labelText = _formatHeaderLabel(col, colIdx, cols, colTables[colIdx] || '', colTables, _activeResultIds);
             const displayLabel = _lastResultIsCsv ? `${_excelCol(colIdx)} - ${labelText}` : labelText;
-            if (_isCustomExprColumn(col)) {
+            if (_isDelimiterColumn(col)) {
+                th.classList.add('th-delimiter');
+                th.appendChild(document.createTextNode('|||'));
+            } else if (_isCustomExprColumn(col)) {
                 th.classList.add('th-custom-expr');
                 th.appendChild(document.createTextNode(displayLabel));
             } else if (_isColumnAlias(col)) {
@@ -2027,6 +2035,12 @@ const Results = (() => {
                     td.className = 'is-number';
                 } else {
                     td.textContent = val;
+                }
+
+                // Delimiter column — override styling regardless of value type
+                if (_isDelimiterColumn(col)) {
+                    td.className = 'td-delimiter';
+                    td.textContent = '|||';
                 }
 
                 // Preserve the original raw value (including any line breaks) for copy-to-clipboard.

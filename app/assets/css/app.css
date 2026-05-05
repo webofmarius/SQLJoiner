@@ -3233,6 +3233,18 @@ body.is-resizing-results #resizer-results {
     background: color-mix(in srgb, var(--surface3) 86%, #0078d4 14%);
     color: #5ab4f5;
 }
+#results-table th.th-delimiter,
+#results-table td.td-delimiter {
+    background: #000;
+    color: #039baf;
+    text-align: center;
+    font-weight: bold;
+    letter-spacing: 0.05em;
+    padding-left: 3em;
+    padding-right: 3em;
+    pointer-events: none;
+    user-select: none;
+}
 #results-table th.col-deselected {
     background: color-mix(in srgb, var(--surface3) 60%, #000 40%);
     color: var(--text-muted, #888);
