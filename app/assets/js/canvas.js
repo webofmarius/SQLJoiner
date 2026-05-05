@@ -204,7 +204,7 @@ const Canvas = (() => {
                 if (typeof SqlBackdrop !== 'undefined') SqlBackdrop.refresh(valTa);
                 valWrap.classList.remove('hidden');
                 idxChk.checked  = false;
-                idxChk.disabled = true;
+                idxChk.disabled = !!tableData.isSubquery;
                 modal.classList.remove('hidden');
                 valTa.focus();
             };
