@@ -5055,7 +5055,8 @@ th.calc-nop { opacity: 0.1; font-weight: bold; }
     text-overflow: ellipsis;
     flex: 1;
 }
-.dist-popup-close {
+.dist-popup-close,
+.dist-popup-copy {
     flex-shrink: 0;
     background: none;
     border: none;
@@ -5065,7 +5066,8 @@ th.calc-nop { opacity: 0.1; font-weight: bold; }
     cursor: pointer;
     padding: 0 2px;
 }
-.dist-popup-close:hover { color: #fff; }
+.dist-popup-close:hover,
+.dist-popup-copy:hover { color: #fff; }
 .dist-popup-body {
     padding: 9px 10px;
 }

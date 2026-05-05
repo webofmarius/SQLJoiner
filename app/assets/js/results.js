@@ -160,6 +160,17 @@ const Results = (() => {
         document.getElementById('btn-diff-snapshot').addEventListener('click', _takeSnapshot);
         document.getElementById('btn-diff-exit').addEventListener('click', _clearSnapshot);
 
+        // Close floating popups (dist, lineage) whenever any modal becomes visible
+        new MutationObserver(mutations => {
+            const anyModalOpened = mutations.some(m =>
+                m.target.classList.contains('modal') && !m.target.classList.contains('hidden')
+            );
+            if (anyModalOpened) {
+                _closeDistPopup();
+                _closeLineagePopup();
+            }
+        }).observe(document.body, { subtree: true, attributeFilter: ['class'] });
+
         document.getElementById('btn-compare')
             .addEventListener('click', _toggleCompareMode);
 
@@ -2652,17 +2663,39 @@ const Results = (() => {
         );
         const label = table ? `${table.alias || table.name}.${col}` : col;
 
+        // Build the equivalent SQL (for clipboard copy)
+        const colTick  = `\`${col.replace(/`/g, '``')}\``;
+        let distSql = null;
+        if (table) {
+            const dbPrefix = table.database ? `\`${table.database}\`.\`` : '`';
+            const tableRef = `${dbPrefix}${table.name}\``;
+            distSql = `SELECT ${colTick} AS _val, COUNT(*) AS _cnt\nFROM ${tableRef}\nGROUP BY ${colTick}\nORDER BY _cnt DESC\nLIMIT 20;`;
+        }
+
         _distPopup.innerHTML = '';
         const hdr = document.createElement('div');
         hdr.className = 'dist-popup-hdr';
         const titleEl = document.createElement('span');
         titleEl.className = 'dist-popup-title';
         titleEl.textContent = label;
+        if (distSql) {
+            const copyBtn = document.createElement('button');
+            copyBtn.className = 'dist-popup-copy';
+            copyBtn.title     = 'Copy distribution SQL to clipboard';
+            copyBtn.textContent = '⎘';
+            copyBtn.addEventListener('click', () => {
+                navigator.clipboard.writeText(distSql)
+                    .then(() => App.notify?.('SQL copied to clipboard', 'success'));
+            });
+            hdr.appendChild(titleEl);
+            hdr.appendChild(copyBtn);
+        } else {
+            hdr.appendChild(titleEl);
+        }
         const closeBtn = document.createElement('button');
         closeBtn.className   = 'dist-popup-close';
         closeBtn.textContent = '✕';
         closeBtn.addEventListener('click', _closeDistPopup);
-        hdr.appendChild(titleEl);
         hdr.appendChild(closeBtn);
         _distPopup.appendChild(hdr);
 
