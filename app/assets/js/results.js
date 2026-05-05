@@ -81,6 +81,9 @@ const Results = (() => {
     let _distPreviewHandled = false;
     let _distPopup          = null;
 
+    // Query Diff state
+    let _diffSnapshot = null; // {cols: string[], rows: any[][]}
+
     // Column highlight (SELECT box ☆ checkbox)
     const _highlightedCols = new Set();
 
@@ -153,6 +156,9 @@ const Results = (() => {
                 }
             });
         })();
+
+        document.getElementById('btn-diff-snapshot').addEventListener('click', _takeSnapshot);
+        document.getElementById('btn-diff-exit').addEventListener('click', _clearSnapshot);
 
         document.getElementById('btn-compare')
             .addEventListener('click', _toggleCompareMode);
@@ -615,7 +621,13 @@ const Results = (() => {
 
         _colFilters = {};
         _lastResultIsCsv = !!result._csvSource;
-        _populateTable(result.cols, result.rows, result.col_tables || [], result.col_types || []);
+
+        // If a diff snapshot exists, render the diff instead of plain table
+        if (_diffSnapshot) {
+            _renderDiff(result.cols, result.rows, result.col_tables || [], result.col_types || []);
+        } else {
+            _populateTable(result.cols, result.rows, result.col_tables || [], result.col_types || []);
+        }
         _applyExplainColors(result.cols, result.rows);
 
         // EXPLAIN graph — show/hide toggle button; refresh graph if it was open
@@ -648,6 +660,14 @@ const Results = (() => {
             _calcBtn.disabled = false;
             _calcBtn.title = 'Calculus mode — double-click numeric cells to build expressions';
         }
+
+        // Enable snapshot button; update active state
+        const _snapBtn = document.getElementById('btn-diff-snapshot');
+        if (_snapBtn) {
+            _snapBtn.disabled = false;
+            _snapBtn.classList.toggle('hidden', !!_diffSnapshot);
+        }
+        document.getElementById('btn-diff-exit')?.classList.toggle('hidden', !_diffSnapshot);
 
         // Mirror the server-generated SQL in the preview bar so the user sees
         // exactly what ran (after parameter substitution and JOIN ordering).
@@ -686,6 +706,8 @@ const Results = (() => {
             btnDup.title = 'Highlight duplicate cell values';
         }
         document.getElementById('results-panel').classList.add('hidden');
+        const _snapBtnClear = document.getElementById('btn-diff-snapshot');
+        if (_snapBtnClear) { _snapBtnClear.disabled = true; _snapBtnClear.classList.remove('hidden'); }
         _colFilters = {};
         _lastResultIsCsv = false;
         document.querySelector('#results-table thead').innerHTML = '';
@@ -2335,6 +2357,249 @@ const Results = (() => {
     function _clearExplainColors() {
         document.querySelectorAll('#results-table td.explain-bad, #results-table td.explain-ok, #results-table td.explain-good')
             .forEach(td => td.classList.remove('explain-bad', 'explain-ok', 'explain-good'));
+    }
+
+    // =========================================================================
+    // Query Diff
+    // =========================================================================
+
+    function _takeSnapshot() {
+        if (!_lastResult) return;
+        _diffSnapshot = {
+            cols: _lastResult.cols.slice(),
+            rows: _lastResult.rows.map(r => r.slice()),
+        };
+        document.getElementById('btn-diff-snapshot')?.classList.add('hidden');
+        document.getElementById('btn-diff-exit')?.classList.remove('hidden');
+        App.notify?.('Snapshot taken — re-run the query to see the diff', 'success');
+    }
+
+    function _clearSnapshot() {
+        _diffSnapshot = null;
+        document.getElementById('btn-diff-snapshot')?.classList.remove('hidden');
+        document.getElementById('btn-diff-exit')?.classList.add('hidden');
+        // Re-render current result without diff overlay
+        if (_lastResult) {
+            _populateTable(_lastResult.cols, _lastResult.rows, _lastResult.col_tables || [], _lastResult.col_types || []);
+        }
+    }
+
+    function _hashRow(row) {
+        return JSON.stringify(row);
+    }
+
+    function _computeDiff(snapRows, newRows) {
+        // Build a frequency map of hashed rows from the snapshot
+        const snapMap = new Map();
+        snapRows.forEach((r, i) => {
+            const h = _hashRow(r);
+            if (!snapMap.has(h)) snapMap.set(h, []);
+            snapMap.get(h).push(i);
+        });
+
+        const newMap = new Map();
+        newRows.forEach((r, i) => {
+            const h = _hashRow(r);
+            if (!newMap.has(h)) newMap.set(h, []);
+            newMap.get(h).push(i);
+        });
+
+        // Greedy exact-match pass — consume identical rows from both sides
+        const snapUsed = new Set();
+        const newUsed  = new Set();
+        snapMap.forEach((snapIdxs, h) => {
+            const newIdxs = newMap.get(h) || [];
+            const count   = Math.min(snapIdxs.length, newIdxs.length);
+            for (let i = 0; i < count; i++) {
+                snapUsed.add(snapIdxs[i]);
+                newUsed.add(newIdxs[i]);
+            }
+        });
+
+        const removed = snapRows
+            .map((r, i) => ({ row: r, i }))
+            .filter(({ i }) => !snapUsed.has(i));
+
+        const added = newRows
+            .map((r, i) => ({ row: r, i }))
+            .filter(({ i }) => !newUsed.has(i));
+
+        // Pair leftover removed + added rows positionally → "changed"
+        const diff = [];
+        const pairCount = Math.min(removed.length, added.length);
+        for (let i = 0; i < pairCount; i++) {
+            const changedCols = new Set();
+            const maxCols = Math.max(removed[i].row.length, added[i].row.length);
+            for (let c = 0; c < maxCols; c++) {
+                if (String(removed[i].row[c] ?? '') !== String(added[i].row[c] ?? '')) {
+                    changedCols.add(c);
+                }
+            }
+            diff.push({ type: 'changed', snapRow: removed[i].row, newRow: added[i].row, changedCols });
+        }
+        for (let i = pairCount; i < removed.length; i++) {
+            diff.push({ type: 'removed', snapRow: removed[i].row, newRow: null, changedCols: new Set() });
+        }
+        for (let i = pairCount; i < added.length; i++) {
+            diff.push({ type: 'added', snapRow: null, newRow: added[i].row, changedCols: new Set() });
+        }
+
+        return diff;
+    }
+
+    function _renderDiff(newCols, newRows, colTables, colTypes) {
+        const snapCols = _diffSnapshot.cols;
+        const snapRows = _diffSnapshot.rows;
+        const colsMatch = snapCols.length === newCols.length &&
+            snapCols.every((c, i) => c === newCols[i]);
+
+        // Always render the table with the new columns/data as base
+        _populateTable(newCols, newRows, colTables, colTypes);
+
+        const tbody = document.querySelector('#results-table tbody');
+        if (!tbody) return;
+
+        // Column mismatch banner
+        if (!colsMatch) {
+            const bannerTr = document.createElement('tr');
+            const bannerTd = document.createElement('td');
+            bannerTd.colSpan = newCols.length + 1;
+            bannerTd.className = 'diff-banner diff-banner--warn';
+            bannerTd.textContent = '⚠ Column structure changed — showing add/remove only, no cell-level diff';
+            bannerTr.appendChild(bannerTd);
+            tbody.insertBefore(bannerTr, tbody.firstChild);
+        }
+
+        const diff = _computeDiff(snapRows, newRows);
+        if (!diff.length) {
+            const bannerTr = document.createElement('tr');
+            const bannerTd = document.createElement('td');
+            bannerTd.colSpan = newCols.length + 1;
+            bannerTd.className = 'diff-banner diff-banner--same';
+            bannerTd.textContent = '✓ No differences — result is identical to snapshot';
+            bannerTr.appendChild(bannerTd);
+            tbody.insertBefore(bannerTr, tbody.firstChild);
+            return;
+        }
+
+        // Build an index of new rows already rendered as DOM trs (skip # col)
+        const existingTrs = Array.from(tbody.querySelectorAll('tr:not(.diff-banner-tr)'));
+
+        // Mark existing rows that are part of the diff
+        // Strategy: re-render the tbody from scratch using diff output
+        tbody.innerHTML = '';
+
+        // Summary banner
+        const addedCount   = diff.filter(d => d.type === 'added').length;
+        const removedCount = diff.filter(d => d.type === 'removed').length;
+        const changedCount = diff.filter(d => d.type === 'changed').length;
+        const parts = [];
+        if (addedCount)   parts.push(`+${addedCount} added`);
+        if (removedCount) parts.push(`−${removedCount} removed`);
+        if (changedCount) parts.push(`~${changedCount} changed`);
+
+        if (parts.length) {
+            const sumTr = document.createElement('tr');
+            sumTr.className = 'diff-banner-tr';
+            const sumTd = document.createElement('td');
+            sumTd.colSpan = newCols.length + 1;
+            sumTd.className = 'diff-banner diff-banner--summary';
+            sumTd.textContent = parts.join('  ·  ');
+            sumTr.appendChild(sumTd);
+            tbody.appendChild(sumTr);
+        }
+
+        // Re-render unchanged rows from newRows, interleaved with diff rows
+        // Build a set of new row indices that appear in changed/added diff entries
+        const diffNewIdxSet = new Set();
+        const usedNewHashes = new Map();
+        _diffSnapshot.rows.forEach(r => {
+            const h = _hashRow(r);
+            usedNewHashes.set(h, (usedNewHashes.get(h) || 0) + 1);
+        });
+
+        newRows.forEach((row, rowIdx) => {
+            const h   = _hashRow(row);
+            const cnt = usedNewHashes.get(h) || 0;
+            if (cnt > 0) {
+                usedNewHashes.set(h, cnt - 1); // this row matched a snapshot row exactly
+            } else {
+                diffNewIdxSet.add(rowIdx); // this row is new/changed
+            }
+        });
+
+        let diffCursor = 0;
+        let rowNum     = 1;
+
+        newRows.forEach((row, rowIdx) => {
+            // Before each new/changed row, flush any pending 'removed' diff entries
+            if (diffNewIdxSet.has(rowIdx)) {
+                // Emit any queued removed rows first
+                while (diffCursor < diff.length && diff[diffCursor].type === 'removed') {
+                    tbody.appendChild(_buildDiffTr(diff[diffCursor].snapRow, newCols, 'removed', new Set(), rowNum++));
+                    diffCursor++;
+                }
+                if (diffCursor < diff.length) {
+                    const entry = diff[diffCursor];
+                    if (entry.type === 'added') {
+                        tbody.appendChild(_buildDiffTr(row, newCols, 'added', new Set(), rowNum++));
+                    } else if (entry.type === 'changed') {
+                        tbody.appendChild(_buildDiffTr(entry.snapRow, newCols, 'removed', entry.changedCols, rowNum));
+                        tbody.appendChild(_buildDiffTr(row, newCols, 'added', entry.changedCols, rowNum++));
+                    }
+                    diffCursor++;
+                }
+            } else {
+                tbody.appendChild(_buildDiffTr(row, newCols, 'same', new Set(), rowNum++));
+            }
+        });
+
+        // Flush any remaining diff entries (extra removed rows at the end)
+        while (diffCursor < diff.length) {
+            const entry = diff[diffCursor++];
+            if (entry.type === 'removed') {
+                tbody.appendChild(_buildDiffTr(entry.snapRow, newCols, 'removed', new Set(), rowNum++));
+            } else if (entry.type === 'added') {
+                tbody.appendChild(_buildDiffTr(entry.newRow, newCols, 'added', new Set(), rowNum++));
+            }
+        }
+    }
+
+    function _buildDiffTr(row, cols, type, changedCols, rowNum) {
+        const tr = document.createElement('tr');
+        if (type === 'added')   tr.classList.add('tr-diff-added');
+        if (type === 'removed') tr.classList.add('tr-diff-removed');
+
+        const tdNum = document.createElement('td');
+        tdNum.className   = 'td-row-num';
+        tdNum.textContent = type === 'removed' ? '−' : type === 'added' ? '+' : String(rowNum);
+        tr.appendChild(tdNum);
+
+        cols.forEach((col, colIdx) => {
+            const td  = document.createElement('td');
+            const val = row ? row[colIdx] : null;
+
+            if (val === null || val === undefined) {
+                td.textContent = 'NULL';
+                td.className = 'is-null';
+            } else {
+                td.textContent = val;
+                if (_isNumeric(val)) td.classList.add('is-number');
+            }
+
+            if (_isDelimiterColumn(col)) {
+                td.className = 'td-delimiter';
+                td.textContent = '|||';
+            }
+
+            if (changedCols.has(colIdx)) {
+                td.classList.add('td-diff-changed');
+            }
+
+            tr.appendChild(td);
+        });
+
+        return tr;
     }
 
     // =========================================================================

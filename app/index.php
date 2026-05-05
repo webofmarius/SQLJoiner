@@ -285,6 +285,7 @@
                         <div class="results-help-row"><kbd>Double-click</kbd> Add number to Calculus</div>
                         <div class="results-help-row"><kbd>Alt + J</kbd> Copy row as JSON</div>
                         <div class="results-help-row"><kbd>Alt + C</kbd> Load CSV / XLSX file</div>
+                        <div class="results-help-row"><kbd>⊙ Snapshot</kbd> Snapshot result for diff</div>
                     </div>
                     <div class="results-help-section">
                         <span class="results-help-group">Header</span>
@@ -301,8 +302,10 @@
                 <button id="btn-calculus" title="Run a query first to enable Calculus mode" disabled>∑ Calculus</button>
                 <button id="btn-compare-datasets" title="Compare current result against a CSV">⇌ Compare Datasets</button>
                 <button id="btn-exit-compare-datasets" class="hidden is-active" title="Exit dataset comparison">✕ Exit Compare</button>
-                <button id="btn-search-cols" title="Toggle column search inputs">⌕ Search</button>
+                <button id="btn-diff-snapshot" title="Snapshot current result for compare comparison" disabled>⊙ Diff Snapshot</button>
+                <button id="btn-diff-exit" class="hidden is-active" title="Exit compare mode">✕ Exit Diff</button>
                 <button id="btn-explain-graph" class="hidden" title="Toggle EXPLAIN graph view">⎇ Explain Graph</button>
+                <button id="btn-search-cols" title="Toggle column search inputs">⌕ Search</button>
             </div>
             <span id="results-meta"></span>
             <div id="results-actions">
@@ -643,10 +646,6 @@
                 <div class="compare-ds-b">
                     <div class="compare-ds-b-header">
                         <strong>Dataset B — CSV</strong>
-                        <label class="compare-ds-header-chk">
-                            <input type="checkbox" id="chk-compare-csv-header" checked>
-                            First row is header
-                        </label>
                     </div>
                     <div class="compare-ds-b-actions">
                         <button type="button" id="btn-compare-ds-load-file">↑ Load CSV file</button>
@@ -659,6 +658,10 @@
                 <div class="form-actions">
                     <button type="button" id="btn-compare-ds-cancel">Cancel</button>
                     <button type="button" id="btn-compare-ds-run" class="primary" disabled>Compare</button>
+                    <label class="compare-ds-header-chk">
+                        <input type="checkbox" id="chk-compare-csv-header" checked>
+                        First row is header
+                    </label>
                 </div>
             </div>
         </div>

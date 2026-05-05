@@ -3548,11 +3548,13 @@ tr.calculus-hl > td {
     color: #fff;
 }
 
-#btn-exit-compare-datasets {
+#btn-exit-compare-datasets,
+#btn-diff-exit {
     background: #e53935;
     color: #fff;
 }
-#btn-exit-compare-datasets:hover {
+#btn-exit-compare-datasets:hover,
+#btn-diff-exit:hover {
     background: #c62828;
 }
 
@@ -4990,6 +4992,37 @@ th.calc-nop { opacity: 0.1; font-weight: bold; }
     border-bottom: 2px solid rgba(255,255,255,0.2);
 }
 
+/* ── Query Diff ─────────────────────────────────────────────── */
+.tr-diff-added  { background: rgba(39, 174, 96,  0.15); }
+.tr-diff-removed{ background: rgba(192, 57,  43,  0.15); }
+.tr-diff-added  td { border-left: 3px solid #27ae60; }
+.tr-diff-removed td { border-left: 3px solid #c0392b; }
+.tr-diff-added  .td-row-num { color: #27ae60; font-weight: 700; }
+.tr-diff-removed .td-row-num { color: #c0392b; font-weight: 700; }
+.td-diff-changed {
+    background: rgba(241, 196, 15, 0.22) !important;
+    outline: 1px solid rgba(241, 196, 15, 0.5);
+}
+.diff-banner-tr td, .diff-banner {
+    padding: 4px 10px;
+    font-size: 11px;
+    font-style: italic;
+    text-align: center;
+}
+.diff-banner--summary {
+    background: #1a1a2e;
+    color: #a0a0cc;
+    border-bottom: 1px solid #2d2d50;
+}
+.diff-banner--same {
+    background: #0b1f0f;
+    color: #90ee90;
+}
+.diff-banner--warn {
+    background: #251a00;
+    color: #ffd488;
+}
+
 /* ── Distribution Preview Popup ────────────────────────────── */
 .dist-popup {
     position: fixed;
@@ -5275,7 +5308,7 @@ th.calc-nop { opacity: 0.1; font-weight: bold; }
 .compare-ds-info { font-size: 12px; color: var(--text-muted, #888); margin-bottom: 10px; min-height: 16px; }
 .compare-ds-b { border: 1px solid var(--border, #444); border-radius: 4px; padding: 10px 12px; margin-bottom: 10px; }
 .compare-ds-b-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
-.compare-ds-header-chk { display: flex; align-items: center; gap: 5px; font-size: 12px; cursor: pointer; }
+.compare-ds-header-chk { display: flex; align-items: center; gap: 5px; font-size: 12px; cursor: pointer; margin-left: auto; }
 .compare-ds-b-actions { display: flex; gap: 8px; margin-bottom: 8px; }
 #compare-ds-paste-area { width: 100%; box-sizing: border-box; resize: vertical; font-family: monospace; font-size: 12px; background: var(--bg-input, #1a1a1a); color: var(--text, #ccc); border: 1px solid var(--border, #444); border-radius: 4px; padding: 6px 8px; margin-bottom: 6px; }
 .compare-ds-error { font-size: 12px; color: var(--error, #e53935); background: var(--error-dim, rgba(229,57,53,.12)); border: 1px solid color-mix(in srgb, var(--error, #e53935) 35%, transparent); border-radius: 4px; padding: 7px 10px; margin-bottom: 8px; }
