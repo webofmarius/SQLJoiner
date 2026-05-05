@@ -274,6 +274,27 @@
         <div id="resizer-results"></div>
         <div id="results-header">
             <div id="results-actions-left">
+                <button id="btn-results-help" title="Shortcuts &amp; tips">?</button>
+                <div id="results-help-popup" class="hidden">
+                    <div class="results-help-section">
+                        <span class="results-help-group">Cell</span>
+                        <div class="results-help-row"><kbd>Click</kbd> Select cell</div>
+                        <div class="results-help-row"><kbd>Right-click</kbd> Cycle cell color</div>
+                        <div class="results-help-row"><kbd>Alt + Click</kbd> Highlight / unhighlight row</div>
+                        <div class="results-help-row"><kbd>Alt + Right-click</kbd> Trace column origin</div>
+                        <div class="results-help-row"><kbd>Double-click</kbd> Add number to Calculus</div>
+                        <div class="results-help-row"><kbd>Alt + J</kbd> Copy row as JSON</div>
+                        <div class="results-help-row"><kbd>Alt + C</kbd> Load CSV / XLSX file</div>
+                    </div>
+                    <div class="results-help-section">
+                        <span class="results-help-group">Header</span>
+                        <div class="results-help-row"><kbd>Double-click</kbd> Add column to WHERE</div>
+                        <div class="results-help-row"><kbd>Click</kbd> Toggle SELECT checkbox</div>
+                        <div class="results-help-row"><kbd>Right-click</kbd> Highlight SELECT checkbox</div>
+                        <div class="results-help-row"><kbd>Alt + Click</kbd> Copy <code>`alias`.`column`</code></div>
+                        <div class="results-help-row"><kbd>Alt + Right-click</kbd> Preview column distribution</div>
+                    </div>
+                </div>
                 <button id="btn-compare" title="Compare cell values">⊜ Compare</button>
                 <button id="btn-duplicates" title="Highlight duplicate cell values">⧉ Duplicates</button>
                 <button id="btn-toggle-dim" title="Dim unhighlighted cells">☾ Dim</button>
@@ -296,9 +317,8 @@
             </div>
         </div>
         <div class="results-legend">
-            <span class="legend-default">Click to cycle cell color · Right-click to select · Alt+click to highlight/unhighlight row · Alt+Right-click to trace column origin · Double-click a number to add to Calculus · Alt+J to copy row as JSON · Alt+C to load CSV · <strong>Header:</strong> Double-click to add to WHERE · Click to toggle SELECT checkbox · Right-click highlight SELECT checkbox · Alt+click to copy `alias`.`column` · Alt+Right-click to preview column distribution</span>
-            <span id="legend-compare" class="hidden"> · <strong>Compare mode:</strong> click header to compare column · click cell to compare row · right-click cell to compare column</span>
-            <span id="legend-duplicates" class="hidden"> · <strong>Duplicates mode:</strong> click header to scan column for duplicates · click cell to scan row · right-click cell to scan column</span>
+            <span id="legend-compare" class="hidden"><strong>Compare mode:</strong> click header to compare column · click cell to compare column · right-click cell to compare row</span>
+            <span id="legend-duplicates" class="hidden"><strong>Duplicates mode:</strong> click header to scan column for duplicates · click cell to scan column · right-click cell to scan row</span>
         </div>
         <div id="results-error" class="hidden"></div>
         <div id="results-table-wrapper">

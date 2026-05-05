@@ -140,6 +140,20 @@ const Results = (() => {
                 }
             });
 
+        (function () {
+            const helpBtn   = document.getElementById('btn-results-help');
+            const helpPopup = document.getElementById('results-help-popup');
+            helpBtn.addEventListener('click', e => {
+                e.stopPropagation();
+                helpPopup.classList.toggle('hidden');
+            });
+            document.addEventListener('click', e => {
+                if (!helpPopup.classList.contains('hidden') && !helpPopup.contains(e.target) && e.target !== helpBtn) {
+                    helpPopup.classList.add('hidden');
+                }
+            });
+        })();
+
         document.getElementById('btn-compare')
             .addEventListener('click', _toggleCompareMode);
 
@@ -2085,7 +2099,7 @@ const Results = (() => {
                     td.classList.add(_colThemes[colIdx]);
                 }
 
-                // Left-click: cycle color / compare row / duplicate row
+                // Left-click: eval mode / bind mode intercept, then compare / duplicates / normal select
                 td.addEventListener('click', e => {
                     // Alt+click: highlight/unhighlight entire row
                     if (e.altKey) {
@@ -2094,24 +2108,23 @@ const Results = (() => {
                         _altRightClickRow(tr);
                         return;
                     }
+                    if (_calculusEvalMode) {
+                        e.stopPropagation();
+                        _calcApplyEval(td);
+                        return;
+                    }
+                    if (_calculusBindModeRowId !== null) {
+                        e.stopPropagation();
+                        _calcTryBind(td);
+                        return;
+                    }
                     if (_compareMode) {
-                        _compareRow(tr, td);
-                        return;
+                        _compareCell(td);
+                    } else if (_duplicateMode) {
+                        _duplicateCell(td);
+                    } else {
+                        _selectCell(td);
                     }
-                    if (_duplicateMode) {
-                        _duplicateRow(tr, td);
-                        return;
-                    }
-                    const currentTheme = THEMES.find(t => td.classList.contains(t));
-                    const currentIndex = THEMES.indexOf(currentTheme);
-                    if (currentTheme) td.classList.remove(currentTheme);
-                    const nextTheme = THEMES[currentIndex + 1];
-                    if (nextTheme) {
-                        td.classList.add(nextTheme);
-                        _dimPinCol(colIdx);
-                    }
-                    _applyDimVisibility();
-                    _applyDimRowVisibility();
                 });
 
                 // Double-click: Calculus mode — add numeric cell to toolbox
@@ -2157,7 +2170,7 @@ const Results = (() => {
                     }
                 });
 
-                // Right-click: select cell / calculus / compare cell / duplicate cell; Alt+right-click: lineage popup
+                // Right-click: cycle color / compare row / duplicate row; Alt+right-click: lineage popup
                 td.addEventListener('contextmenu', e => {
                     e.preventDefault();
                     e.stopPropagation(); // Don't trigger header contextmenu if somehow bubbled
@@ -2171,30 +2184,28 @@ const Results = (() => {
                         return;
                     }
 
-                    if (_calculusEvalMode) {
-                        e.stopPropagation();
-                        _calcApplyEval(td);
-                        return;
-                    }
-                    if (_calculusBindModeRowId !== null) {
-                        e.stopPropagation();
-                        _calcTryBind(td);
-                        return;
-                    }
-
-                    // Compare mode: right-click compares this cell against the column
+                    // Compare mode: right-click compares all cells in the row against this cell
                     if (_compareMode) {
-                        _compareCell(td);
+                        _compareRow(tr, td);
                         return;
                     }
 
-                    // Duplicate mode: right-click scans this cell for duplicates
+                    // Duplicate mode: right-click searches for duplicates within the row
                     if (_duplicateMode) {
-                        _duplicateCell(td);
+                        _duplicateRow(tr, td);
                         return;
                     }
 
-                    _selectCell(td);
+                    const currentTheme = THEMES.find(t => td.classList.contains(t));
+                    const currentIndex = THEMES.indexOf(currentTheme);
+                    if (currentTheme) td.classList.remove(currentTheme);
+                    const nextTheme = THEMES[currentIndex + 1];
+                    if (nextTheme) {
+                        td.classList.add(nextTheme);
+                        _dimPinCol(colIdx);
+                    }
+                    _applyDimVisibility();
+                    _applyDimRowVisibility();
                 });
 
                 // Drag to WHERE / GROUP BY / HAVING / ORDER BY drop zones
