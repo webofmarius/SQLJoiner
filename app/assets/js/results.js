@@ -1504,12 +1504,13 @@ const Results = (() => {
         });
 
         // Strategy 2: scan _lastResult cols + col_tables with _computeColKey
+        // Use i + 1 so the index aligns with the ths array (ths[0] is the row-num th)
         if (colIdx === -1 && _lastResult) {
             const lcols   = _lastResult.cols       || [];
             const ltables = _lastResult.col_tables || [];
             lcols.forEach((col, i) => {
                 if (colIdx !== -1) return;
-                if (_computeColKey(col, ltables[i] || '', i, ltables) === colKey) colIdx = i;
+                if (_computeColKey(col, ltables[i] || '', i, ltables) === colKey) colIdx = i + 1;
             });
         }
 
@@ -1526,7 +1527,7 @@ const Results = (() => {
         if (colIdx === -1) return;
 
         ths[colIdx].classList.toggle('col-highlighted', on);
-        tbody.querySelectorAll(`tr td:nth-child(${colIdx + 2})`).forEach(td => {
+        tbody.querySelectorAll(`tr td:nth-child(${colIdx + 1})`).forEach(td => {
             td.classList.toggle('col-highlighted', on);
         });
 
