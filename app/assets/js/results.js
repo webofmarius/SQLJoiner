@@ -2643,6 +2643,27 @@ const Results = (() => {
         document.addEventListener('keydown', e => {
             if (e.key === 'Escape' && !_distPopup.classList.contains('hidden')) _closeDistPopup();
         });
+
+        // Drag via header
+        _distPopup.addEventListener('mousedown', e => {
+            const hdr = e.target.closest('.dist-popup-hdr');
+            if (!hdr || e.target.closest('button')) return;
+            e.preventDefault();
+            const startX = e.clientX - _distPopup.offsetLeft;
+            const startY = e.clientY - _distPopup.offsetTop;
+            _distPopup.style.userSelect = 'none';
+            const onMove = e => {
+                _distPopup.style.left = (e.clientX - startX) + 'px';
+                _distPopup.style.top  = (e.clientY - startY) + 'px';
+            };
+            const onUp = () => {
+                _distPopup.style.userSelect = '';
+                document.removeEventListener('mousemove', onMove);
+                document.removeEventListener('mouseup',   onUp);
+            };
+            document.addEventListener('mousemove', onMove);
+            document.addEventListener('mouseup',   onUp);
+        });
     }
 
     function _closeDistPopup() {
@@ -2679,7 +2700,7 @@ const Results = (() => {
         if (table) {
             const dbPrefix = table.database ? `\`${table.database}\`.\`` : '`';
             const tableRef = `${dbPrefix}${table.name}\``;
-            distSql = `SELECT ${colTick} AS _val, COUNT(*) AS _cnt\nFROM ${tableRef}\nGROUP BY ${colTick}\nORDER BY _cnt DESC\nLIMIT 20;`;
+            distSql = `SELECT ${colTick} AS _val, COUNT(*) AS _cnt\nFROM ${tableRef}\nGROUP BY ${colTick}\nORDER BY _cnt DESC\nLIMIT 10;`;
         }
 
         _distPopup.innerHTML = '';
@@ -2761,7 +2782,7 @@ const Results = (() => {
         // Sort by count desc, cap at 20
         const sorted = [...countMap.entries()]
             .sort((a, b) => b[1] - a[1])
-            .slice(0, 20)
+            .slice(0, 10)
             .map(([val, cnt]) => ({ val: val === null ? null : val, cnt }));
 
         _buildDistChart(body, sorted, total, col, minVal, maxVal, colIdx);
@@ -2896,7 +2917,7 @@ const Results = (() => {
         // Footer
         const footer = document.createElement('div');
         footer.className   = 'dist-popup-footer';
-        footer.textContent = isCapped ? 'Top 20 values · based on fetched rows' : 'Based on fetched rows';
+        footer.textContent = isCapped ? 'Top 10 values · based on fetched rows' : 'Based on fetched rows';
         container.appendChild(footer);
     }
 

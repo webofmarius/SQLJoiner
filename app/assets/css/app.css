@@ -5053,6 +5053,7 @@ th.calc-nop { opacity: 0.1; font-weight: bold; }
     padding: 7px 10px 6px;
     background: #12122a;
     border-bottom: 1px solid #2d2d50;
+    cursor: move;
     gap: 6px;
 }
 .dist-popup-caption {
@@ -5083,6 +5084,7 @@ th.calc-nop { opacity: 0.1; font-weight: bold; }
 }
 .dist-popup-close:hover,
 .dist-popup-copy:hover { color: #fff; }
+.dist-popup-hdr button { cursor: pointer; }
 .dist-popup-body {
     padding: 9px 10px;
 }
