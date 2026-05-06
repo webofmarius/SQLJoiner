@@ -1682,19 +1682,24 @@ const Results = (() => {
 
             // Tooltip: show full schema.table origin on hover; also apply table color
             const colTableAlias = colTables[colIdx] || '';
+            const _distHint = 'Alt + right click: Preview Distribution column';
             if (colTableAlias) {
                 const colTableLc  = colTableAlias.toLowerCase();
                 const originTable = (State.tables || []).find(t => t.alias?.toLowerCase() === colTableLc)
                                  ?? (State.tables || []).find(t => t.name?.toLowerCase()  === colTableLc);
                 if (originTable) {
-                    th.title = originTable.database
+                    th.title = (originTable.database
                         ? `${originTable.database}.${originTable.name}`
-                        : originTable.name;
+                        : originTable.name) + `\n\n${_distHint}`;
                     if (originTable.color) {
                         th.style.backgroundColor = originTable.color;
                         th.style.color = _readableTextColor(originTable.color);
                     }
+                } else {
+                    th.title = _distHint;
                 }
+            } else {
+                th.title = _distHint;
             }
 
             // Header label: prefix with table alias when possible (e.g. "u.id").
