@@ -2884,9 +2884,7 @@ const Canvas = (() => {
         const card = document.querySelector(`.table-card[data-table-id="${table.id}"]`);
         if (!card) return;
 
-        const cx = card.offsetLeft + card.offsetWidth / 2;
-        const cy = card.offsetTop  + card.offsetHeight / 2;
-        _scrollWrapperToLogicalCenter(cx, cy);
+        _scrollToCardTop(card);
 
         // Find the column element
         const colEl = card.querySelector(`.table-card__col[data-col="${colName}"]`);
@@ -2983,6 +2981,28 @@ const Canvas = (() => {
         _scrollWrapperToLogicalCenter((minX + maxX) / 2, (minY + maxY) / 2, behavior);
     }
 
+    function _scrollToJoinId(joinId) {
+        const path = document.getElementById('jpath-' + joinId);
+        if (!path) return;
+
+        // Highlight using the same class as search focus
+        document.querySelectorAll('#join-lines path.join-line-pulse')
+            .forEach(p => p.classList.remove('join-line-pulse'));
+        path.classList.add('join-line-pulse');
+        path.addEventListener('animationend', () => path.classList.remove('join-line-pulse'), { once: true });
+
+        // Scroll canvas to midpoint of the path
+        const mid = path.getPointAtLength(path.getTotalLength() / 2);
+        const s   = _canvasContentScale();
+        const wrapper = document.getElementById('canvas-wrapper');
+        if (!wrapper) return;
+        wrapper.scrollTo({
+            left: mid.x * s - wrapper.clientWidth / 2,
+            top:  mid.y * s - 20,
+            behavior: 'smooth',
+        });
+    }
+
     return {
         init,
         renderTable,
@@ -3002,6 +3022,7 @@ const Canvas = (() => {
         toggleOverviewZoom,
         scrollToTableId:       _scrollToTableId,
         scrollToTableIdTop:    _scrollToTableIdTop,
+        scrollToJoinId:        _scrollToJoinId,
         scrollToLogicalBoundingBox,
         startPan(e) {
             const wrapper   = document.getElementById('canvas-wrapper');

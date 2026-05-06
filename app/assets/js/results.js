@@ -165,10 +165,7 @@ const Results = (() => {
             const anyModalOpened = mutations.some(m =>
                 m.target.classList.contains('modal') && !m.target.classList.contains('hidden')
             );
-            if (anyModalOpened) {
-                _closeDistPopup();
-                _closeLineagePopup();
-            }
+            if (anyModalOpened) _closeFloatingPopups();
         }).observe(document.body, { subtree: true, attributeFilter: ['class'] });
 
         document.getElementById('btn-compare')
@@ -785,7 +782,13 @@ const Results = (() => {
         }
     }
 
+    function _closeFloatingPopups() {
+        _closeDistPopup();
+        _closeLineagePopup();
+    }
+
     function _setCollapsed(collapsed) {
+        _closeFloatingPopups();
         const panel = document.getElementById('results-panel');
         const btn   = document.getElementById('btn-toggle-results');
         panel.classList.toggle('is-collapsed', collapsed);
@@ -804,6 +807,7 @@ const Results = (() => {
     }
 
     function _setTall(tall) {
+        _closeFloatingPopups();
         const panel = document.getElementById('results-panel');
         const btn   = document.getElementById('btn-results-tall');
         panel.classList.toggle('is-tall', tall);
@@ -832,6 +836,7 @@ const Results = (() => {
     }
 
     function _setFullscreen(full) {
+        _closeFloatingPopups();
         const panel = document.getElementById('results-panel');
         const btn   = document.getElementById('btn-results-fullscreen');
         panel.classList.toggle('is-fullscreen', full);
@@ -864,6 +869,7 @@ const Results = (() => {
                 panel.classList.contains('is-tall') ||
                 panel.classList.contains('is-fullscreen')) return;
 
+            _closeFloatingPopups();
             e.preventDefault();
 
             const startY = e.clientY;
@@ -1215,14 +1221,18 @@ const Results = (() => {
     // -------------------------------------------------------------------------
 
     /**
-     * Find the strongest index key ('PRI' > 'UNI' > 'MUL') for a column name
-     * by searching across all tables currently in State.
+     * Find the strongest index key ('PRI' > 'UNI' > 'MUL') for a column name.
+     * When tableAlias is provided, only the matching table is searched so that
+     * two columns with the same name from different tables don't bleed badges.
      */
-    function _getColKey(colName) {
+    function _getColKey(colName, tableAlias = '') {
         const bare     = colName.includes('.') ? colName.split('.').pop() : colName;
         const priority = { PRI: 3, UNI: 2, MUL: 1 };
+        const aliasLc  = tableAlias.toLowerCase();
         let best = '';
         for (const table of (State.tables ?? [])) {
+            if (aliasLc && (table.alias || '').toLowerCase() !== aliasLc
+                        && (table.name  || '').toLowerCase() !== aliasLc) continue;
             const col = (table.columns ?? []).find(c => c.name === bare);
             if (col?.key && (priority[col.key] ?? 0) > (priority[best] ?? 0)) {
                 best = col.key;
@@ -1646,7 +1656,7 @@ const Results = (() => {
         trHead.appendChild(thRowNum);
         cols.forEach((col, colIdx) => {
             const th  = document.createElement('th');
-            const key = _getColKey(col);
+            const key = _getColKey(col, colTables[colIdx] || '');
             if (key) {
                 const badge = document.createElement('span');
                 if (key === 'PRI') {
@@ -2675,9 +2685,10 @@ const Results = (() => {
         _distPopup.innerHTML = '';
         const hdr = document.createElement('div');
         hdr.className = 'dist-popup-hdr';
-        const titleEl = document.createElement('span');
-        titleEl.className = 'dist-popup-title';
-        titleEl.textContent = label;
+        const captionEl = document.createElement('span');
+        captionEl.className = 'dist-popup-caption';
+        captionEl.textContent = 'Distribution per column';
+        hdr.appendChild(captionEl);
         if (distSql) {
             const copyBtn = document.createElement('button');
             copyBtn.className = 'dist-popup-copy';
@@ -2687,10 +2698,7 @@ const Results = (() => {
                 navigator.clipboard.writeText(distSql)
                     .then(() => App.notify?.('SQL copied to clipboard', 'success'));
             });
-            hdr.appendChild(titleEl);
             hdr.appendChild(copyBtn);
-        } else {
-            hdr.appendChild(titleEl);
         }
         const closeBtn = document.createElement('button');
         closeBtn.className   = 'dist-popup-close';
@@ -2701,6 +2709,10 @@ const Results = (() => {
 
         const body = document.createElement('div');
         body.className = 'dist-popup-body';
+        const titleEl = document.createElement('div');
+        titleEl.className = 'dist-popup-title';
+        titleEl.textContent = label;
+        body.appendChild(titleEl);
         _distPopup.appendChild(body);
         _distPopup.classList.remove('hidden');
         _positionDistPopup(th);
@@ -2726,17 +2738,37 @@ const Results = (() => {
         }
 
         const total = _lastResult.rows.length;
+
+        // Compute min/max across all non-null values before capping (numeric and dates only)
+        const allNonNull = [...countMap.keys()].filter(v => v !== null);
+        let minVal = null, maxVal = null;
+        if (allNonNull.length) {
+            const nums = allNonNull.map(Number);
+            if (nums.every(n => !isNaN(n))) {
+                minVal = Math.min(...nums);
+                maxVal = Math.max(...nums);
+            } else {
+                const dateRe = /^\d{4}-\d{2}-\d{2}/;
+                if (allNonNull.every(v => dateRe.test(v))) {
+                    const sorted = [...allNonNull].sort();
+                    minVal = sorted[0];
+                    maxVal = sorted[sorted.length - 1];
+                }
+                // strings: leave minVal/maxVal as null — no min/max shown
+            }
+        }
+
         // Sort by count desc, cap at 20
         const sorted = [...countMap.entries()]
             .sort((a, b) => b[1] - a[1])
             .slice(0, 20)
             .map(([val, cnt]) => ({ val: val === null ? null : val, cnt }));
 
-        _buildDistChart(body, sorted, total, col);
+        _buildDistChart(body, sorted, total, col, minVal, maxVal, colIdx);
         _positionDistPopup(th);
     }
 
-    function _buildDistChart(container, rows, total, col) {
+    function _buildDistChart(container, rows, total, col, minVal = null, maxVal = null, colIdx = -1) {
         if (!rows.length) {
             container.innerHTML = '<span class="dist-popup-unavail">No data in current result.</span>';
             return;
@@ -2814,6 +2846,53 @@ const Results = (() => {
         });
         container.appendChild(chart);
 
+        // Min / Max
+        if (minVal !== null || maxVal !== null) {
+            const divTop = document.createElement('div');
+            divTop.className = 'dist-popup-divider';
+            container.appendChild(divTop);
+
+            const minmax = document.createElement('div');
+            minmax.className = 'dist-popup-minmax';
+            const fmt = v => (typeof v === 'number' ? v.toLocaleString() : String(v));
+            const _highlightCell = (targetVal, theme = THEMES[0]) => {
+                if (colIdx === -1) return;
+                const tbody = document.querySelector('#results-table tbody');
+                if (!tbody) return;
+                const isNum = typeof targetVal === 'number';
+                for (const tr of tbody.querySelectorAll('tr')) {
+                    const td = tr.querySelectorAll('td')[colIdx + 1]; // +1 for row-num cell
+                    if (!td) continue;
+                    const raw = td.dataset.raw ?? td.textContent;
+                    const match = isNum ? Number(raw) === targetVal : String(raw) === String(targetVal);
+                    if (!match) continue;
+                    if (td.classList.contains(theme)) {
+                        td.classList.remove(theme);
+                    } else {
+                        THEMES.forEach(t => td.classList.remove(t));
+                        td.classList.add(theme);
+                        td.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+                    }
+                    break;
+                }
+            };
+            const minEl = document.createElement('span');
+            minEl.className = 'dist-popup-minmax-item dist-popup-minmax-item--min';
+            minEl.innerHTML = `<span class="dist-popup-minmax-label">MIN</span><span class="dist-popup-minmax-val">${fmt(minVal)}</span>`;
+            minEl.addEventListener('click', () => _highlightCell(minVal));
+            const maxEl = document.createElement('span');
+            maxEl.className = 'dist-popup-minmax-item dist-popup-minmax-item--max';
+            maxEl.innerHTML = `<span class="dist-popup-minmax-label">MAX</span><span class="dist-popup-minmax-val">${fmt(maxVal)}</span>`;
+            maxEl.addEventListener('click', () => _highlightCell(maxVal, THEMES[3]));
+            minmax.appendChild(minEl);
+            minmax.appendChild(maxEl);
+            container.appendChild(minmax);
+
+            const divBot = document.createElement('div');
+            divBot.className = 'dist-popup-divider';
+            container.appendChild(divBot);
+        }
+
         // Footer
         const footer = document.createElement('div');
         footer.className   = 'dist-popup-footer';
@@ -2878,14 +2957,14 @@ const Results = (() => {
         // Header
         const hdr = document.createElement('div');
         hdr.className = 'lineage-popup-hdr';
-        const titleEl = document.createElement('span');
-        titleEl.className   = 'lineage-popup-title';
-        titleEl.textContent = col;
+        const caption = document.createElement('div');
+        caption.className   = 'lineage-popup-caption';
+        caption.textContent = 'Column Lineage Trace';
         const closeBtn = document.createElement('button');
         closeBtn.className   = 'lineage-popup-close';
         closeBtn.textContent = '✕';
         closeBtn.addEventListener('click', _closeLineagePopup);
-        hdr.appendChild(titleEl);
+        hdr.appendChild(caption);
         hdr.appendChild(closeBtn);
         _lineagePopup.appendChild(hdr);
 
@@ -2894,6 +2973,74 @@ const Results = (() => {
         _lineagePopup.appendChild(body);
         _lineagePopup.classList.remove('hidden');
         _positionLineagePopup(td);
+
+        // Shared helper
+        const _focusTable = (tblId) => {
+            if (typeof Canvas !== 'undefined') Canvas.scrollToTableIdTop(tblId);
+            const card = document.querySelector(`.table-card[data-table-id="${tblId}"]`);
+            if (card) {
+                card.classList.remove('explain-card-pulse');
+                void card.offsetWidth;
+                card.classList.add('explain-card-pulse');
+                card.addEventListener('animationend', () => card.classList.remove('explain-card-pulse'), { once: true });
+            }
+        };
+
+        // Column name — shown as alias.col when a source table is known
+        const colNameEl = document.createElement('div');
+        colNameEl.className = 'lineage-col-name';
+
+        const colNameLeft = document.createElement('span');
+        if (srcTable?.alias) {
+            const aliasSpan = document.createElement('span');
+            aliasSpan.className   = 'lineage-col-alias';
+            aliasSpan.textContent = srcTable.alias;
+            aliasSpan.title       = 'Click to focus on canvas';
+            aliasSpan.addEventListener('click', () => _focusTable(srcTable.id));
+            colNameLeft.appendChild(aliasSpan);
+            colNameLeft.appendChild(document.createTextNode('.'));
+            const colSpan = document.createElement('span');
+            colSpan.className   = 'lineage-col-colname';
+            colSpan.textContent = col;
+            colSpan.title       = 'Click to highlight column on canvas';
+            colSpan.addEventListener('click', () => {
+                if (typeof Canvas !== 'undefined') Canvas.focusColumn(srcTable.alias, col);
+            });
+            colNameLeft.appendChild(colSpan);
+        } else {
+            colNameLeft.textContent = col;
+        }
+        colNameEl.appendChild(colNameLeft);
+
+        // Right side: index badge + data type from source table column metadata
+        const srcColMeta = srcTable?.columns?.find(c => c.name.toLowerCase() === col.toLowerCase());
+        if (srcColMeta) {
+            const metaEl = document.createElement('span');
+            metaEl.className = 'lineage-col-meta';
+            if (srcColMeta.key === 'PRI') {
+                const b = document.createElement('span');
+                b.className = 'col-badge col-badge--pk'; b.title = 'Primary Key'; b.textContent = 'PK';
+                metaEl.appendChild(b);
+            } else if (srcColMeta.key === 'MUL') {
+                const b = document.createElement('span');
+                b.className = 'col-badge col-badge--fk'; b.title = 'Index / Foreign Key'; b.textContent = 'FK';
+                metaEl.appendChild(b);
+            } else if (srcColMeta.key === 'UNI') {
+                const b = document.createElement('span');
+                b.className = 'col-badge col-badge--uni'; b.title = 'Unique'; b.textContent = 'UQ';
+                metaEl.appendChild(b);
+            }
+            const typeStr = srcColMeta.extra === 'auto_increment'
+                ? `${srcColMeta.shortType} ↑` : (srcColMeta.shortType || '');
+            if (typeStr) {
+                const typeEl = document.createElement('span');
+                typeEl.className = 'lineage-col-type'; typeEl.textContent = typeStr;
+                metaEl.appendChild(typeEl);
+            }
+            colNameEl.appendChild(metaEl);
+        }
+
+        body.appendChild(colNameEl);
 
         // No source table metadata (CSV, custom expr, subquery)
         if (!srcTable) {
@@ -2916,22 +3063,9 @@ const Results = (() => {
         const tableVal = tableRow.querySelector('.lineage-val');
         tableVal.classList.add('lineage-val--link');
         tableVal.title = 'Click to focus on canvas';
-        tableVal.addEventListener('click', () => {
-            if (typeof Canvas !== 'undefined') Canvas.scrollToTableIdTop(srcTable.id);
-            const card = document.querySelector(`.table-card[data-table-id="${srcTable.id}"]`);
-            if (card) {
-                card.classList.remove('explain-card-pulse');
-                void card.offsetWidth;
-                card.classList.add('explain-card-pulse');
-                card.addEventListener('animationend', () => card.classList.remove('explain-card-pulse'), { once: true });
-            }
-            _closeLineagePopup();
-        });
+        tableVal.addEventListener('click', () => _focusTable(srcTable.id));
 
-        _lineageSection(body, 'Source', [
-            tableRow,
-            _lineageRow('Alias',  srcTable.alias || '—'),
-        ]);
+        _lineageSection(body, 'Source', [tableRow]);
 
         // JOINs involving this table
         const relatedJoins = joins.filter(j =>
@@ -2943,10 +3077,17 @@ const Results = (() => {
                 _lineageNote('Driving table — no JOINs connect here'),
             ]);
         } else {
-            const joinEls = relatedJoins.map(j => {
-                const isFrom   = j.fromTableId === srcTable.id;
-                const otherId  = isFrom ? j.toTableId : j.fromTableId;
-                const otherTbl = tables.find(t => t.id === otherId);
+            const colorMap   = typeof _getTableColorMap === 'function' ? _getTableColorMap() : null;
+            const aliasToTbl = new Map(tables.filter(t => t.alias).map(t => [t.alias, t]));
+            const JOIN_BG    = [
+                'rgba(30,60,100,0.35)', 'rgba(60,30,80,0.35)', 'rgba(20,70,50,0.35)',
+                'rgba(80,50,20,0.35)',  'rgba(20,50,80,0.35)', 'rgba(70,20,40,0.35)',
+            ];
+
+            const joinEls = relatedJoins.map((j, ji) => {
+                const isFrom     = j.fromTableId === srcTable.id;
+                const otherId    = isFrom ? j.toTableId : j.fromTableId;
+                const otherTbl   = tables.find(t => t.id === otherId);
                 const otherAlias = otherTbl?.alias || otherTbl?.name || otherId;
                 const thisAlias  = srcTable.alias || srcTable.name;
 
@@ -2961,7 +3102,112 @@ const Results = (() => {
                     const et = isFrom ? ec.toCol   : ec.fromCol;
                     lines.push(`  AND ${fromAlias}.${ef} = ${toAlias}.${et}`);
                 });
-                return _lineageCode(lines.join('\n'));
+                const joinText = lines.join('\n');
+
+                // Build highlighted HTML via the global _highlightSQL if available
+                const el = document.createElement('pre');
+                el.className = 'lineage-code';
+                el.style.background = JOIN_BG[ji % JOIN_BG.length];
+
+                if (typeof _highlightSQL === 'function') {
+                    el.innerHTML = _highlightSQL(joinText, colorMap);
+                    // Wrap alias.col sequences AND standalone aliases in clickable spans
+                    const isAliasSpan = n => n?.nodeType === 1 && aliasToTbl.has(n.textContent.trim()) && n.tagName === 'SPAN';
+                    const isDotText   = n => n?.nodeType === 3 && n.textContent === '.';
+                    const isColref    = n => n?.nodeType === 1 && n.classList?.contains('sql-hl-colref');
+
+                    const childArr = Array.from(el.childNodes);
+                    let ci = 0;
+                    while (ci < childArr.length) {
+                        const node  = childArr[ci];
+                        const next1 = childArr[ci + 1];
+                        const next2 = childArr[ci + 2];
+                        if (isAliasSpan(node) && isDotText(next1) && isColref(next2)) {
+                            // Wrap alias + "." + col in one clickable span
+                            const alias = node.textContent.trim();
+                            const wrapper = document.createElement('span');
+                            wrapper.dataset.lineageAlias = alias;
+                            el.insertBefore(wrapper, node);
+                            wrapper.appendChild(node);
+                            wrapper.appendChild(next1);
+                            wrapper.appendChild(next2);
+                            ci += 3;
+                        } else {
+                            if (isAliasSpan(node)) node.dataset.lineageAlias = node.textContent.trim();
+                            ci++;
+                        }
+                    }
+
+                    // Split text nodes that contain a bare alias word (e.g. the "i" in "JOIN ingredients i")
+                    const aliasKeys = [...aliasToTbl.keys()];
+                    if (aliasKeys.length) {
+                        const aliasRe = new RegExp(
+                            `\\b(${aliasKeys.map(a => a.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})\\b`, 'g'
+                        );
+                        const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+                        const textNodes = [];
+                        let tn;
+                        while ((tn = walker.nextNode())) textNodes.push(tn);
+                        textNodes.forEach(textNode => {
+                            // Skip text already inside a tagged wrapper
+                            if (textNode.parentElement?.closest('[data-lineage-alias]')) return;
+                            const text = textNode.textContent;
+                            aliasRe.lastIndex = 0;
+                            if (!aliasRe.test(text)) return;
+                            aliasRe.lastIndex = 0;
+                            const frag = document.createDocumentFragment();
+                            let last = 0, m;
+                            while ((m = aliasRe.exec(text)) !== null) {
+                                if (last < m.index) frag.appendChild(document.createTextNode(text.slice(last, m.index)));
+                                const s = document.createElement('span');
+                                s.dataset.lineageAlias = m[1];
+                                s.textContent = m[1];
+                                frag.appendChild(s);
+                                last = m.index + m[0].length;
+                            }
+                            if (last < text.length) frag.appendChild(document.createTextNode(text.slice(last)));
+                            textNode.replaceWith(frag);
+                        });
+                    }
+
+                    // Add click handlers to all tagged elements
+                    el.querySelectorAll('[data-lineage-alias]').forEach(span => {
+                        const alias = span.dataset.lineageAlias;
+                        const tbl   = aliasToTbl.get(alias);
+                        if (!tbl) return;
+                        span.classList.add('lineage-alias-link');
+                        span.title = `Click to show ${alias} on canvas`;
+                        span.addEventListener('click', e => {
+                            e.stopPropagation();
+                            if (typeof Canvas !== 'undefined') Canvas.scrollToTableIdTop(tbl.id);
+                            const card = document.querySelector(`.table-card[data-table-id="${tbl.id}"]`);
+                            if (card) {
+                                card.classList.remove('explain-card-pulse');
+                                void card.offsetWidth;
+                                card.classList.add('explain-card-pulse');
+                                card.addEventListener('animationend', () => card.classList.remove('explain-card-pulse'), { once: true });
+                            }
+                        });
+                    });
+
+                    // Own-table alias matches .lineage-col-alias color; other alias gets a distinct blue
+                    el.querySelectorAll('[data-lineage-alias]').forEach(span => {
+                        const color = span.dataset.lineageAlias === thisAlias ? 'rgb(255, 179, 0)' : 'rgb(255 252 246 / 0.8)';
+                        span.style.color = color;
+                        span.querySelectorAll('span[style]').forEach(s => s.style.color = color);
+                    });
+                } else {
+                    el.textContent = joinText;
+                }
+
+                // Click on the block itself (not an alias) → scroll to join line
+                if (typeof Canvas !== 'undefined' && document.getElementById('jpath-' + j.id)) {
+                    el.classList.add('lineage-code--link');
+                    el.title = 'Click to focus JOIN line · click alias to focus table';
+                    el.addEventListener('click', () => Canvas.scrollToJoinId(j.id));
+                }
+
+                return el;
             });
             _lineageSection(body, 'JOINs', joinEls);
         }
