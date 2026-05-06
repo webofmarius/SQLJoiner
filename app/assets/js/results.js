@@ -1483,7 +1483,7 @@ const Results = (() => {
         if (colIdx === -1) return;
 
         ths[colIdx].classList.toggle('col-deselected', isDeselected);
-        tbody.querySelectorAll(`tr td:nth-child(${colIdx + 2})`).forEach(td => {
+        tbody.querySelectorAll(`tr td:nth-child(${colIdx + 1})`).forEach(td => {
             td.classList.toggle('col-deselected', isDeselected);
         });
     }
