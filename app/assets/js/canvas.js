@@ -1807,6 +1807,7 @@ const Canvas = (() => {
                 _applyCardColor(card, hex);
                 QueryPanel.refresh?.();
                 Results.refreshHeaderColors?.();
+                if (typeof Minimap !== 'undefined') Minimap.update();
                 _closeColorPopup();
             });
             swatchWrap.appendChild(swatch);
@@ -1823,6 +1824,7 @@ const Canvas = (() => {
             _applyCardColor(card, null);
             QueryPanel.refresh?.();
             Results.refreshHeaderColors?.();
+            if (typeof Minimap !== 'undefined') Minimap.update();
             _closeColorPopup();
         });
 

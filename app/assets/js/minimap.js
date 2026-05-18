@@ -85,8 +85,8 @@ const Minimap = (() => {
             const mw = Math.max(2, w * SCALE);
             const mh = Math.max(2, h * SCALE);
 
-            buf.fillStyle   = '#2d3748';
-            buf.strokeStyle = '#4a9eff';
+            buf.fillStyle   = t.color || '#2d3748';
+            buf.strokeStyle = t.color || '#4a9eff';
             buf.lineWidth   = 0.5;
             buf.beginPath();
             if (buf.roundRect) {
