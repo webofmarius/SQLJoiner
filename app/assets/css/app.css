@@ -6653,3 +6653,38 @@ textarea.sql-bd-active.scope-mode-on {
     color: var(--text-muted);
     min-height: 16px;
 }
+
+/* ---- Minimap ---- */
+#btn-minimap.is-active {
+    color: var(--accent);
+    border-color: var(--accent);
+    background: rgba(74, 158, 255, 0.12);
+}
+
+#minimap-container {
+    position: fixed;
+    bottom: calc(var(--bottombar-height) + 12px);
+    right: 12px;
+    width: 200px;
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    border-radius: 6px;
+    z-index: 150;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+    overflow: hidden;
+}
+#minimap-header {
+    padding: 4px 8px;
+    font-size: 11px;
+    color: var(--text-muted);
+    border-bottom: 1px solid var(--border);
+    user-select: none;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+#minimap-canvas {
+    display: block;
+    cursor: crosshair;
+    width: 200px;
+    height: 200px;
+}

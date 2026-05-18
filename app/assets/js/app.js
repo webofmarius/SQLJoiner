@@ -275,6 +275,8 @@ const App = (() => {
             SqlBackdrop.checkAlias     = alias => State.tables.some(t => t.alias === alias);
         }
 
+        if (typeof Minimap !== 'undefined') Minimap.init();
+
         // Capture the initial clean-slate baseline so dirty checks work from the start.
         // Use setTimeout so any non-awaited async init work (e.g. _activateProfile)
         // has settled before we snapshot, avoiding false "dirty" positives.
@@ -550,6 +552,13 @@ const App = (() => {
             if (e.code === 'F8' && !isMod) {
                 e.preventDefault();
                 Results.toggleFullscreen?.();
+                return;
+            }
+
+            // F10 — Toggle minimap
+            if (e.code === 'F10' && !isMod) {
+                e.preventDefault();
+                if (typeof Minimap !== 'undefined') Minimap.toggle();
                 return;
             }
 

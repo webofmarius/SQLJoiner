@@ -322,6 +322,8 @@ const Canvas = (() => {
         // Hide the "add tables" hint once canvas has content
         const hint = document.getElementById('canvas-hint');
         if (hint) hint.style.display = 'none';
+
+        if (typeof Minimap !== 'undefined') Minimap.update();
     }
 
     // =========================================================================
@@ -329,6 +331,7 @@ const Canvas = (() => {
     // =========================================================================
     function removeTable(tableId) {
         _removeCardEl(tableId);
+        if (typeof Minimap !== 'undefined') Minimap.update();
     }
 
     // =========================================================================
@@ -1477,6 +1480,7 @@ const Canvas = (() => {
 
             _drag.cardEl  = null;
             _drag.tableId = null;
+            if (typeof Minimap !== 'undefined') Minimap.update();
             return;
         }
 
@@ -1507,6 +1511,7 @@ const Canvas = (() => {
             _resize.cardEl    = null;
             _resize.tableId   = null;
             _resize.startLeft = 0;
+            if (typeof Minimap !== 'undefined') Minimap.update();
             return;
         }
 
@@ -2967,7 +2972,10 @@ const Canvas = (() => {
         });
         if (typeof Islands !== 'undefined') Islands.redrawPositions?.();
         requestAnimationFrame(() => {
-            requestAnimationFrame(() => _scrollToActiveIslandTop());
+            requestAnimationFrame(() => {
+                _scrollToActiveIslandTop();
+                if (typeof Minimap !== 'undefined') Minimap.update();
+            });
         });
     }
 

@@ -40,6 +40,7 @@
             <button type="button" id="btn-timestamp-conv" title="Timestamp converter">⧖</button>
             <button id="btn-focus-tables" title="Center view on tables">⊙</button>
             <button type="button" id="btn-canvas-overview-zoom" title="Overview zoom — shrink canvas only (toggle; recenters on tables)">⊟</button>
+            <button type="button" id="btn-minimap" title="Toggle minimap (canvas overview)">⊹ Map</button>
             <div id="undo-redo-bar">
                 <button id="btn-undo" title="Undo (Ctrl+Z)" disabled>↩</button>
                 <button id="btn-redo" title="Redo (Ctrl+Shift+Z)" disabled>↪</button>
@@ -334,6 +335,11 @@
     </div>
 
     <!-- ==================== CALCULUS TOOLBOX (floating, no backdrop) ==================== -->
+    <div id="minimap-container" class="hidden">
+        <div id="minimap-header">Map</div>
+        <canvas id="minimap-canvas"></canvas>
+    </div>
+
     <div id="calculus-toolbox" class="hidden">
         <div id="calculus-toolbox-header">
             <span>∑ Calculus</span>
@@ -1025,6 +1031,7 @@
     <script src="assets/js/results.js"></script>
     <script src="assets/js/undo.js"></script>
     <script src="assets/js/sql-backdrop.js"></script>
+    <script src="assets/js/minimap.js"></script>
 
     <!-- ==================== TABLE SEARCH MODAL ==================== -->
     <div id="modal-table-search" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modal-table-search-title">
