@@ -7009,7 +7009,8 @@ textarea.sql-bd-active.scope-mode-on {
     cursor: pointer;
     white-space: nowrap;
 }
-.rec-action-btn:hover {
+.rec-action-btn:hover,
+.rec-action-btn.is-previewing {
     color: var(--text);
     border-color: var(--accent);
     background: rgba(74,158,255,0.1);
@@ -7022,6 +7023,63 @@ textarea.sql-bd-active.scope-mode-on {
     color: #f87171;
     border-color: #f87171;
     background: rgba(248,113,113,0.1);
+}
+.rec-sql-preview-popup {
+    position: fixed;
+    z-index: 9990;
+    width: 630px;
+    max-width: 90vw;
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    border-radius: 6px;
+    box-shadow: 0 6px 24px rgba(0,0,0,0.55);
+    padding: 6px;
+    pointer-events: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.rec-sql-preview-header {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    cursor: move;
+    user-select: none;
+}
+.rec-sql-preview-drag {
+    flex: 1;
+    height: 8px;
+    border-radius: 2px;
+    background: var(--border2);
+    opacity: 0.5;
+}
+.rec-sql-preview-header:hover .rec-sql-preview-drag { opacity: 1; }
+.rec-sql-preview-close {
+    flex-shrink: 0;
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 13px;
+    cursor: pointer;
+    padding: 0 3px;
+    line-height: 1;
+}
+.rec-sql-preview-close:hover { color: var(--text); }
+.rec-sql-preview-ta {
+    width: 100%;
+    height: 360px;
+    resize: none;
+    font-family: monospace;
+    font-size: 12px;
+    line-height: 1.5;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text);
+    padding: 6px 8px;
+    box-sizing: border-box;
+    outline: none;
+    cursor: default;
 }
 .rec-rename-input {
     flex: 1;

@@ -16,6 +16,7 @@ const Recordings = (() => {
     let _dragId     = null;    // id of entry currently being dragged
     let _dimMode    = false;   // show only checked rows
     let _sameColor  = false;   // show only rows matching color of checked rows
+    let _pinnedSqlPreview = null; // { btn, hideFn } — currently pinned SQL preview
 
     // -------------------------------------------------------------------------
     // Public
@@ -168,6 +169,13 @@ const Recordings = (() => {
             [...list.querySelectorAll('.rec-entry-chk:checked')]
                 .map(c => c.closest('.rec-entry')?.dataset.id).filter(Boolean)
         );
+
+        // Clean up any pinned SQL preview — its button is about to be destroyed
+        if (_pinnedSqlPreview) {
+            _pinnedSqlPreview.btn.classList.remove('is-active');
+            _pinnedSqlPreview.hideFn();
+            _pinnedSqlPreview = null;
+        }
 
         list.innerHTML = '';
 
@@ -329,6 +337,163 @@ const Recordings = (() => {
 
             const renameActionBtn = _btn('✎', 'Rename this recording', () => _startRename(rec.id, nameEl, rec));
             actions.appendChild(renameActionBtn);
+
+            // SQL Preview button — hover reveals a floating syntax-highlighted preview;
+            // click pins/unpins it so it stays visible until clicked again.
+            const sqlPreviewBtn = _btn('⌕ Peek', 'Hover to preview SQL · Click to pin', null);
+            let _sqlPreviewPopup = null;
+            let _sqlHideTimer    = null;
+
+            const isPinned = () => _pinnedSqlPreview?.btn === sqlPreviewBtn;
+
+            const showSqlPreview = () => {
+                clearTimeout(_sqlHideTimer);
+                if (_sqlPreviewPopup) return;
+
+                const popup = document.createElement('div');
+                popup.className = 'rec-sql-preview-popup';
+
+                // Header row: drag handle + close button
+                const header = document.createElement('div');
+                header.className = 'rec-sql-preview-header';
+
+                const dragHandle = document.createElement('span');
+                dragHandle.className = 'rec-sql-preview-drag';
+                header.appendChild(dragHandle);
+
+                const closeBtn = document.createElement('button');
+                closeBtn.className   = 'rec-sql-preview-close';
+                closeBtn.textContent = '✕';
+                closeBtn.title       = 'Close preview';
+                closeBtn.addEventListener('click', e => {
+                    e.stopPropagation();
+                    if (isPinned()) {
+                        sqlPreviewBtn.classList.remove('is-active');
+                        _pinnedSqlPreview = null;
+                    }
+                    hideSqlPreview();
+                });
+                header.appendChild(closeBtn);
+                popup.appendChild(header);
+
+                // Drag logic — convert right→left on first move so left/top are authoritative
+                header.addEventListener('mousedown', e => {
+                    if (e.target === closeBtn) return;
+                    e.preventDefault();
+                    const pr  = popup.getBoundingClientRect();
+                    // Switch from right-based to left-based positioning
+                    popup.style.left  = pr.left + 'px';
+                    popup.style.right = 'auto';
+                    let ox = e.clientX - pr.left;
+                    let oy = e.clientY - pr.top;
+                    const onMove = ev => {
+                        popup.style.left = (ev.clientX - ox) + 'px';
+                        popup.style.top  = (ev.clientY - oy) + 'px';
+                    };
+                    const onUp = () => {
+                        document.removeEventListener('mousemove', onMove);
+                        document.removeEventListener('mouseup',   onUp);
+                    };
+                    document.addEventListener('mousemove', onMove);
+                    document.addEventListener('mouseup',   onUp);
+                });
+
+                const ta = document.createElement('textarea');
+                ta.className  = 'rec-sql-preview-ta';
+                ta.readOnly   = true;
+                ta.spellcheck = false;
+                ta.value      = rec.sql || '';
+                popup.appendChild(ta);
+                document.body.appendChild(popup);
+                _sqlPreviewPopup = popup;
+                sqlPreviewBtn.classList.add('is-previewing');
+
+                if (typeof SqlBackdrop !== 'undefined') SqlBackdrop.attach(ta);
+
+                ta.addEventListener('keydown', e => {
+                    if (e.key === 'Escape') {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (isPinned()) {
+                            sqlPreviewBtn.classList.remove('is-active');
+                            _pinnedSqlPreview = null;
+                        }
+                        hideSqlPreview();
+                    }
+                });
+
+                // Position: right edge 10px left of the color button's left edge
+                const colorBtnRect = colorBtn.getBoundingClientRect();
+                const btnRect      = sqlPreviewBtn.getBoundingClientRect();
+                popup.style.right = (window.innerWidth - colorBtnRect.left + 10) + 'px';
+                requestAnimationFrame(() => {
+                    const ph = popup.offsetHeight;
+                    let top = btnRect.top + btnRect.height / 2 - ph / 2;
+                    top = Math.max(8, Math.min(top, window.innerHeight - ph - 8));
+                    popup.style.top = top + 'px';
+                });
+
+                popup.addEventListener('mouseenter', () => clearTimeout(_sqlHideTimer));
+                popup.addEventListener('mouseleave', () => {
+                    if (isPinned()) return;
+                    _sqlHideTimer = setTimeout(hideSqlPreview, 120);
+                });
+
+                // Clicking the popup or its textarea pins the Peek button
+                popup.addEventListener('click', () => {
+                    if (isPinned()) return;
+                    // Unpin any other active preview first
+                    if (_pinnedSqlPreview) {
+                        _pinnedSqlPreview.btn.classList.remove('is-active');
+                        _pinnedSqlPreview.hideFn();
+                        _pinnedSqlPreview = null;
+                    }
+                    sqlPreviewBtn.classList.add('is-active');
+                    _pinnedSqlPreview = { btn: sqlPreviewBtn, hideFn: hideSqlPreview };
+                });
+            };
+
+            const hideSqlPreview = () => {
+                if (!_sqlPreviewPopup) return;
+                if (typeof SqlBackdrop !== 'undefined') {
+                    const ta = _sqlPreviewPopup.querySelector('textarea');
+                    if (ta) SqlBackdrop.detach(ta);
+                }
+                _sqlPreviewPopup.remove();
+                _sqlPreviewPopup = null;
+                sqlPreviewBtn.classList.remove('is-previewing');
+            };
+
+            sqlPreviewBtn.addEventListener('mouseenter', () => {
+                if (_pinnedSqlPreview && !isPinned()) return; // another button is pinned
+                showSqlPreview();
+            });
+            sqlPreviewBtn.addEventListener('mouseleave', () => {
+                if (isPinned()) return;
+                _sqlHideTimer = setTimeout(hideSqlPreview, 120);
+            });
+
+            sqlPreviewBtn.addEventListener('click', e => {
+                e.stopPropagation();
+                // Unpin any previously pinned button
+                if (_pinnedSqlPreview && _pinnedSqlPreview.btn !== sqlPreviewBtn) {
+                    _pinnedSqlPreview.btn.classList.remove('is-active');
+                    _pinnedSqlPreview.hideFn();
+                    _pinnedSqlPreview = null;
+                }
+                if (isPinned()) {
+                    // Unpin this button
+                    sqlPreviewBtn.classList.remove('is-active');
+                    _pinnedSqlPreview = null;
+                } else {
+                    // Pin this button
+                    sqlPreviewBtn.classList.add('is-active');
+                    _pinnedSqlPreview = { btn: sqlPreviewBtn, hideFn: hideSqlPreview };
+                    showSqlPreview();
+                }
+            });
+
+            actions.appendChild(sqlPreviewBtn);
 
             const actionSep = document.createElement('span');
             actionSep.className = 'rec-action-sep';
