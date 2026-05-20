@@ -265,7 +265,7 @@ const Recordings = (() => {
             chk.addEventListener('change', _onCheckChange);
             row.appendChild(chk);
 
-            // Name + hover rename icon
+            // Name
             const nameWrap = document.createElement('span');
             nameWrap.className = 'rec-entry-name';
 
@@ -274,13 +274,6 @@ const Recordings = (() => {
             nameEl.textContent = rec.name || _fmtTs(rec.timestamp);
             nameEl.addEventListener('click', e => { e.stopPropagation(); chk.checked = !chk.checked; _onCheckChange(); });
             nameWrap.appendChild(nameEl);
-
-            const renameBtn = document.createElement('button');
-            renameBtn.className   = 'rec-rename-btn';
-            renameBtn.textContent = '✎';
-            renameBtn.title       = 'Rename';
-            renameBtn.addEventListener('click', e => { e.stopPropagation(); _startRename(rec.id, nameEl, rec); });
-            nameWrap.appendChild(renameBtn);
 
             row.appendChild(nameWrap);
 
@@ -329,6 +322,17 @@ const Recordings = (() => {
                 _openEntryColorPopup(rec, row, colorBtn);
             });
             actions.appendChild(colorBtn);
+
+            const colorSep = document.createElement('span');
+            colorSep.className = 'rec-action-sep';
+            actions.appendChild(colorSep);
+
+            const renameActionBtn = _btn('✎', 'Rename this recording', () => _startRename(rec.id, nameEl, rec));
+            actions.appendChild(renameActionBtn);
+
+            const actionSep = document.createElement('span');
+            actionSep.className = 'rec-action-sep';
+            actions.appendChild(actionSep);
 
             actions.appendChild(_btn('Results', 'Load results into table', () => _loadResults(rec)));
             actions.appendChild(_btn('SQL',     'View generated SQL',      () => _showSQL(rec)));

@@ -6980,20 +6980,14 @@ textarea.sql-bd-active.scope-mode-on {
     min-width: 0;
 }
 .rec-entry-name-text:hover { color: var(--accent); text-decoration: underline; }
-.rec-rename-btn {
+.rec-action-sep {
+    display: inline-block;
+    width: 1px;
+    align-self: stretch;
+    background: var(--border2);
+    margin: 2px 2px;
     flex-shrink: 0;
-    background: transparent;
-    border: none;
-    color: var(--text-faint);
-    font-size: 12px;
-    padding: 0 1px;
-    cursor: pointer;
-    opacity: 0;
-    transition: opacity 0.15s, color 0.15s;
-    line-height: 1;
 }
-.rec-entry:hover .rec-rename-btn { opacity: 0.5; }
-.rec-entry:hover .rec-rename-btn:hover { opacity: 1; color: var(--accent); }
 .rec-entry-rowcount {
     font-size: 10px;
     color: var(--text-muted);
