@@ -82,7 +82,8 @@ const Results = (() => {
     let _distPopup          = null;
 
     // Query Diff state
-    let _diffSnapshot = null; // {cols: string[], rows: any[][]}
+    let _diffSnapshot        = null; // {cols: string[], rows: any[][]}
+    let _diffChangedColIdxs  = null; // Set<number> of col indices with changes (null = no diff rendered yet)
 
     // Column highlight (SELECT box ☆ checkbox)
     const _highlightedCols = new Set();
@@ -936,21 +937,28 @@ const Results = (() => {
 
         if (dimmed) {
             const tbody = table.querySelector('tbody');
-            _dimRowMode = _dimWantRowMode(tbody);
 
-            if (!_dimRowMode) {
-                // Column mode: seed pinned set with already-colored columns
-                _dimPinnedCols = new Set();
-                if (_lastResult) {
-                    _lastResult.cols.forEach((_col, colIdx) => {
-                        if (_colThemes[colIdx]) { _dimPinnedCols.add(colIdx); return; }
-                        const nth = colIdx + 2;
-                        if (tbody && THEMES.some(t => tbody.querySelector(`tr td:nth-child(${nth}).${t}`)))
-                            _dimPinnedCols.add(colIdx);
-                    });
-                }
+            // Diff mode: show only columns that have changes
+            if (_diffChangedColIdxs) {
+                _dimRowMode    = false;
+                _dimPinnedCols = new Set(_diffChangedColIdxs);
             } else {
-                _dimPinnedCols = new Set();
+                _dimRowMode = _dimWantRowMode(tbody);
+
+                if (!_dimRowMode) {
+                    // Column mode: seed pinned set with already-colored columns
+                    _dimPinnedCols = new Set();
+                    if (_lastResult) {
+                        _lastResult.cols.forEach((_col, colIdx) => {
+                            if (_colThemes[colIdx]) { _dimPinnedCols.add(colIdx); return; }
+                            const nth = colIdx + 2;
+                            if (tbody && THEMES.some(t => tbody.querySelector(`tr td:nth-child(${nth}).${t}`)))
+                                _dimPinnedCols.add(colIdx);
+                        });
+                    }
+                } else {
+                    _dimPinnedCols = new Set();
+                }
             }
         } else {
             // Turning Dim off: remove row-mode classes; keep row-highlighted state intact
@@ -1125,6 +1133,8 @@ const Results = (() => {
     function _dimRefreshModeIfDimmed() {
         const table = document.getElementById('results-table');
         if (!table?.classList.contains('is-dimmed')) return;
+        // In diff-col-mode, pinned cols are driven by the diff — ignore row marks
+        if (_diffChangedColIdxs) { _applyDimVisibility(); return; }
         const tbody = table.querySelector('tbody');
         const wantRowMode = _dimWantRowMode(tbody);
         if (wantRowMode !== _dimRowMode) {
@@ -2402,7 +2412,8 @@ const Results = (() => {
     }
 
     function _clearSnapshot() {
-        _diffSnapshot = null;
+        _diffSnapshot       = null;
+        _diffChangedColIdxs = null;
         document.getElementById('btn-diff-snapshot')?.classList.remove('hidden');
         document.getElementById('btn-diff-exit')?.classList.add('hidden');
         // Re-render current result without diff overlay
@@ -2498,6 +2509,26 @@ const Results = (() => {
         }
 
         const diff = _computeDiff(snapRows, newRows);
+
+        // Compute which column indices have any change (for DIM filter)
+        _diffChangedColIdxs = new Set();
+        diff.forEach(entry => {
+            if (entry.type === 'changed') {
+                entry.changedCols.forEach(ci => _diffChangedColIdxs.add(ci));
+            } else if (entry.type === 'added' || entry.type === 'removed') {
+                newCols.forEach((_c, ci) => _diffChangedColIdxs.add(ci));
+            }
+        });
+        if (!_diffChangedColIdxs.size) _diffChangedColIdxs = null;
+
+        // If DIM is already active, re-seed pinned cols from the new diff set
+        const table = document.getElementById('results-table');
+        if (table?.classList.contains('is-dimmed') && _diffChangedColIdxs) {
+            _dimRowMode    = false;
+            _dimPinnedCols = new Set(_diffChangedColIdxs);
+            _applyDimVisibility();
+        }
+
         if (!diff.length) {
             const bannerTr = document.createElement('tr');
             const bannerTd = document.createElement('td');
