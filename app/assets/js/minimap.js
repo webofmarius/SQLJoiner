@@ -34,7 +34,9 @@ const Minimap = (() => {
         _tablesBuf.width  = MAP_SIZE;
         _tablesBuf.height = MAP_SIZE;
 
-        document.getElementById('btn-minimap')
+        document.getElementById('btn-minimap-badge')
+            .addEventListener('click', toggle);
+        document.getElementById('btn-minimap-close')
             .addEventListener('click', toggle);
 
         _canvas.addEventListener('mousedown', _onMapMouseDown);
@@ -48,7 +50,7 @@ const Minimap = (() => {
         _visible = !_visible;
         document.getElementById('minimap-container')
             .classList.toggle('hidden', !_visible);
-        document.getElementById('btn-minimap')
+        document.getElementById('btn-minimap-badge')
             .classList.toggle('is-active', _visible);
         if (_visible) _drawAll();
     }

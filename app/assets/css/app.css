@@ -6655,12 +6655,6 @@ textarea.sql-bd-active.scope-mode-on {
 }
 
 /* ---- Minimap ---- */
-#btn-minimap.is-active {
-    color: var(--accent);
-    border-color: var(--accent);
-    background: rgba(74, 158, 255, 0.12);
-}
-
 #minimap-container {
     position: fixed;
     bottom: calc(var(--bottombar-height) + 12px);
@@ -6674,13 +6668,55 @@ textarea.sql-bd-active.scope-mode-on {
     overflow: hidden;
 }
 #minimap-header {
-    padding: 4px 8px;
+    padding: 4px 4px 4px 8px;
     font-size: 11px;
     color: var(--text-muted);
     border-bottom: 1px solid var(--border);
     user-select: none;
     letter-spacing: 0.05em;
     text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+#btn-minimap-close {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 14px;
+    line-height: 1;
+    padding: 0 4px;
+    cursor: pointer;
+    border-radius: 3px;
+}
+#btn-minimap-close:hover {
+    color: var(--text);
+    background: rgba(255,255,255,0.08);
+}
+.minimap-badge-toggle {
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    border-radius: 4px;
+    color: var(--text-muted);
+    font-size: 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+.minimap-badge-toggle:hover {
+    background: var(--surface3, var(--surface2));
+    color: var(--text);
+    border-color: var(--accent);
+}
+.minimap-badge-toggle.is-active {
+    color: var(--accent);
+    border-color: var(--accent);
+    background: rgba(74, 158, 255, 0.12);
 }
 #minimap-canvas {
     display: block;

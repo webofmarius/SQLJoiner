@@ -40,7 +40,6 @@
             <button type="button" id="btn-timestamp-conv" title="Timestamp converter">⧖</button>
             <button id="btn-focus-tables" title="Center view on tables">⊙</button>
             <button type="button" id="btn-canvas-overview-zoom" title="Overview zoom — shrink canvas only (toggle; recenters on tables)">⊟</button>
-            <button type="button" id="btn-minimap" title="Toggle minimap (canvas overview)">⊹ Map</button>
             <div id="undo-redo-bar">
                 <button id="btn-undo" title="Undo (Ctrl+Z)" disabled>↩</button>
                 <button id="btn-redo" title="Redo (Ctrl+Shift+Z)" disabled>↪</button>
@@ -264,6 +263,7 @@
             <button id="btn-plot-query" class="btn-outline-blue" title="Plot query results as a bar chart">📊 Plot</button>
             <input type="checkbox" id="chk-explain-colors" checked title="Color-code EXPLAIN results">
             <button id="btn-explain-query" class="btn-outline-blue" title="Run EXPLAIN on the current query (Alt+E)">⚙ Explain</button>
+            <button id="btn-minimap-badge" class="minimap-badge-toggle" title="Toggle minimap (canvas overview)">⊹</button>
             <button id="btn-run-custom-query" class="btn-outline-blue" title="Run a custom SQL query">▶ Run Custom Query</button>
             <button id="btn-cancel-query" class="btn-danger hidden" title="Kill the running query on the server">✕ Cancel Query</button>
             <button id="btn-run-query" class="primary">▶ Run Query</button>
@@ -336,7 +336,10 @@
 
     <!-- ==================== CALCULUS TOOLBOX (floating, no backdrop) ==================== -->
     <div id="minimap-container" class="hidden">
-        <div id="minimap-header">Map</div>
+        <div id="minimap-header">
+            <span>Map</span>
+            <button id="btn-minimap-close" title="Close minimap">×</button>
+        </div>
         <canvas id="minimap-canvas"></canvas>
     </div>
 
