@@ -1394,8 +1394,9 @@ const Canvas = (() => {
             _drag.cardEl.style.left = x + 'px';
             _drag.cardEl.style.top  = y + 'px';
 
-            if (typeof Joins   !== 'undefined') Joins.redrawForTable(_drag.tableId);
-            if (typeof Islands !== 'undefined') Islands.redrawPositions();
+            if (typeof Joins    !== 'undefined') Joins.redrawForTable(_drag.tableId);
+            if (typeof Islands  !== 'undefined') Islands.redrawPositions();
+            if (typeof Minimap  !== 'undefined') Minimap.scheduleUpdate();
             return;
         }
 
@@ -3015,6 +3016,7 @@ const Canvas = (() => {
 
     return {
         init,
+        CARD_COLORS,
         renderTable,
         removeTable,
         removeTableByName,

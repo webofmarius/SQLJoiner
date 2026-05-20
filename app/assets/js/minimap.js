@@ -60,6 +60,15 @@ const Minimap = (() => {
         _drawAll();
     }
 
+    let _updateFrame = null;
+    function scheduleUpdate() {
+        if (!_visible || _updateFrame) return;
+        _updateFrame = requestAnimationFrame(() => {
+            _updateFrame = null;
+            _drawAll();
+        });
+    }
+
     // -------------------------------------------------------------------------
     // Drawing
     // -------------------------------------------------------------------------
@@ -82,8 +91,11 @@ const Minimap = (() => {
             const card = document.querySelector(`.table-card[data-table-id="${t.id}"]`);
             const w = card ? card.offsetWidth  : (t.size?.w ?? 180);
             const h = card ? card.offsetHeight : (t.size?.h ?? 120);
-            const x  = t.position.x * SCALE;
-            const y  = t.position.y * SCALE;
+            // During drag the card's CSS left/top leads t.position — read live value
+            const liveX = card ? parseFloat(card.style.left) : NaN;
+            const liveY = card ? parseFloat(card.style.top)  : NaN;
+            const x  = (isNaN(liveX) ? t.position.x : liveX) * SCALE;
+            const y  = (isNaN(liveY) ? t.position.y : liveY) * SCALE;
             const mw = Math.max(2, w * SCALE);
             const mh = Math.max(2, h * SCALE);
 
@@ -159,5 +171,5 @@ const Minimap = (() => {
 
     // -------------------------------------------------------------------------
 
-    return { init, update, toggle };
+    return { init, update, scheduleUpdate, toggle };
 })();

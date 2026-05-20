@@ -255,6 +255,7 @@ const Islands = (() => {
         });
 
         redrawPositions();
+        if (typeof Minimap !== 'undefined') Minimap.scheduleUpdate();
     }
 
     function _onDragUp() {

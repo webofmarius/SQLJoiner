@@ -14,6 +14,8 @@ const Recordings = (() => {
     let _idSeq      = 0;
     let _newIsland  = false;   // global "restore in new island" preference
     let _dragId     = null;    // id of entry currently being dragged
+    let _dimMode    = false;   // show only checked rows
+    let _sameColor  = false;   // show only rows matching color of checked rows
 
     // -------------------------------------------------------------------------
     // Public
@@ -31,14 +33,35 @@ const Recordings = (() => {
             ?.addEventListener('click', () => { _visible = true; toggle(); });
         document.getElementById('btn-rec-record')
             ?.addEventListener('click', toggleRecord);
-        document.getElementById('btn-rec-delete-all')
-            ?.addEventListener('click', _deleteAll);
         document.getElementById('btn-rec-delete-selected')
             ?.addEventListener('click', _deleteSelected);
         document.getElementById('btn-rec-compare')
             ?.addEventListener('click', _compareSelected);
         document.getElementById('chk-rec-select-all')
             ?.addEventListener('change', e => _selectAll(e.target.checked));
+        document.getElementById('btn-rec-dim')
+            ?.addEventListener('click', _toggleDim);
+        document.getElementById('btn-rec-same-color')
+            ?.addEventListener('click', _toggleSameColor);
+
+        const helpBtn   = document.getElementById('btn-rec-help');
+        const helpPopup = document.getElementById('rec-help-popup');
+        // Move popup to <body> so it escapes the panel's overflow:hidden clipping
+        if (helpPopup) document.body.appendChild(helpPopup);
+        helpBtn?.addEventListener('click', e => {
+            e.stopPropagation();
+            const isHidden = helpPopup.classList.toggle('hidden');
+            if (!isHidden) {
+                const r = helpBtn.getBoundingClientRect();
+                helpPopup.style.top = (r.bottom + 6) + 'px';
+            }
+        });
+        document.addEventListener('click', e => {
+            if (helpPopup && !helpPopup.classList.contains('hidden') &&
+                !helpPopup.contains(e.target) && e.target !== helpBtn) {
+                helpPopup.classList.add('hidden');
+            }
+        });
 
         _makeDraggable(
             document.getElementById('recordings-panel-header'),
@@ -53,7 +76,15 @@ const Recordings = (() => {
         _panel?.classList.toggle('hidden', !_visible);
         document.getElementById('btn-recordings-toggle')
             ?.classList.toggle('is-active', _visible);
-        if (_visible) _renderList();
+        if (_visible) {
+            _renderList();
+        } else {
+            // Reset filter toggles on close
+            _dimMode   = false;
+            _sameColor = false;
+            document.getElementById('btn-rec-dim')?.classList.remove('is-active');
+            document.getElementById('btn-rec-same-color')?.classList.remove('is-active');
+        }
     }
 
     function toggleRecord() {
@@ -131,6 +162,13 @@ const Recordings = (() => {
     function _renderList() {
         const list = document.getElementById('recordings-list');
         if (!list) return;
+
+        // Snapshot checked IDs BEFORE wiping the DOM
+        const checkedIds = new Set(
+            [...list.querySelectorAll('.rec-entry-chk:checked')]
+                .map(c => c.closest('.rec-entry')?.dataset.id).filter(Boolean)
+        );
+
         list.innerHTML = '';
 
         // reset select-all and action buttons
@@ -138,11 +176,40 @@ const Recordings = (() => {
         if (selAll) selAll.checked = false;
         document.getElementById('btn-rec-delete-selected').disabled = true;
         document.getElementById('btn-rec-compare').disabled         = true;
+        document.getElementById('btn-rec-dim').disabled             = true;
+        document.getElementById('btn-rec-same-color').disabled      = true;
 
-        const recs = State.recordings || [];
-        if (!recs.length) {
+        const allRecs = State.recordings || [];
+        if (!allRecs.length) {
             list.innerHTML = '<div class="rec-empty">No recordings yet. Run a query while recording is active.</div>';
             return;
+        }
+
+        // --- compute visible set based on filter modes ---
+        // Intersect checkedIds with what still exists (deletions remove entries from State)
+        const validCheckedRecs = allRecs.filter(r => checkedIds.has(r.id));
+
+        let recs = allRecs;
+        if (_dimMode) {
+            if (validCheckedRecs.length === 0) {
+                // All checked rows were deleted — end DIM
+                _dimMode = false;
+                document.getElementById('btn-rec-dim')?.classList.remove('is-active');
+            } else {
+                recs = recs.filter(r => checkedIds.has(r.id));
+            }
+        }
+        if (_sameColor) {
+            const activeColors = new Set(
+                validCheckedRecs.filter(r => (r.color ?? null) !== null).map(r => r.color)
+            );
+            if (activeColors.size === 0) {
+                // No colored checked rows remain — end Same color
+                _sameColor = false;
+                document.getElementById('btn-rec-same-color')?.classList.remove('is-active');
+            } else {
+                recs = recs.filter(r => activeColors.has(r.color ?? null));
+            }
         }
 
         recs.forEach(rec => {
@@ -190,20 +257,57 @@ const Recordings = (() => {
             seqEl.textContent = rec.seq ?? '';
             row.appendChild(seqEl);
 
-            // Checkbox
+            // Checkbox — restore checked state so filters & button states survive re-render
             const chk = document.createElement('input');
-            chk.type = 'checkbox';
+            chk.type    = 'checkbox';
+            chk.checked = checkedIds.has(rec.id);
             chk.className = 'rec-entry-chk';
             chk.addEventListener('change', _onCheckChange);
             row.appendChild(chk);
 
-            // Name (click to rename)
+            // Name + hover rename icon
+            const nameWrap = document.createElement('span');
+            nameWrap.className = 'rec-entry-name';
+
             const nameEl = document.createElement('span');
-            nameEl.className = 'rec-entry-name';
+            nameEl.className   = 'rec-entry-name-text';
             nameEl.textContent = rec.name || _fmtTs(rec.timestamp);
-            nameEl.title = 'Click to rename';
-            nameEl.addEventListener('click', () => _startRename(rec.id, nameEl, rec));
-            row.appendChild(nameEl);
+            nameEl.addEventListener('click', e => { e.stopPropagation(); chk.checked = !chk.checked; _onCheckChange(); });
+            nameWrap.appendChild(nameEl);
+
+            const renameBtn = document.createElement('button');
+            renameBtn.className   = 'rec-rename-btn';
+            renameBtn.textContent = '✎';
+            renameBtn.title       = 'Rename';
+            renameBtn.addEventListener('click', e => { e.stopPropagation(); _startRename(rec.id, nameEl, rec); });
+            nameWrap.appendChild(renameBtn);
+
+            row.appendChild(nameWrap);
+
+            // Single click anywhere on the row toggles the checkbox
+            row.addEventListener('click', e => {
+                if (e.target === chk) return;                 // checkbox handles itself
+                if (e.target.closest('button, input')) return; // buttons / rename input
+                chk.checked = !chk.checked;
+                _onCheckChange();
+            });
+
+            // Right-click cycles through colors (null → color[0] → color[1] → … → null)
+            row.addEventListener('contextmenu', e => {
+                e.preventDefault();
+                const colors = (typeof Canvas !== 'undefined' && Canvas.CARD_COLORS)
+                    ? Canvas.CARD_COLORS.map(c => c.hex)
+                    : [];
+                const currentIdx = colors.indexOf(rec.color ?? null);
+                // -1 = no color → first color; last color → null; otherwise advance
+                rec.color = currentIdx === -1
+                    ? colors[0]
+                    : currentIdx === colors.length - 1
+                        ? null
+                        : colors[currentIdx + 1];
+                _applyEntryColor(row, colorBtn, rec.color);
+                if (_sameColor) _renderList();
+            });
 
             // Row count
             const badge = document.createElement('span');
@@ -214,6 +318,18 @@ const Recordings = (() => {
             // Action buttons
             const actions = document.createElement('div');
             actions.className = 'rec-entry-actions';
+
+            // Color dot — left of Results
+            const colorBtn = document.createElement('button');
+            colorBtn.className = 'rec-color-btn';
+            colorBtn.title     = 'Set row color';
+            _applyEntryColor(row, colorBtn, rec.color ?? null);
+            colorBtn.addEventListener('click', e => {
+                e.stopPropagation();
+                _openEntryColorPopup(rec, row, colorBtn);
+            });
+            actions.appendChild(colorBtn);
+
             actions.appendChild(_btn('Results', 'Load results into table', () => _loadResults(rec)));
             actions.appendChild(_btn('SQL',     'View generated SQL',      () => _showSQL(rec)));
 
@@ -234,6 +350,16 @@ const Recordings = (() => {
 
             list.appendChild(row);
         });
+
+        // Recompute button states — no re-render (we're already inside _renderList)
+        _updateHeaderButtons(false);
+
+        // Sync select-all checkbox: check it iff every visible row is checked
+        const allVisibleChks = [...list.querySelectorAll('.rec-entry-chk')];
+        const selAllEl = document.getElementById('chk-rec-select-all');
+        if (selAllEl) {
+            selAllEl.checked = allVisibleChks.length > 0 && allVisibleChks.every(c => c.checked);
+        }
     }
 
     function _btn(label, title, onClick) {
@@ -281,22 +407,16 @@ const Recordings = (() => {
         _renderList();
     }
 
-    function _deleteSelected() {
+    async function _deleteSelected() {
         const ids = new Set(
             [...document.querySelectorAll('.rec-entry-chk:checked')]
                 .map(c => c.closest('.rec-entry')?.dataset.id)
                 .filter(Boolean)
         );
-        State.recordings = (State.recordings || []).filter(r => !ids.has(r.id));
-        _updateBadges();
-        _renderList();
-    }
-
-    function _deleteAll() {
-        const n = (State.recordings || []).length;
+        const n = ids.size;
         if (!n) return;
-        if (!confirm(`Delete all ${n} recording${n !== 1 ? 's' : ''}?`)) return;
-        State.recordings = [];
+        if (!await Dialog.confirm(`Delete ${n} selected recording${n !== 1 ? 's' : ''}?`)) return;
+        State.recordings = (State.recordings || []).filter(r => !ids.has(r.id));
         _updateBadges();
         _renderList();
     }
@@ -306,10 +426,58 @@ const Recordings = (() => {
         _onCheckChange();
     }
 
+    // Updates header button states from the current DOM check state.
+    // Pass rerender=true only from user-triggered events (not from inside _renderList).
+    function _updateHeaderButtons(rerender) {
+        const checked = [...document.querySelectorAll('.rec-entry-chk:checked')];
+        const checkedCount = checked.length;
+
+        const hasColoredChecked = checked.some(c => {
+            const id  = c.closest('.rec-entry')?.dataset.id;
+            const rec = (State.recordings || []).find(r => r.id === id);
+            return rec && (rec.color ?? null) !== null;
+        });
+
+        document.getElementById('btn-rec-delete-selected').disabled = checkedCount === 0;
+        document.getElementById('btn-rec-compare').disabled         = checkedCount !== 2;
+
+        const dimShouldDisable       = checkedCount === 0;
+        const sameColorShouldDisable = !hasColoredChecked;
+
+        document.getElementById('btn-rec-dim').disabled        = dimShouldDisable;
+        document.getElementById('btn-rec-same-color').disabled = sameColorShouldDisable;
+
+        // If a filter gets disabled while active, turn it off
+        let filterDeactivated = false;
+        if (dimShouldDisable && _dimMode) {
+            _dimMode = false;
+            filterDeactivated = true;
+            document.getElementById('btn-rec-dim')?.classList.remove('is-active');
+        }
+        if (sameColorShouldDisable && _sameColor) {
+            _sameColor = false;
+            filterDeactivated = true;
+            document.getElementById('btn-rec-same-color')?.classList.remove('is-active');
+        }
+
+        // Re-render if a filter is active OR was just deactivated — only from user events
+        if (rerender && (_dimMode || _sameColor || filterDeactivated)) _renderList();
+    }
+
     function _onCheckChange() {
-        const checked = document.querySelectorAll('.rec-entry-chk:checked');
-        document.getElementById('btn-rec-delete-selected').disabled = checked.length === 0;
-        document.getElementById('btn-rec-compare').disabled         = checked.length !== 2;
+        _updateHeaderButtons(true);
+    }
+
+    function _toggleDim() {
+        _dimMode = !_dimMode;
+        document.getElementById('btn-rec-dim')?.classList.toggle('is-active', _dimMode);
+        _renderList();
+    }
+
+    function _toggleSameColor() {
+        _sameColor = !_sameColor;
+        document.getElementById('btn-rec-same-color')?.classList.toggle('is-active', _sameColor);
+        _renderList();
     }
 
     function _compareSelected() {
@@ -436,6 +604,94 @@ const Recordings = (() => {
     }
 
     // -------------------------------------------------------------------------
+    // Entry color picker
+    // -------------------------------------------------------------------------
+
+    let _entryColorPopup = null;
+
+    function _applyEntryColor(row, btn, color) {
+        if (color) {
+            row.style.borderLeft = `3px solid ${color}`;
+            row.style.background = _hexToRgba(color, 0.13);
+            btn.style.background = color;
+            btn.classList.add('has-color');
+        } else {
+            row.style.borderLeft = '3px solid transparent';
+            row.style.background = '';
+            btn.style.background = '';
+            btn.classList.remove('has-color');
+        }
+    }
+
+    function _hexToRgba(hex, alpha) {
+        const r = parseInt(hex.slice(1, 3), 16);
+        const g = parseInt(hex.slice(3, 5), 16);
+        const b = parseInt(hex.slice(5, 7), 16);
+        return `rgba(${r},${g},${b},${alpha})`;
+    }
+
+    function _openEntryColorPopup(rec, row, anchorBtn) {
+        // Toggle
+        if (_entryColorPopup) { _entryColorPopup.remove(); _entryColorPopup = null; return; }
+
+        const COLORS = (typeof Canvas !== 'undefined' && Canvas.CARD_COLORS) ? Canvas.CARD_COLORS : [];
+
+        const popup = document.createElement('div');
+        popup.className = 'card-color-popup';
+
+        const swatchWrap = document.createElement('div');
+        swatchWrap.className = 'card-color-swatches';
+
+        COLORS.forEach(({ hex, label }) => {
+            const sw = document.createElement('button');
+            sw.className       = 'card-color-swatch';
+            sw.title           = label;
+            sw.style.background = hex;
+            if (rec.color === hex) sw.classList.add('is-active');
+            sw.addEventListener('click', e => {
+                e.stopPropagation();
+                rec.color = hex;
+                _applyEntryColor(row, anchorBtn, hex);
+                popup.remove();
+                _entryColorPopup = null;
+            });
+            swatchWrap.appendChild(sw);
+        });
+
+        const resetBtn = document.createElement('button');
+        resetBtn.className   = 'card-color-reset';
+        resetBtn.textContent = '✕ Reset color';
+        resetBtn.addEventListener('click', e => {
+            e.stopPropagation();
+            rec.color = null;
+            _applyEntryColor(row, anchorBtn, null);
+            popup.remove();
+            _entryColorPopup = null;
+        });
+
+        popup.appendChild(swatchWrap);
+        popup.appendChild(resetBtn);
+        document.body.appendChild(popup);
+        _entryColorPopup = popup;
+
+        // Position below anchor
+        const rect = anchorBtn.getBoundingClientRect();
+        let left = rect.left;
+        let top  = rect.bottom + 6;
+        if (left + 160 > window.innerWidth - 8) left = window.innerWidth - 168;
+        popup.style.left = left + 'px';
+        popup.style.top  = top  + 'px';
+
+        setTimeout(() => {
+            document.addEventListener('click', function close() {
+                popup.remove();
+                _entryColorPopup = null;
+                document.removeEventListener('click', close);
+            }, { once: true });
+        }, 0);
+    }
+
+    // -------------------------------------------------------------------------
     // Badges & state display
     // -------------------------------------------------------------------------
 
@@ -476,6 +732,13 @@ const Recordings = (() => {
             if (e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT') return;
             e.preventDefault();
             const r = panel.getBoundingClientRect();
+            // Pin to current rendered position and remove the centering transform
+            // so that style.left/top map 1:1 to screen coordinates going forward.
+            panel.style.left      = r.left + 'px';
+            panel.style.top       = r.top  + 'px';
+            panel.style.right     = 'auto';
+            panel.style.bottom    = 'auto';
+            panel.style.transform = 'none';
             ox = e.clientX - r.left;
             oy = e.clientY - r.top;
             const onMove = ev => {

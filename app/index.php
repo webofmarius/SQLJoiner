@@ -347,14 +347,39 @@
     <!-- ==================== RECORDINGS PANEL ==================== -->
     <div id="recordings-panel" class="hidden">
         <div id="recordings-panel-header">
-            <span class="rec-panel-title">Recordings</span>
-            <button id="btn-rec-compare" class="rec-compare-btn" disabled title="Select exactly 2 recordings to compare their results using Diff Snapshot">Compare</button>
-            <button id="btn-rec-delete-selected" class="rec-delete-sel-btn" disabled>Delete Selected</button>
+            <span class="rec-panel-title">Recordings <span id="rec-count-badge" class="rec-count-badge">0</span></span>
             <input type="checkbox" id="chk-rec-select-all" class="rec-select-all-chk" title="Select / deselect all recordings">
-            <span id="rec-count-badge" class="rec-count-badge">0</span>
+            <button id="btn-rec-dim" class="rec-filter-btn" title="DIM — show only selected (checked) recordings">☾ DIM</button>
+            <button id="btn-rec-same-color" class="rec-filter-btn" title="Same color — show only recordings whose color matches a checked recording">◈ Same color</button>
+            <button id="btn-rec-compare" class="rec-compare-btn" disabled title="Select exactly 2 recordings to compare their results using Diff Snapshot">⊙ Compare</button>
+            <button id="btn-rec-delete-selected" class="rec-delete-sel-btn" disabled>⊗</button>
+            <span class="rec-header-sep"></span>
             <button id="btn-rec-record" class="rec-record-btn" title="Recording active — click to stop">■ Stop</button>
-            <button id="btn-rec-delete-all" class="rec-delete-all-btn" title="Delete all recordings">Delete All</button>
+            <button id="btn-rec-help" title="Shortcuts &amp; tips">?</button>
             <button id="btn-recordings-close" title="Close panel">✕</button>
+        </div>
+        <!-- Help popup — appended to body in JS to escape overflow:hidden -->
+        <div id="rec-help-popup" class="hidden">
+            <div class="results-help-section">
+                <span class="results-help-group">Row</span>
+                <div class="results-help-row"><kbd>Click</kbd> Toggle selection</div>
+                <div class="results-help-row"><kbd>Right-click</kbd> Cycle row color</div>
+                <div class="results-help-row"><kbd>✎ icon</kbd> Rename entry</div>
+            </div>
+            <div class="results-help-section">
+                <span class="results-help-group">Filters</span>
+                <div class="results-help-row"><kbd>☾ DIM</kbd> Show only selected rows</div>
+                <div class="results-help-row"><kbd>◈ Same color</kbd> Show rows matching checked color</div>
+                <div class="results-help-row"><kbd>⊙ Compare</kbd> Diff two selected recordings</div>
+            </div>
+            <div class="results-help-section">
+                <span class="results-help-group">Actions</span>
+                <div class="results-help-row"><kbd>Results</kbd> Load results into table</div>
+                <div class="results-help-row"><kbd>SQL</kbd> View generated SQL</div>
+                <div class="results-help-row"><kbd>Island</kbd> Restore island config</div>
+                <div class="results-help-row"><kbd>☐ (left of Island)</kbd> Restore in new island</div>
+                <div class="results-help-row"><kbd>■ Stop / ▶ Record</kbd> Pause / resume recording</div>
+            </div>
         </div>
         <div id="recordings-list"></div>
     </div>

@@ -6734,7 +6734,7 @@ textarea.sql-bd-active.scope-mode-on {
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    width: 560px;
+    width: 680px;
     max-width: 96vw;
     max-height: 70vh;
     min-height: 120px;
@@ -6758,6 +6758,13 @@ textarea.sql-bd-active.scope-mode-on {
     border-bottom: 1px solid var(--border2);
     flex-shrink: 0;
     user-select: none;
+}
+.rec-header-sep {
+    display: inline-block;
+    width: 1px;
+    align-self: stretch;
+    background: var(--border2);
+    margin: 2px 4px;
 }
 .rec-panel-title {
     font-size: 12px;
@@ -6798,7 +6805,6 @@ textarea.sql-bd-active.scope-mode-on {
     0%, 100% { box-shadow: 0 0 0 0 rgba(248,113,113,0.4); }
     50%       { box-shadow: 0 0 0 4px rgba(248,113,113,0); }
 }
-.rec-delete-all-btn,
 #btn-recordings-close {
     font-size: 11px;
     padding: 2px 6px;
@@ -6808,7 +6814,6 @@ textarea.sql-bd-active.scope-mode-on {
     color: var(--text-muted);
     cursor: pointer;
 }
-.rec-delete-all-btn:hover,
 #btn-recordings-close:hover {
     color: var(--text);
     background: rgba(255,255,255,0.06);
@@ -6816,6 +6821,27 @@ textarea.sql-bd-active.scope-mode-on {
 #btn-recordings-close {
     font-size: 14px;
     padding: 0 5px;
+}
+#btn-rec-help {
+    font-weight: 700;
+    min-width: 22px;
+    padding: 0 6px;
+}
+#rec-help-popup {
+    position: fixed;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 9999;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.5);
+    padding: 10px 14px 12px;
+    font-size: 11px;
+    color: var(--text-faint);
+    white-space: normal;
+    display: flex;
+    gap: 18px;
 }
 
 .rec-new-island-chk {
@@ -6827,6 +6853,27 @@ textarea.sql-bd-active.scope-mode-on {
     cursor: pointer;
     flex-shrink: 0;
 }
+.rec-filter-btn {
+    font-size: 11px;
+    padding: 2px 7px;
+    border-radius: 4px;
+    border: 1px solid var(--border2);
+    background: var(--surface3, var(--surface2));
+    color: var(--text-muted);
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.rec-filter-btn:hover {
+    background: var(--surface2);
+    color: var(--text);
+}
+.rec-filter-btn.is-active {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+}
+.rec-filter-btn:disabled { opacity: 0.4; cursor: default; pointer-events: none; }
 .rec-compare-btn {
     font-size: 11px;
     padding: 2px 7px;
@@ -6842,13 +6889,12 @@ textarea.sql-bd-active.scope-mode-on {
     color: var(--accent);
     background: rgba(74,158,255,0.1);
 }
-.rec-compare-btn:disabled { opacity: 0.4; cursor: default; }
+.rec-compare-btn:disabled { opacity: 0.4; cursor: default; pointer-events: none; }
 
 .rec-delete-sel-btn {
     font-size: 11px;
     padding: 2px 7px;
     border-radius: 4px;
-    border: 1px solid #f87171;
     background: rgba(248,113,113,0.08);
     color: #f87171;
     cursor: pointer;
@@ -6856,8 +6902,9 @@ textarea.sql-bd-active.scope-mode-on {
 }
 .rec-delete-sel-btn:not(:disabled):hover {
     background: rgba(248,113,113,0.18);
+    border: 1px solid #f87171;
 }
-.rec-delete-sel-btn:disabled { opacity: 0.4; cursor: default; }
+.rec-delete-sel-btn:disabled { opacity: 0.4; cursor: default; pointer-events: none; }
 
 #recordings-list {
     overflow-y: auto;
@@ -6880,6 +6927,7 @@ textarea.sql-bd-active.scope-mode-on {
     font-size: 12px;
 }
 .rec-entry:last-child { border-bottom: none; }
+.rec-entry:nth-child(even) { background: rgba(139,90,43,0.18); }
 .rec-entry:hover { background: rgba(255,255,255,0.03); }
 .rec-entry { cursor: grab; }
 .rec-entry:active { cursor: grabbing; }
@@ -6890,6 +6938,20 @@ textarea.sql-bd-active.scope-mode-on {
     border-top: 2px solid var(--accent);
     margin-top: -1px;
 }
+.rec-color-btn {
+    flex-shrink: 0;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: 1px solid var(--border2);
+    background: transparent;
+    padding: 0;
+    margin-top: 3px;
+    cursor: pointer;
+    transition: transform 0.1s, border-color 0.1s;
+}
+.rec-color-btn:hover        { transform: scale(1.2); border-color: var(--text-muted); }
+.rec-color-btn.has-color    { border-color: rgba(255,255,255,0.4); }
 .rec-entry-seq {
     flex-shrink: 0;
     min-width: 18px;
@@ -6902,6 +6964,14 @@ textarea.sql-bd-active.scope-mode-on {
 .rec-entry-chk { flex-shrink: 0; cursor: pointer; }
 .rec-entry-name {
     flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    min-width: 0;
+    overflow: hidden;
+}
+.rec-entry-name-text {
+    flex: 1;
     color: var(--text);
     cursor: pointer;
     white-space: nowrap;
@@ -6909,7 +6979,21 @@ textarea.sql-bd-active.scope-mode-on {
     text-overflow: ellipsis;
     min-width: 0;
 }
-.rec-entry-name:hover { color: var(--accent); text-decoration: underline; }
+.rec-entry-name-text:hover { color: var(--accent); text-decoration: underline; }
+.rec-rename-btn {
+    flex-shrink: 0;
+    background: transparent;
+    border: none;
+    color: var(--text-faint);
+    font-size: 12px;
+    padding: 0 1px;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.15s, color 0.15s;
+    line-height: 1;
+}
+.rec-entry:hover .rec-rename-btn { opacity: 0.5; }
+.rec-entry:hover .rec-rename-btn:hover { opacity: 1; color: var(--accent); }
 .rec-entry-rowcount {
     font-size: 10px;
     color: var(--text-muted);
