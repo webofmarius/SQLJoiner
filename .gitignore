@@ -10,3 +10,4 @@ dist/
 php-bin/
 
 package-lock.json
+.bash_aliases
