@@ -2403,8 +2403,10 @@ const Results = (() => {
     function _takeSnapshot() {
         if (!_lastResult) return;
         _diffSnapshot = {
-            cols: _lastResult.cols.slice(),
-            rows: _lastResult.rows.map(r => r.slice()),
+            cols:       _lastResult.cols.slice(),
+            rows:       _lastResult.rows.map(r => r.slice()),
+            col_tables: (_lastResult.col_tables || []).slice(),
+            col_types:  (_lastResult.col_types  || []).slice(),
         };
         document.getElementById('btn-diff-snapshot')?.classList.add('hidden');
         document.getElementById('btn-diff-exit')?.classList.remove('hidden');
@@ -2412,13 +2414,14 @@ const Results = (() => {
     }
 
     function _clearSnapshot() {
+        const snap          = _diffSnapshot;
         _diffSnapshot       = null;
         _diffChangedColIdxs = null;
         document.getElementById('btn-diff-snapshot')?.classList.remove('hidden');
         document.getElementById('btn-diff-exit')?.classList.add('hidden');
-        // Re-render current result without diff overlay
-        if (_lastResult) {
-            _populateTable(_lastResult.cols, _lastResult.rows, _lastResult.col_tables || [], _lastResult.col_types || []);
+        // Restore the original snapshot data, not the latest query result
+        if (snap) {
+            _populateTable(snap.cols, snap.rows, snap.col_tables, snap.col_types);
         }
     }
 
@@ -2488,25 +2491,24 @@ const Results = (() => {
     function _renderDiff(newCols, newRows, colTables, colTypes) {
         const snapCols = _diffSnapshot.cols;
         const snapRows = _diffSnapshot.rows;
-        const colsMatch = snapCols.length === newCols.length &&
-            snapCols.every((c, i) => c === newCols[i]);
+
+        // Hard stop: column structure must match exactly
+        const _abortDiff = (msg) => App.notify?.(msg, 'error');
+        if (snapCols.length !== newCols.length) {
+            _abortDiff(`Diff aborted — column count changed (snapshot: ${snapCols.length}, now: ${newCols.length})`);
+            return;
+        }
+        const mismatch = snapCols.findIndex((c, i) => c !== newCols[i]);
+        if (mismatch !== -1) {
+            _abortDiff(`Diff aborted — column "${newCols[mismatch]}" differs from snapshot column "${snapCols[mismatch]}" at position ${mismatch + 1}`);
+            return;
+        }
 
         // Always render the table with the new columns/data as base
         _populateTable(newCols, newRows, colTables, colTypes);
 
         const tbody = document.querySelector('#results-table tbody');
         if (!tbody) return;
-
-        // Column mismatch banner
-        if (!colsMatch) {
-            const bannerTr = document.createElement('tr');
-            const bannerTd = document.createElement('td');
-            bannerTd.colSpan = newCols.length + 1;
-            bannerTd.className = 'diff-banner diff-banner--warn';
-            bannerTd.textContent = '⚠ Column structure changed — showing add/remove only, no cell-level diff';
-            bannerTr.appendChild(bannerTd);
-            tbody.insertBefore(bannerTr, tbody.firstChild);
-        }
 
         const diff = _computeDiff(snapRows, newRows);
 
