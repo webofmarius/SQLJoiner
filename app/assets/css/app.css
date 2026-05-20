@@ -6724,3 +6724,261 @@ textarea.sql-bd-active.scope-mode-on {
     width: 200px;
     height: 200px;
 }
+
+/* =========================================================================
+   Recordings Panel
+   ========================================================================= */
+
+#recordings-panel {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 560px;
+    max-width: 96vw;
+    max-height: 70vh;
+    min-height: 120px;
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    border-radius: 8px;
+    box-shadow: 0 6px 24px rgba(0,0,0,0.55);
+    z-index: 200;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+#recordings-panel.hidden { display: none; }
+
+#recordings-panel-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 8px;
+    background: var(--surface2);
+    border-bottom: 1px solid var(--border2);
+    flex-shrink: 0;
+    user-select: none;
+}
+.rec-panel-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    flex: 1;
+}
+.rec-count-badge {
+    background: var(--surface3, var(--surface2));
+    border: 1px solid var(--border2);
+    color: var(--text-muted);
+    border-radius: 10px;
+    font-size: 11px;
+    padding: 0 6px;
+    min-width: 20px;
+    text-align: center;
+    line-height: 18px;
+}
+.rec-record-btn {
+    font-size: 11px;
+    padding: 2px 7px;
+    border-radius: 4px;
+    border: 1px solid var(--border2);
+    background: var(--surface3, var(--surface2));
+    color: var(--text-muted);
+    cursor: pointer;
+    white-space: nowrap;
+}
+.rec-record-btn.is-recording {
+    color: #f87171;
+    border-color: #f87171;
+    background: rgba(248, 113, 113, 0.1);
+    animation: rec-pulse 1.6s ease-in-out infinite;
+}
+@keyframes rec-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(248,113,113,0.4); }
+    50%       { box-shadow: 0 0 0 4px rgba(248,113,113,0); }
+}
+.rec-delete-all-btn,
+#btn-recordings-close {
+    font-size: 11px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    border: 1px solid var(--border2);
+    background: none;
+    color: var(--text-muted);
+    cursor: pointer;
+}
+.rec-delete-all-btn:hover,
+#btn-recordings-close:hover {
+    color: var(--text);
+    background: rgba(255,255,255,0.06);
+}
+#btn-recordings-close {
+    font-size: 14px;
+    padding: 0 5px;
+}
+
+.rec-new-island-chk {
+    cursor: pointer;
+    flex-shrink: 0;
+    margin: 0 1px 0 3px;
+}
+.rec-select-all-chk {
+    cursor: pointer;
+    flex-shrink: 0;
+}
+.rec-compare-btn {
+    font-size: 11px;
+    padding: 2px 7px;
+    border-radius: 4px;
+    border: 1px solid var(--border2);
+    background: var(--surface3, var(--surface2));
+    color: var(--text-muted);
+    cursor: pointer;
+    white-space: nowrap;
+}
+.rec-compare-btn:not(:disabled):hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: rgba(74,158,255,0.1);
+}
+.rec-compare-btn:disabled { opacity: 0.4; cursor: default; }
+
+.rec-delete-sel-btn {
+    font-size: 11px;
+    padding: 2px 7px;
+    border-radius: 4px;
+    border: 1px solid #f87171;
+    background: rgba(248,113,113,0.08);
+    color: #f87171;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.rec-delete-sel-btn:not(:disabled):hover {
+    background: rgba(248,113,113,0.18);
+}
+.rec-delete-sel-btn:disabled { opacity: 0.4; cursor: default; }
+
+#recordings-list {
+    overflow-y: auto;
+    flex: 1;
+    padding: 4px 0;
+}
+.rec-empty {
+    padding: 18px 14px;
+    font-size: 12px;
+    color: var(--text-muted);
+    text-align: center;
+    font-style: italic;
+}
+.rec-entry {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 8px;
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+}
+.rec-entry:last-child { border-bottom: none; }
+.rec-entry:hover { background: rgba(255,255,255,0.03); }
+.rec-entry { cursor: grab; }
+.rec-entry:active { cursor: grabbing; }
+.rec-entry--dragging {
+    opacity: 0.4;
+}
+.rec-entry--drag-over {
+    border-top: 2px solid var(--accent);
+    margin-top: -1px;
+}
+.rec-entry-seq {
+    flex-shrink: 0;
+    min-width: 18px;
+    font-size: 10px;
+    color: var(--text-muted);
+    text-align: right;
+    opacity: 0.6;
+    margin-right: 1px;
+}
+.rec-entry-chk { flex-shrink: 0; cursor: pointer; }
+.rec-entry-name {
+    flex: 1;
+    color: var(--text);
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+}
+.rec-entry-name:hover { color: var(--accent); text-decoration: underline; }
+.rec-entry-rowcount {
+    font-size: 10px;
+    color: var(--text-muted);
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+.rec-entry-actions {
+    display: flex;
+    gap: 3px;
+    flex-shrink: 0;
+}
+.rec-action-btn {
+    font-size: 10px;
+    padding: 2px 5px;
+    border-radius: 3px;
+    border: 1px solid var(--border2);
+    background: var(--surface2);
+    color: var(--text-muted);
+    cursor: pointer;
+    white-space: nowrap;
+}
+.rec-action-btn:hover {
+    color: var(--text);
+    border-color: var(--accent);
+    background: rgba(74,158,255,0.1);
+}
+.rec-btn-del {
+    border-color: transparent;
+    color: var(--text-muted);
+}
+.rec-btn-del:hover {
+    color: #f87171;
+    border-color: #f87171;
+    background: rgba(248,113,113,0.1);
+}
+.rec-rename-input {
+    flex: 1;
+    font-size: 12px;
+    background: var(--surface3, var(--surface2));
+    border: 1px solid var(--accent);
+    border-radius: 3px;
+    color: var(--text);
+    padding: 1px 4px;
+    outline: none;
+    min-width: 0;
+}
+
+/* --- Recordings toggle button in bottombar --- */
+#btn-recordings-toggle {
+    white-space: nowrap;
+    padding: 4px 8px;
+}
+#btn-recordings-toggle .rec-dot {
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--text-muted);
+    margin-right: 4px;
+    vertical-align: middle;
+    position: relative;
+    top: -1px;
+}
+#btn-recordings-toggle.rec-is-recording .rec-dot {
+    background: #f87171;
+}
+#btn-recordings-toggle.is-active {
+    color: var(--accent);
+    border-color: var(--accent);
+    background: rgba(74,158,255,0.1);
+}
+

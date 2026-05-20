@@ -151,6 +151,12 @@ const State = {
 
     /** Sort order for each island's pin container. { [islandKey]: 'asc' | 'desc' } */
     islandPinSortOrder: {},
+
+    /** Whether the Recordings module is actively capturing results. Default true. */
+    recordingActive: true,
+
+    /** Saved query recordings. Array of { id, timestamp, name, sql, results, island }. */
+    recordings: [],
 };
 
 /* =============================================================================
@@ -275,7 +281,8 @@ const App = (() => {
             SqlBackdrop.checkAlias     = alias => State.tables.some(t => t.alias === alias);
         }
 
-        if (typeof Minimap !== 'undefined') Minimap.init();
+        if (typeof Minimap     !== 'undefined') Minimap.init();
+        if (typeof Recordings  !== 'undefined') Recordings.init();
 
         // Capture the initial clean-slate baseline so dirty checks work from the start.
         // Use setTimeout so any non-awaited async init work (e.g. _activateProfile)
@@ -3798,6 +3805,8 @@ const App = (() => {
                 customQueryHighlight: parsed.customQueryHighlight ?? false,
                 islandPinnedPlots:  (!parsed.islandPinnedPlots  || Array.isArray(parsed.islandPinnedPlots))  ? {} : parsed.islandPinnedPlots,
                 islandPinSortOrder: (!parsed.islandPinSortOrder || Array.isArray(parsed.islandPinSortOrder)) ? {} : parsed.islandPinSortOrder,
+                recordingActive: parsed.recordingActive ?? true,
+                recordings:      Array.isArray(parsed.recordings) ? parsed.recordings : [],
             });
 
             if (opts.preserveWhereRaw && _prevWhereMode === 'raw') {
@@ -3898,6 +3907,8 @@ const App = (() => {
             // Refresh the sidebar table list for the restored database so that
             // on-canvas markers and the db-select reflect the loaded context.
             loadTables();
+
+            if (typeof Recordings !== 'undefined') Recordings.refresh();
 
         } catch (e) {
             _notify('Error: ' + e.message, 'error');

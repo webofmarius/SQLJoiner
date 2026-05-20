@@ -263,6 +263,7 @@
             <button id="btn-plot-query" class="btn-outline-blue" title="Plot query results as a bar chart">📊 Plot</button>
             <input type="checkbox" id="chk-explain-colors" checked title="Color-code EXPLAIN results">
             <button id="btn-explain-query" class="btn-outline-blue" title="Run EXPLAIN on the current query (Alt+E)">⚙ Explain</button>
+            <button id="btn-recordings-toggle" class="rec-toggle-btn" title="Query Recordings"><span class="rec-dot"></span>Rec <span class="rec-toggle-count">0</span></button>
             <button id="btn-minimap-badge" class="minimap-badge-toggle" title="Toggle minimap (canvas overview)">⊹</button>
             <button id="btn-run-custom-query" class="btn-outline-blue" title="Run a custom SQL query">▶ Run Custom Query</button>
             <button id="btn-cancel-query" class="btn-danger hidden" title="Kill the running query on the server">✕ Cancel Query</button>
@@ -341,6 +342,21 @@
             <button id="btn-minimap-close" title="Close minimap">×</button>
         </div>
         <canvas id="minimap-canvas"></canvas>
+    </div>
+
+    <!-- ==================== RECORDINGS PANEL ==================== -->
+    <div id="recordings-panel" class="hidden">
+        <div id="recordings-panel-header">
+            <span class="rec-panel-title">Recordings</span>
+            <button id="btn-rec-compare" class="rec-compare-btn" disabled title="Select exactly 2 recordings to compare their results using Diff Snapshot">Compare</button>
+            <button id="btn-rec-delete-selected" class="rec-delete-sel-btn" disabled>Delete Selected</button>
+            <input type="checkbox" id="chk-rec-select-all" class="rec-select-all-chk" title="Select / deselect all recordings">
+            <span id="rec-count-badge" class="rec-count-badge">0</span>
+            <button id="btn-rec-record" class="rec-record-btn" title="Recording active — click to stop">■ Stop</button>
+            <button id="btn-rec-delete-all" class="rec-delete-all-btn" title="Delete all recordings">Delete All</button>
+            <button id="btn-recordings-close" title="Close panel">✕</button>
+        </div>
+        <div id="recordings-list"></div>
     </div>
 
     <div id="calculus-toolbox" class="hidden">
@@ -1035,6 +1051,7 @@
     <script src="assets/js/undo.js"></script>
     <script src="assets/js/sql-backdrop.js"></script>
     <script src="assets/js/minimap.js"></script>
+    <script src="assets/js/recordings.js"></script>
 
     <!-- ==================== TABLE SEARCH MODAL ==================== -->
     <div id="modal-table-search" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modal-table-search-title">

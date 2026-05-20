@@ -683,6 +683,11 @@ const Results = (() => {
         if (result.sql) {
             document.getElementById('sql-preview-text').textContent = result.sql;
         }
+
+        // Record this result (skip diff renders and replayed recordings)
+        if (typeof Recordings !== 'undefined' && !_diffSnapshot && !result._fromRecording) {
+            Recordings.onQuerySuccess(result);
+        }
     }
 
     /** Hide the panel and wipe all content. */
@@ -7706,6 +7711,21 @@ async function _copyAsSqlSelect() {
                 metaEl.textContent = `${rowLabel} — CSV (memory)`;
             }
             return null;
+        },
+        /**
+         * Diff two recording result objects against each other.
+         * snapResult = the "before" (base), newResult = the "after".
+         */
+        compareRecordings(snapResult, newResult) {
+            _diffSnapshot = {
+                cols:       (snapResult.cols       || []).slice(),
+                rows:       (snapResult.rows       || []).map(r => r.slice()),
+                col_tables: (snapResult.col_tables || []).slice(),
+                col_types:  (snapResult.col_types  || []).slice(),
+            };
+            document.getElementById('btn-diff-snapshot')?.classList.add('hidden');
+            document.getElementById('btn-diff-exit')?.classList.remove('hidden');
+            render({ ...newResult, _fromRecording: true });
         },
     };
 })();
