@@ -6944,7 +6944,28 @@ textarea.sql-bd-active.scope-mode-on {
 }
 .rec-entry:last-child { border-bottom: none; }
 .rec-entry:nth-child(even) { background: rgba(139,90,43,0.18); }
-.rec-entry:hover { background: rgba(255,255,255,0.03); }
+.rec-entry:hover {
+    background: color-mix(in srgb, var(--accent, #4a9eff) 14%, var(--surface2)) !important;
+    border-color: color-mix(in srgb, var(--accent, #4a9eff) 50%, var(--border));
+}
+.rec-entry.is-current-rec {
+    border-color: var(--accent, #4a9eff) !important;
+    background: color-mix(in srgb, var(--accent, #4a9eff) 22%, var(--surface2)) !important;
+}
+.rec-entry.is-current-rec:hover {
+    background: color-mix(in srgb, var(--accent, #4a9eff) 30%, var(--surface2)) !important;
+}
+.rec-viewstate-badge {
+    font-size: 11px;
+    margin-left: 5px;
+    opacity: 0.75;
+    cursor: default;
+    flex-shrink: 0;
+}
+#btn-save-view-state {
+    padding: 4px 8px;
+    white-space: nowrap;
+}
 .rec-entry { cursor: grab; }
 .rec-entry:active { cursor: grabbing; }
 .rec-entry--dragging {

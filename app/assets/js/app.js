@@ -4096,11 +4096,6 @@ const App = (() => {
         document.getElementById('btn-ai-knowledge')
             .addEventListener('click', runAiKnowledge);
 
-        document.getElementById('btn-copy-explain')
-            .addEventListener('click', _copyExplainSql);
-
-        document.getElementById('btn-copy-sql')
-            .addEventListener('click', _copySql);
 
         document.getElementById('btn-load-csv').addEventListener('click', () => {
             document.getElementById('csv-file-input').click();

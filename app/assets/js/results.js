@@ -720,6 +720,7 @@ const Results = (() => {
 
         // Record this result (skip diff renders and replayed recordings)
         if (typeof Recordings !== 'undefined' && !_diffSnapshot && !result._fromRecording) {
+            Recordings.setCurrentRec?.(null); // clear before onQuerySuccess (re-sets if recording is on)
             Recordings.onQuerySuccess(result);
         }
     }
@@ -7693,6 +7694,158 @@ async function _copyAsSqlSelect() {
     }
 
     // -------------------------------------------------------------------------
+    // Recording view-state snapshot
+    // -------------------------------------------------------------------------
+
+    /** All CSS classes that belong to feature-coloring systems. */
+    const _ALL_FEATURE_CLS = [
+        'cell-compare-ref', 'cell-compare-match', 'cell-compare-diff',
+        'cell-dup-origin',  'cell-dup-match',     'cell-dup-unique',
+        'cell-ds-diff',
+        'col-highlight-1', 'col-highlight-2', 'col-highlight-3', 'col-highlight-4',
+    ];
+
+    /** Return {ri, ci} of a <td> relative to its tbody, or null. */
+    function _cellPosition(td) {
+        const tr    = td?.closest('tr');
+        const tbody = tr?.closest('tbody');
+        if (!tbody) return null;
+        const ri = Array.from(tbody.querySelectorAll('tr')).indexOf(tr);
+        const ci = Array.from(tr.querySelectorAll('td:not(.td-row-num)')).indexOf(td);
+        return (ri >= 0 && ci >= 0) ? { ri, ci } : null;
+    }
+
+    /**
+     * Serialise the current results-table visual state into a plain object
+     * suitable for storing on a recording entry.
+     */
+    function captureViewState() {
+        const table = document.getElementById('results-table');
+        if (!table || !_lastResult) return null;
+        const tbody = table.querySelector('tbody');
+        if (!tbody) return null;
+
+        const cellStates    = []; // { ri, ci, classes:[], featureOverride:string|null }
+        const rowHighlights = []; // [ri, ...]
+
+        Array.from(tbody.querySelectorAll('tr')).forEach((tr, ri) => {
+            if (tr.classList.contains('row-highlighted')) rowHighlights.push(ri);
+            Array.from(tr.querySelectorAll('td:not(.td-row-num)')).forEach((td, ci) => {
+                const classes         = _ALL_FEATURE_CLS.filter(c => td.classList.contains(c));
+                const featureOverride = td.dataset.featureOverride || null;
+                if (classes.length || featureOverride) {
+                    cellStates.push({ ri, ci, classes, featureOverride });
+                }
+            });
+        });
+
+        const panel = document.getElementById('results-panel');
+        return {
+            compareMode:     _compareMode,
+            compareRefValue: _compareRefValue,
+            compareRefPos:   _cellPosition(_compareRefCell),
+            duplicateMode:   _duplicateMode,
+            dupOriginPos:    _cellPosition(_duplicateOriginCell),
+            cellStates,
+            rowHighlights,
+            dimActive:       table.classList.contains('is-dimmed'),
+            dimRowMode:      _dimRowMode,
+            dimPinnedCols:   [..._dimPinnedCols],
+            colFilters:      { ..._colFilters },
+            searchActive:    panel?.classList.contains('search-active') ?? false,
+        };
+    }
+
+    /**
+     * Restore a previously captured view-state onto the current results table.
+     * Must be called after Results.render() has fully populated the DOM.
+     */
+    function applyViewState(viewState) {
+        if (!viewState) return;
+        const table = document.getElementById('results-table');
+        if (!table) return;
+        const tbody = table.querySelector('tbody');
+        if (!tbody) return;
+
+        const trs = Array.from(tbody.querySelectorAll('tr'));
+        const getCell = (ri, ci) => {
+            const tr = trs[ri];
+            if (!tr) return null;
+            return Array.from(tr.querySelectorAll('td:not(.td-row-num)'))[ci] ?? null;
+        };
+
+        // Cell classes + featureOverride attributes
+        viewState.cellStates?.forEach(({ ri, ci, classes, featureOverride }) => {
+            const td = getCell(ri, ci);
+            if (!td) return;
+            classes.forEach(c => td.classList.add(c));
+            if (featureOverride) td.dataset.featureOverride = featureOverride;
+        });
+
+        // Row highlights (alt+click)
+        viewState.rowHighlights?.forEach(ri => {
+            trs[ri]?.classList.add('row-highlighted');
+        });
+
+        // Compare mode
+        _compareMode     = viewState.compareMode     ?? false;
+        _compareRefValue = viewState.compareRefValue ?? null;
+        _compareRefCell  = viewState.compareRefPos   ? getCell(viewState.compareRefPos.ri, viewState.compareRefPos.ci) : null;
+        const btnCmp = document.getElementById('btn-compare');
+        if (btnCmp) {
+            btnCmp.classList.toggle('is-active', _compareMode);
+            btnCmp.title = _compareMode ? 'Exit compare mode' : 'Compare cell values';
+        }
+        document.getElementById('legend-compare')?.classList.toggle('hidden', !_compareMode);
+
+        // Duplicates mode
+        _duplicateMode       = viewState.duplicateMode ?? false;
+        _duplicateOriginCell = viewState.dupOriginPos  ? getCell(viewState.dupOriginPos.ri, viewState.dupOriginPos.ci) : null;
+        const btnDup = document.getElementById('btn-duplicates');
+        if (btnDup) {
+            btnDup.classList.toggle('is-active', _duplicateMode);
+            btnDup.title = _duplicateMode ? 'Exit duplicates mode' : 'Highlight duplicate cell values';
+            if (_duplicateMode) {
+                const matchCount = viewState.cellStates?.filter(s => s.classes.includes('cell-dup-match')).length ?? 0;
+                btnDup.textContent = matchCount > 0 ? `⧉ Duplicates (${matchCount + 1})` : '⧉ Duplicates';
+            }
+        }
+        document.getElementById('legend-duplicates')?.classList.toggle('hidden', !_duplicateMode);
+
+        // Mutual-exclusion disabled state
+        if (btnCmp) btnCmp.disabled = _duplicateMode;
+        if (btnDup) btnDup.disabled = _compareMode;
+
+        // DIM
+        if (viewState.dimActive) {
+            _dimRowMode    = viewState.dimRowMode ?? false;
+            _dimPinnedCols = new Set(viewState.dimPinnedCols ?? []);
+            table.classList.add('is-dimmed');
+            document.getElementById('btn-toggle-dim')?.classList.add('is-active');
+            _applyDimVisibility();
+            _applyDimRowVisibility();
+        }
+
+        // Column filters
+        const savedFilters = viewState.colFilters ?? {};
+        if (Object.keys(savedFilters).length) {
+            _colFilters = { ...savedFilters };
+            Array.from(table.querySelectorAll('thead th .th-filter-input')).forEach((inp, ci) => {
+                const val = savedFilters[ci] ?? '';
+                inp.value = val;
+                inp.classList.toggle('has-value', val.length > 0);
+            });
+            _applyColFilter();
+        }
+
+        // Search-active
+        if (viewState.searchActive) {
+            document.getElementById('results-panel')?.classList.add('search-active');
+            document.getElementById('btn-search-cols')?.classList.add('active');
+        }
+    }
+
+    // -------------------------------------------------------------------------
     return {
         init,
         render,
@@ -7731,6 +7884,10 @@ async function _copyAsSqlSelect() {
         },
         /** Destroy all Calculus expression rows. */
         calcClear: _calcClearAll,
+        /** Serialise the current results-table visual state for storage in a recording. */
+        captureViewState,
+        /** Restore a previously captured view-state onto the current results table. */
+        applyViewState,
         /** Turn off Dim (called on context load/reset). */
         clearDim: () => _setDimmed(false),
         /** Exit dataset compare mode, stripping all compare highlights and turning off Dim. */

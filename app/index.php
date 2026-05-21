@@ -255,8 +255,7 @@
             <code id="sql-preview-text">-- Add tables to the canvas to begin</code>
         </div>
         <div id="bottom-actions">
-            <button id="btn-copy-sql" title="Copy generated SQL to clipboard">Copy SQL</button>
-            <button id="btn-copy-explain" title="Copy SQL with EXPLAIN prefix to clipboard">Copy EXPLAIN</button>
+
             <input type="checkbox" id="chk-ai-knowledge-save" title="Save to disk instead of copying to clipboard">
             <button id="btn-ai-knowledge" class="btn-outline-blue" title="Generate SELECT + CREATE TABLE definitions for all tables (Ctrl/Cmd+K)">AI Knowledge</button>
             <input type="checkbox" id="chk-plot-show-results" title="Also show results table when plotting">
@@ -309,6 +308,7 @@
                 <button id="btn-diff-exit" class="hidden is-active" title="Exit compare mode">✕ Exit Diff</button>
                 <button id="btn-explain-graph" class="hidden" title="Toggle EXPLAIN graph view">⎇ Explain Graph</button>
                 <button id="btn-search-cols" title="Toggle column search inputs">⌕ Search</button>
+                <button id="btn-save-view-state" class="hidden" title="Save current visual state (Compare, Duplicates, colors, Dim, filters) to this recording">📌 Save</button>
             </div>
             <span id="results-meta"></span>
             <div id="results-actions">
@@ -366,6 +366,8 @@
                 <div class="results-help-row"><kbd>Click</kbd> Toggle selection</div>
                 <div class="results-help-row"><kbd>Right-click</kbd> Cycle row color</div>
                 <div class="results-help-row"><kbd>✎ icon</kbd> Rename entry</div>
+                <div class="results-help-row"><kbd>Alt+hover</kbd> Peek SQL preview</div>
+                <div class="results-help-row"><kbd>Alt+click</kbd> Pin / unpin SQL preview</div>
             </div>
             <div class="results-help-section">
                 <span class="results-help-group">Filters</span>
