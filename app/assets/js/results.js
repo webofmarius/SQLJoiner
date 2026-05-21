@@ -29,7 +29,7 @@ const Results = (() => {
     // Dataset compare state
     let _datasetCompareActive     = false;
     let _datasetCompareTrs        = []; // <tr> elements marked row-highlighted by compare
-    let _datasetCompareTds        = []; // <td> elements marked col-highlight-4 by compare
+    let _datasetCompareTds        = []; // <td> elements marked cell-ds-diff by compare
     let _datasetCompareBannerTr   = null; // injected status banner row (green = all equal, red = diffs)
 
     // Duplicates mode
@@ -128,6 +128,13 @@ const Results = (() => {
         'col-highlight-2',
         'col-highlight-3',
         'col-highlight-4'
+    ];
+
+    // All feature-coloring classes that DIM should keep visible (besides right-click THEMES)
+    const FEATURE_COLOR_CLASSES = [
+        'cell-compare-ref', 'cell-compare-match', 'cell-compare-diff',
+        'cell-dup-origin', 'cell-dup-match', 'cell-dup-unique',
+        'cell-ds-diff', 'td-diff-changed'
     ];
 
     // -------------------------------------------------------------------------
@@ -984,7 +991,7 @@ const Results = (() => {
                         _lastResult.cols.forEach((_col, colIdx) => {
                             if (_colThemes[colIdx]) { _dimPinnedCols.add(colIdx); return; }
                             const nth = colIdx + 2;
-                            if (tbody && THEMES.some(t => tbody.querySelector(`tr td:nth-child(${nth}).${t}`)))
+                            if (tbody && [...THEMES, ...FEATURE_COLOR_CLASSES].some(t => tbody.querySelector(`tr td:nth-child(${nth}).${t}`)))
                                 _dimPinnedCols.add(colIdx);
                         });
                     }
@@ -1056,7 +1063,7 @@ const Results = (() => {
     /**
      * Compare the current result table (Dataset A) against a CSV string (Dataset B).
      * Highlights mismatched rows with row-highlighted and mismatched cells with
-     * col-highlight-4 (red), then auto-activates DIM in row-mode.
+     * cell-ds-diff (red), then auto-activates DIM in row-mode.
      * Returns an error string on failure, or null on success.
      */
     function _runDatasetCompare(csvText, hasHeader) {
@@ -1102,7 +1109,7 @@ const Results = (() => {
                 const aNum = Number(aVal);
                 const bNum = Number(bVal);
                 if (aVal !== '' && bVal !== '' && !isNaN(aNum) && !isNaN(bNum) && aNum === bNum) return;
-                td.classList.add('col-highlight-4');
+                td.classList.add('cell-ds-diff');
                 _datasetCompareTds.push(td);
                 mismatch = true;
             });
@@ -1145,7 +1152,7 @@ const Results = (() => {
 
     function _exitDatasetCompare() {
         _datasetCompareTrs.forEach(tr => tr.classList.remove('row-highlighted'));
-        _datasetCompareTds.forEach(td => td.classList.remove('col-highlight-4'));
+        _datasetCompareTds.forEach(td => td.classList.remove('cell-ds-diff'));
         _datasetCompareTrs = [];
         _datasetCompareTds = [];
         _datasetCompareBannerTr?.remove();
@@ -1179,7 +1186,7 @@ const Results = (() => {
                     _lastResult.cols.forEach((_col, colIdx) => {
                         if (_colThemes[colIdx]) { _dimPinnedCols.add(colIdx); return; }
                         const nth = colIdx + 2;
-                        if (tbody && THEMES.some(t => tbody.querySelector(`tr td:nth-child(${nth}).${t}`)))
+                        if (tbody && [...THEMES, ...FEATURE_COLOR_CLASSES].some(t => tbody.querySelector(`tr td:nth-child(${nth}).${t}`)))
                             _dimPinnedCols.add(colIdx);
                     });
                 }
@@ -2254,14 +2261,14 @@ const Results = (() => {
                 // mousedown catches Alt+right-click reliably on Windows (where the
                 // contextmenu event may not carry altKey).
                 td.addEventListener('mousedown', e => {
-                    if (e.button === 2 && _altKeyHeld) {
+                    if (e.button === 2 && _altKeyHeld && !_compareMode && !_duplicateMode) {
                         e.stopPropagation(); // prevent document mousedown from closing the popup it just opened
                         _showLineagePopup(td, col, colIdx, colTables);
                         _altRightClickHandled = true;
                     }
                 });
 
-                // Right-click: cycle color / compare row / duplicate row; Alt+right-click: lineage popup
+                // Right-click: cycle cell color; Alt+right-click: lineage popup (or color override in Compare/Duplicates mode)
                 td.addEventListener('contextmenu', e => {
                     e.preventDefault();
                     e.stopPropagation(); // Don't trigger header contextmenu if somehow bubbled
@@ -2271,20 +2278,22 @@ const Results = (() => {
 
                     // Fallback: check our own Alt-key tracker in case mousedown was skipped.
                     if (_altKeyHeld) {
-                        _showLineagePopup(td, col, colIdx, colTables);
-                        return;
-                    }
-
-                    // Compare mode: right-click compares all cells in the row against this cell
-                    if (_compareMode) {
-                        _compareRow(tr, td);
-                        return;
-                    }
-
-                    // Duplicate mode: right-click searches for duplicates within the row
-                    if (_duplicateMode) {
-                        _duplicateRow(tr, td);
-                        return;
+                        if (_compareMode || _duplicateMode) {
+                            // Override exception: strip feature coloring from this cell so the
+                            // manual color shows through, then fall through to color cycling.
+                            const featureCls = [
+                                'cell-compare-ref', 'cell-compare-match', 'cell-compare-diff',
+                                'cell-dup-origin',  'cell-dup-match',     'cell-dup-unique'
+                            ].filter(c => td.classList.contains(c));
+                            if (featureCls.length) {
+                                // Remember original feature class so cycling back to no-color can restore it
+                                td.dataset.featureOverride = featureCls.join(' ');
+                                td.classList.remove(...featureCls);
+                            }
+                        } else {
+                            _showLineagePopup(td, col, colIdx, colTables);
+                            return;
+                        }
                     }
 
                     const currentTheme = THEMES.find(t => td.classList.contains(t));
@@ -2294,6 +2303,10 @@ const Results = (() => {
                     if (nextTheme) {
                         td.classList.add(nextTheme);
                         _dimPinCol(colIdx);
+                    } else if ((_compareMode || _duplicateMode) && td.dataset.featureOverride) {
+                        // Cycled back to no-color inside a feature mode — restore original feature class
+                        td.classList.add(...td.dataset.featureOverride.split(' '));
+                        delete td.dataset.featureOverride;
                     }
                     _applyDimVisibility();
                     _applyDimRowVisibility();
@@ -3693,6 +3706,8 @@ const Results = (() => {
         btn.classList.toggle('is-active', _compareMode);
         btn.title = _compareMode ? 'Exit compare mode' : 'Compare cell values';
         document.getElementById('legend-compare')?.classList.toggle('hidden', !_compareMode);
+        const btnDup = document.getElementById('btn-duplicates');
+        if (btnDup) btnDup.disabled = _compareMode;
 
         if (!_compareMode) {
             // Exiting: clear only compare highlights, preserve manual right-click colors
@@ -3702,6 +3717,8 @@ const Results = (() => {
                 .forEach(td => {
                     td.classList.remove('cell-compare-ref', 'cell-compare-match', 'cell-compare-diff');
                 });
+            document.querySelectorAll('#results-table td[data-feature-override]')
+                .forEach(td => { delete td.dataset.featureOverride; });
         }
     }
 
@@ -3764,6 +3781,8 @@ const Results = (() => {
         btn.classList.toggle('is-active', _duplicateMode);
         btn.title = _duplicateMode ? 'Exit duplicates mode' : 'Highlight duplicate cell values';
         document.getElementById('legend-duplicates')?.classList.toggle('hidden', !_duplicateMode);
+        const btnCmp = document.getElementById('btn-compare');
+        if (btnCmp) btnCmp.disabled = _duplicateMode;
 
         if (!_duplicateMode) {
             // Exiting: clear only duplicate highlights, preserve compare/manual colors
@@ -3771,6 +3790,8 @@ const Results = (() => {
                 .forEach(td => td.classList.remove('cell-dup-origin', 'cell-dup-match', 'cell-dup-unique'));
             _duplicateOriginCell = null;
             btn.textContent = '⧉ Duplicates';
+            document.querySelectorAll('#results-table td[data-feature-override]')
+                .forEach(td => { delete td.dataset.featureOverride; });
         }
     }
 

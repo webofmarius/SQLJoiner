@@ -4807,38 +4807,54 @@ th.calc-nop { opacity: 0.1; font-weight: bold; }
     animation: calculus-origin-pulse 2.5s ease-out forwards;
 }
 
-.cell-compare-ref {
-    background-color: #1b5e20 !important;
-    color: #a5d6a7 !important;
-    outline: 2px solid #a5d6a7 !important;
-    outline-offset: -2px;
-}
+/* ── Results table cell colour priority (lowest → highest) ─────────────────
+   All selectors use #results-table td. (specificity 1,1,1) which beats the
+   row-highlighted selector (0,5,2). Among these rules document order decides
+   the winner when a cell carries multiple feature classes — LAST rule wins.
+   Generic .td-diff-changed (0,1,0) is automatically lowest via specificity. */
 
-.cell-compare-match {
-    background-color: #2e7d32 !important;
+/* Compare Datasets */
+#results-table td.cell-ds-diff {
+    background-color: #e53935 !important;
     color: #fff !important;
 }
 
-.cell-compare-diff {
-    background-color: #c62828 !important;
-    color: #fff !important;
-}
+/* Right-click manual color */
+#results-table td.col-highlight-1 { background-color: #fdd835 !important; color: #000 !important; }
+#results-table td.col-highlight-2 { background-color: #43a047 !important; color: #fff !important; }
+#results-table td.col-highlight-3 { background-color: #1e88e5 !important; color: #fff !important; }
+#results-table td.col-highlight-4 { background-color: #e53935 !important; color: #fff !important; }
 
-.cell-dup-origin {
+/* Duplicates */
+#results-table td.cell-dup-origin {
     background-color: #ff6d00 !important;
     color: #fff !important;
     outline: 2px solid #ffd740 !important;
     outline-offset: -2px;
 }
-
-.cell-dup-match {
+#results-table td.cell-dup-match {
     background-color: #e65100 !important;
     color: #ffe0b2 !important;
 }
-
-.cell-dup-unique {
+#results-table td.cell-dup-unique {
     background-color: #1a2634 !important;
     color: #607d8b !important;
+}
+
+/* Compare — highest priority */
+#results-table td.cell-compare-ref {
+    background-color: #1b5e20 !important;
+    color: #a5d6a7 !important;
+    outline: 2px solid #a5d6a7 !important;
+    outline-offset: -2px;
+}
+#results-table td.cell-compare-match {
+    background-color: #2e7d32 !important;
+    color: #fff !important;
+}
+#results-table td.cell-compare-diff {
+    background-color: #c62828 !important;
+    color: #fff !important;
 }
 
 /* EXPLAIN colour-coding */

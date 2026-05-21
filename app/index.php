@@ -284,6 +284,7 @@
                         <div class="results-help-row"><kbd>Right-click</kbd> Cycle cell color</div>
                         <div class="results-help-row"><kbd>Alt + Click</kbd> Highlight / unhighlight row</div>
                         <div class="results-help-row"><kbd>Alt + Right-click</kbd> Trace column origin</div>
+                        <div class="results-help-row"><kbd>Alt + Right-click</kbd> <em>in Compare / Duplicates mode</em> — override cell color (persists when mode exits)</div>
                         <div class="results-help-row"><kbd>Double-click</kbd> Add number to Calculus</div>
                         <div class="results-help-row"><kbd>Alt + J</kbd> Copy row as JSON</div>
                         <div class="results-help-row"><kbd>Alt + C</kbd> Load CSV / XLSX file</div>
