@@ -263,7 +263,7 @@
             <button id="btn-plot-query" class="btn-outline-blue" title="Plot query results as a bar chart">📊 Plot</button>
             <input type="checkbox" id="chk-explain-colors" checked title="Color-code EXPLAIN results">
             <button id="btn-explain-query" class="btn-outline-blue" title="Run EXPLAIN on the current query (Alt+E)">⚙ Explain</button>
-            <button id="btn-recordings-toggle" class="rec-toggle-btn" title="Query Recordings"><span class="rec-dot"></span>Rec <span class="rec-toggle-count">0</span></button>
+            <button id="btn-recordings-toggle" class="rec-toggle-btn" title="Query Recordings — left-click to open, right-click to toggle recording"><span class="rec-dot"></span>Rec <span class="rec-toggle-count">0</span></button>
             <button id="btn-minimap-badge" class="minimap-badge-toggle" title="Toggle minimap (canvas overview)">⊹</button>
             <button id="btn-run-custom-query" class="btn-outline-blue" title="Run a custom SQL query">▶ Run Custom Query</button>
             <button id="btn-cancel-query" class="btn-danger hidden" title="Kill the running query on the server">✕ Cancel Query</button>

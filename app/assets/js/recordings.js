@@ -30,6 +30,8 @@ const Recordings = (() => {
 
         document.getElementById('btn-recordings-toggle')
             ?.addEventListener('click', toggle);
+        document.getElementById('btn-recordings-toggle')
+            ?.addEventListener('contextmenu', e => { e.preventDefault(); toggleRecord(); });
         document.getElementById('btn-recordings-close')
             ?.addEventListener('click', () => { _visible = true; toggle(); });
         document.getElementById('btn-rec-record')
