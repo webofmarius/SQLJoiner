@@ -605,15 +605,42 @@ const Results = (() => {
      * Always expands the panel so fresh results are immediately visible.
      */
     function render(result) {
-        // If a dataset compare is active, clean it up — the table is being replaced
+        // Reset all transient button states — new results replace old context
         if (_datasetCompareActive) {
             _datasetCompareTrs = [];
             _datasetCompareTds = [];
-            _datasetCompareBannerTr = null; // tbody is about to be wiped
+            _datasetCompareBannerTr = null;
             _datasetCompareActive = false;
             document.getElementById('btn-exit-compare-datasets')?.classList.add('hidden');
             document.getElementById('btn-compare-datasets')?.classList.remove('hidden');
-            _setDimmed(false);
+        }
+        _setDimmed(false);
+        if (_compareMode) {
+            _compareMode = false;
+            _compareRefValue = null;
+            _compareRefCell  = null;
+            const btnCompare = document.getElementById('btn-compare');
+            if (btnCompare) {
+                btnCompare.classList.remove('is-active');
+                btnCompare.title = 'Compare cell values';
+            }
+        }
+        if (_duplicateMode) {
+            _duplicateMode = false;
+            _duplicateOriginCell = null;
+            const btnDup = document.getElementById('btn-duplicates');
+            if (btnDup) {
+                btnDup.classList.remove('is-active');
+                btnDup.textContent = '⧉ Duplicates';
+                btnDup.title = 'Highlight duplicate cell values';
+            }
+        }
+        const resultsPanel = document.getElementById('results-panel');
+        if (resultsPanel?.classList.contains('search-active')) {
+            resultsPanel.classList.remove('search-active');
+            document.getElementById('btn-search-cols')?.classList.remove('active');
+            _colFilters = {};
+            document.querySelectorAll('#results-table .th-filter-input').forEach(inp => { inp.value = ''; });
         }
 
         // Clear any previous error banner
