@@ -2168,6 +2168,14 @@ body.is-cut-mode * { cursor: crosshair !important; }
 .th-col-focus-flash {
     animation: th-col-focus-flash 2s ease-out forwards !important;
 }
+@keyframes td-col-focus-flash {
+    0%   { background: color-mix(in srgb, var(--accent, #4a9eff) 30%, transparent); box-shadow: inset 2px 0 0 var(--accent, #4a9eff), inset -2px 0 0 var(--accent, #4a9eff); }
+    60%  { background: color-mix(in srgb, var(--accent, #4a9eff) 12%, transparent); box-shadow: inset 1px 0 0 var(--accent, #4a9eff), inset -1px 0 0 var(--accent, #4a9eff); }
+    100% { background: transparent; box-shadow: none; }
+}
+.td-col-focus-flash {
+    animation: td-col-focus-flash 2s ease-out forwards !important;
+}
 
 /* Valid drop-target column highlighted under cursor during drag */
 .table-card__col.drop-target {

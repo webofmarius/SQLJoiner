@@ -7744,11 +7744,26 @@ async function _copyAsSqlSelect() {
         // Scroll horizontally to centre the column in the wrapper
         th.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
 
-        // Flash the header for 2 seconds
+        // Flash the header
         th.classList.remove('th-col-focus-flash');
         void th.offsetWidth; // force reflow so animation restarts
         th.classList.add('th-col-focus-flash');
-        setTimeout(() => th.classList.remove('th-col-focus-flash'), 2000);
+
+        // Flash every body cell in the same column via nth-child (1-based)
+        const nthChild = th.cellIndex + 1;
+        const cells = document.querySelectorAll(
+            `#results-table tbody tr td:nth-child(${nthChild})`
+        );
+        cells.forEach(td => {
+            td.classList.remove('td-col-focus-flash');
+            void td.offsetWidth;
+            td.classList.add('td-col-focus-flash');
+        });
+
+        setTimeout(() => {
+            th.classList.remove('th-col-focus-flash');
+            cells.forEach(td => td.classList.remove('td-col-focus-flash'));
+        }, 2000);
     }
 
     /**
