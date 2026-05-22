@@ -384,6 +384,9 @@
                 <div class="results-help-row"><kbd>■ Stop / ▶ Record</kbd> Pause / resume recording</div>
             </div>
         </div>
+        <div id="rec-search-bar">
+            <input type="search" id="rec-search-input" placeholder="Search recordings…" autocomplete="off" spellcheck="false">
+        </div>
         <div id="recordings-list"></div>
     </div>
 

@@ -6765,6 +6765,28 @@ textarea.sql-bd-active.scope-mode-on {
 }
 #recordings-panel.hidden { display: none; }
 
+#rec-search-bar {
+    padding: 5px 8px;
+    background: var(--surface2);
+    border-bottom: 1px solid var(--border2);
+    flex-shrink: 0;
+}
+#rec-search-input {
+    width: 100%;
+    box-sizing: border-box;
+    font-size: 11px;
+    padding: 3px 8px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--surface);
+    color: var(--text);
+    outline: none;
+    transition: border-color .15s;
+}
+#rec-search-input:focus {
+    border-color: var(--accent, #5ab4f5);
+}
+
 #recordings-panel-header {
     display: flex;
     align-items: center;

@@ -20,7 +20,8 @@ const Recordings = (() => {
     let _peekHideTimer = null;
     let _peekRec       = null;   // rec whose SQL is shown in _peekPopup
     let _peekPinned    = false;  // true = stays open until explicitly closed
-    let _currentRecId = null;  // id of the recording whose results are currently shown
+    let _currentRecId  = null;  // id of the recording whose results are currently shown
+    let _searchTerm    = '';    // current recording search filter
 
     // -------------------------------------------------------------------------
     // Public
@@ -42,6 +43,10 @@ const Recordings = (() => {
             ?.addEventListener('click', toggleRecord);
         document.getElementById('btn-save-view-state')
             ?.addEventListener('click', _saveViewState);
+        document.getElementById('rec-search-input')
+            ?.addEventListener('input', e => { _searchTerm = e.target.value.trim(); _filterRecordingList(); });
+        document.getElementById('rec-search-input')
+            ?.addEventListener('keydown', e => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); } });
         document.getElementById('btn-rec-delete-selected')
             ?.addEventListener('click', _deleteSelected);
         document.getElementById('btn-rec-compare')
@@ -86,6 +91,9 @@ const Recordings = (() => {
         document.getElementById('btn-recordings-toggle')
             ?.classList.toggle('is-active', _visible);
         if (_visible) {
+            _searchTerm = '';
+            const srch = document.getElementById('rec-search-input');
+            if (srch) srch.value = '';
             _renderList();
         } else {
             // Reset filter toggles on close
@@ -323,6 +331,18 @@ const Recordings = (() => {
     // List rendering
     // -------------------------------------------------------------------------
 
+    /** Hide/show rendered rows based on the current search term. No re-render. */
+    function _filterRecordingList() {
+        const term = _searchTerm.toLowerCase();
+        document.querySelectorAll('#recordings-list .rec-entry').forEach(row => {
+            const id  = row.dataset.id;
+            const rec = (State.recordings || []).find(r => r.id === id);
+            if (!rec) return;
+            const name = (rec.name || _fmtTs(rec.timestamp)).toLowerCase();
+            row.classList.toggle('hidden', term !== '' && !name.includes(term));
+        });
+    }
+
     function _renderList() {
         const list = document.getElementById('recordings-list');
         if (!list) return;
@@ -558,6 +578,9 @@ const Recordings = (() => {
 
         // Recompute button states — no re-render (we're already inside _renderList)
         _updateHeaderButtons(false);
+
+        // Apply active search filter to freshly rendered rows
+        _filterRecordingList();
 
         // Sync select-all checkbox: check it iff every visible row is checked
         const allVisibleChks = [...list.querySelectorAll('.rec-entry-chk')];
