@@ -20,6 +20,7 @@ const Recordings = (() => {
     let _peekHideTimer = null;
     let _peekRec       = null;   // rec whose SQL is shown in _peekPopup
     let _peekPinned    = false;  // true = stays open until explicitly closed
+    let _peekRowEl     = null;   // row element that has the is-peeked dashed border
     let _currentRecId  = null;  // id of the recording whose results are currently shown
     let _searchTerm    = '';    // current recording search filter
 
@@ -279,6 +280,10 @@ const Recordings = (() => {
         _peekPopup  = popup;
         _peekRec    = rec;
         _peekPinned = !!pin;
+        if (pin) {
+            _peekRowEl = document.querySelector(`#recordings-list .rec-entry[data-id="${rec.id}"]`);
+            if (_peekRowEl) _peekRowEl.classList.add('is-peeked');
+        }
 
         _positionPeekPopup(mouseX, mouseY);
 
@@ -313,6 +318,7 @@ const Recordings = (() => {
         _peekPopup  = null;
         _peekRec    = null;
         _peekPinned = false;
+        if (_peekRowEl) { _peekRowEl.classList.remove('is-peeked'); _peekRowEl = null; }
     }
 
     function _positionPeekPopup(mouseX, mouseY) {
@@ -450,6 +456,7 @@ const Recordings = (() => {
             chk.checked = checkedIds.has(rec.id);
             chk.className = 'rec-entry-chk';
             chk.addEventListener('change', _onCheckChange);
+            chk.addEventListener('click', e => { if (e.altKey) { e.preventDefault(); _openPeekPopup(rec, e.clientX, e.clientY, true); } });
             row.appendChild(chk);
 
             // Name
@@ -459,7 +466,7 @@ const Recordings = (() => {
             const nameEl = document.createElement('span');
             nameEl.className   = 'rec-entry-name-text';
             nameEl.textContent = rec.name || _fmtTs(rec.timestamp);
-            nameEl.addEventListener('click', e => { e.stopPropagation(); chk.checked = !chk.checked; _onCheckChange(); });
+            nameEl.addEventListener('click', e => { e.stopPropagation(); if (e.altKey) { _openPeekPopup(rec, e.clientX, e.clientY, true); return; } chk.checked = !chk.checked; _onCheckChange(); });
             nameWrap.appendChild(nameEl);
 
             if (rec.viewState) {
@@ -638,7 +645,8 @@ const Recordings = (() => {
     // Delete
     // -------------------------------------------------------------------------
 
-    function _deleteEntry(id) {
+    async function _deleteEntry(id) {
+        if (!await Dialog.confirm('Delete this recording?')) return;
         State.recordings = (State.recordings || []).filter(r => r.id !== id);
         _updateBadges();
         _renderList();

@@ -750,6 +750,13 @@ const Canvas = (() => {
             if (!table) return;
 
             const key = `${table.alias}.${col.name}`;
+
+            // Alt+right-click → focus matching column in the results table
+            if (e.altKey) {
+                if (typeof Results !== 'undefined') Results.focusColumn?.(key);
+                return;
+            }
+
             const globalIdx = State.columnOrder.indexOf(key);
             if (globalIdx === -1) return;
 

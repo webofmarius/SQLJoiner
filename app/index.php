@@ -951,6 +951,7 @@
                     <li>Drag &amp; drop SELECT tables or columns to reorder them</li>
                     <li>Right-click a Custom Expression input to edit its label</li>
                     <li><kbd>Alt</kbd> + <kbd>Right-click</kbd> <span>Copy all highlighted scopes to clipboard (Scope mode only)</span></li>
+                    <li><span class="shortcut-mouse">Alt+right-click column (canvas card or SELECT box)</span> <span>Scroll &amp; highlight the matching column in the results table</span></li>
                 </ul>
                 <div class="form-actions">
                     <button type="button" class="modal-close">Close</button>

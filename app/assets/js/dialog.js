@@ -40,7 +40,7 @@ const Dialog = (() => {
             if (e.key === 'Escape') { e.preventDefault(); _cancel(); }
         });
         el.addEventListener('keydown', e => {
-            if (e.key === 'Escape') _cancel();
+            if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); _cancel(); }
         });
     }
 

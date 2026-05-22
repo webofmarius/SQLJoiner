@@ -2160,6 +2160,14 @@ body.is-cut-mode * { cursor: crosshair !important; }
 .table-card__col.is-col-focus {
     animation: col-focus-flash 1.4s ease-out forwards;
 }
+@keyframes th-col-focus-flash {
+    0%   { background: color-mix(in srgb, var(--accent, #4a9eff) 70%, transparent); color: #fff; box-shadow: 0 0 0 2px var(--accent, #4a9eff); }
+    60%  { background: color-mix(in srgb, var(--accent, #4a9eff) 30%, transparent); color: inherit; box-shadow: none; }
+    100% { background: transparent; }
+}
+.th-col-focus-flash {
+    animation: th-col-focus-flash 2s ease-out forwards !important;
+}
 
 /* Valid drop-target column highlighted under cursor during drag */
 .table-card__col.drop-target {
@@ -6969,6 +6977,10 @@ textarea.sql-bd-active.scope-mode-on {
 .rec-entry:hover {
     background: color-mix(in srgb, var(--accent, #4a9eff) 14%, var(--surface2)) !important;
     border-color: color-mix(in srgb, var(--accent, #4a9eff) 50%, var(--border));
+}
+.rec-entry.is-peeked {
+    outline: 1.5px dashed var(--accent, #4a9eff);
+    outline-offset: -1px;
 }
 .rec-entry.is-current-rec {
     border-color: var(--accent, #4a9eff) !important;

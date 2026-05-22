@@ -7716,6 +7716,42 @@ async function _copyAsSqlSelect() {
     }
 
     /**
+     * Scroll to and briefly flash the results-table column whose data-col-key
+     * matches colKey (e.g. "u.id"). Falls back to bare column name comparison.
+     * Expands the results panel if it is collapsed.
+     */
+    function focusColumn(colKey) {
+        if (!colKey) return;
+
+        // Exact key match
+        let th = document.querySelector(`#results-table thead th[data-col-key="${colKey}"]`);
+
+        // Fallback: bare column name (handles table alias mismatch)
+        if (!th) {
+            const bare = (colKey.includes('.') ? colKey.split('.')[1] : colKey).toLowerCase();
+            for (const el of document.querySelectorAll('#results-table thead th[data-col-key]')) {
+                const k = el.dataset.colKey || '';
+                const b = (k.includes('.') ? k.split('.')[1] : k).toLowerCase();
+                if (b === bare) { th = el; break; }
+            }
+        }
+        if (!th) return;
+
+        // Expand results panel if collapsed so the column is visible
+        const panel = document.getElementById('results-panel');
+        if (panel?.classList.contains('is-collapsed')) _setCollapsed(false);
+
+        // Scroll horizontally to centre the column in the wrapper
+        th.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+
+        // Flash the header for 2 seconds
+        th.classList.remove('th-col-focus-flash');
+        void th.offsetWidth; // force reflow so animation restarts
+        th.classList.add('th-col-focus-flash');
+        setTimeout(() => th.classList.remove('th-col-focus-flash'), 2000);
+    }
+
+    /**
      * Serialise the current results-table visual state into a plain object
      * suitable for storing on a recording entry.
      */
@@ -7884,6 +7920,12 @@ async function _copyAsSqlSelect() {
         },
         /** Destroy all Calculus expression rows. */
         calcClear: _calcClearAll,
+        /**
+         * Scroll to and briefly flash the results-table column matching colKey
+         * (format: "tableAlias.colName"). Falls back to bare column name.
+         * Expands the results panel first if it is collapsed.
+         */
+        focusColumn,
         /** Serialise the current results-table visual state for storage in a recording. */
         captureViewState,
         /** Restore a previously captured view-state onto the current results table. */

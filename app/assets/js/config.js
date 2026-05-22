@@ -123,6 +123,18 @@ const QueryPanel = (() => {
             });
         });
 
+        // Alt+right-click a SELECT column row → focus matching column in results table
+        document.getElementById('select-columns')?.addEventListener('contextmenu', e => {
+            if (!e.altKey) return;
+            const row = e.target.closest('.select-col-row');
+            if (!row) return;
+            e.preventDefault();
+            e.stopPropagation();
+            const key = State.columnOrder[parseInt(row.dataset.idx, 10)];
+            if (!key) return;
+            if (typeof Results !== 'undefined') Results.focusColumn?.(key);
+        });
+
         // Alt+click a SELECT column row → add it to WHERE (capture phase to prevent checkbox toggle)
         document.getElementById('select-columns')?.addEventListener('click', e => {
             if (!e.altKey) return;
