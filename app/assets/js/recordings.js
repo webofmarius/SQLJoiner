@@ -153,6 +153,12 @@ const Recordings = (() => {
                 col_tables: (result.col_tables || []).slice(),
                 col_types:  (result.col_types  || []).slice(),
                 count:      result.count ?? result.rows?.length ?? 0,
+                // Rendering context — used by _loadResults so header labels match
+                // what was shown when the recording was made, regardless of current State.
+                selectSchemaAlias: State.selectSchemaAlias ?? true,
+                selectAliases:     JSON.parse(JSON.stringify(State.selectAliases || {})),
+                selectSortAlpha:   State.selectSortAlpha   ?? false,
+                columnOrder:       (State.columnOrder || []).slice(),
             },
             island: {
                 key:    islandKey,
@@ -241,6 +247,10 @@ const Recordings = (() => {
             col_tables: (lastResult.col_tables || []).slice(),
             col_types:  (lastResult.col_types  || []).slice(),
             count:      lastResult.count ?? lastResult.rows?.length ?? 0,
+            selectSchemaAlias: State.selectSchemaAlias ?? true,
+            selectAliases:     JSON.parse(JSON.stringify(State.selectAliases || {})),
+            selectSortAlpha:   State.selectSortAlpha   ?? false,
+            columnOrder:       (State.columnOrder || []).slice(),
         };
         rec.island = {
             key:    islandKey,
@@ -1018,6 +1028,13 @@ const Recordings = (() => {
             count:          rec.results.count ?? rec.results.rows.length,
             sql:            rec.sql || '',
             _fromRecording: true,
+            // Saved rendering context — ensures header labels (alias prefix, sort order)
+            // match what was shown when the recording was made, not the current canvas state.
+            _replayTables:       rec.island?.tables || [],
+            _replaySchemaAlias:  rec.results.selectSchemaAlias ?? true,
+            _replayAliases:      rec.results.selectAliases     ?? {},
+            _replaySortAlpha:    rec.results.selectSortAlpha   ?? false,
+            _replayColumnOrder:  rec.results.columnOrder       ?? [],
         });
         if (rec.viewState) Results.applyViewState?.(rec.viewState);
         setCurrentRec(rec.id);

@@ -1414,13 +1414,17 @@ const Results = (() => {
      * @param {number} colIdx    - position of this column in the result cols array
      * @param {string[]} allCols - the full result cols array (needed for duplicate detection)
      */
-    function _formatHeaderLabel(colName, colIdx = 0, allCols = [], colTable = '', allColTables = [], activeIds = null) {
+    // overrides: { tables, showSchemaAlias, selectAliases, sortAlphaOn, columnOrder }
+    // — provided when rendering a recording so stale live State is not consulted.
+    function _formatHeaderLabel(colName, colIdx = 0, allCols = [], colTable = '', allColTables = [], activeIds = null, overrides = {}) {
         const name            = String(colName ?? '');
         const nameLc          = name.toLowerCase();
         const bareName        = name.includes('.') ? name.split('.').pop() : name;
-        const selectAliases   = State.selectAliases || {};
-        const sortAlphaOn     = State.selectSortAlpha   ?? false;
-        const showSchemaAlias = State.selectSchemaAlias ?? true;
+        const selectAliases   = overrides.selectAliases ?? State.selectAliases ?? {};
+        const sortAlphaOn     = overrides.sortAlphaOn   ?? State.selectSortAlpha   ?? false;
+        const showSchemaAlias = overrides.showSchemaAlias ?? State.selectSchemaAlias ?? true;
+        const _tables         = overrides.tables ?? State.tables ?? [];
+        const _columnOrder    = overrides.columnOrder ?? State.columnOrder ?? [];
 
         // Helper: alias-aware sort key for a "tableAlias.colName" key
         const _sortKey = k => {
@@ -1430,18 +1434,16 @@ const Results = (() => {
         };
 
         // 0) PRIMARY path: PDO gives us the real table name for every result column.
-        //    Map it to the user-assigned alias from State.tables (case-insensitive).
+        //    Map it to the user-assigned alias from _tables (case-insensitive).
         //    This is the most reliable source — no guessing, no order-dependency.
         //    Use occurrence-index logic so self-joins (multiple aliases for the same
         //    real table) each get their own correct alias (a1, a2, a3…).
         if (colTable) {
             const colTableLc    = colTable.toLowerCase();
-            const matchingTbls  = Array.isArray(State.tables)
-                ? State.tables.filter(t =>
+            const matchingTbls  = _tables.filter(t =>
                     (t.name.toLowerCase() === colTableLc || (t.alias || '').toLowerCase() === colTableLc) &&
                     (!activeIds || activeIds.has(t.id))
-                )
-                : [];
+                );
             if (matchingTbls.length > 0) {
                 const occurrenceBefore = allColTables
                     .slice(0, colIdx)
@@ -1484,10 +1486,10 @@ const Results = (() => {
         //    Restrict to active island columns to avoid picking up the same column
         //    name from a different island's table.
         const bareNameLc  = bareName.toLowerCase();
-        const rawColOrder = (State.columnOrder || []).filter(k => {
+        const rawColOrder = _columnOrder.filter(k => {
             if (!activeIds) return true;
             const alias = k.split('.')[0];
-            return (State.tables || []).some(t => t.alias === alias && activeIds.has(t.id));
+            return _tables.some(t => t.alias === alias && activeIds.has(t.id));
         });
 
         const effectiveOrder = sortAlphaOn
@@ -1512,12 +1514,12 @@ const Results = (() => {
             }
         }
 
-        // 3) Fallback B: scan State.tables directly (case-insensitive, active island only).
-        if (!tableAlias && Array.isArray(State.tables)) {
+        // 3) Fallback B: scan _tables directly (case-insensitive, active island only).
+        if (!tableAlias) {
             let tableMatchCount = 0;
             const tbls = activeIds
-                ? State.tables.filter(t => activeIds.has(t.id))
-                : State.tables;
+                ? _tables.filter(t => activeIds.has(t.id))
+                : _tables;
             for (const t of tbls) {
                 if ((t.columns ?? []).some(c => c.name.toLowerCase() === bareNameLc)) {
                     if (tableMatchCount === occurrenceBefore) {
@@ -1797,6 +1799,19 @@ const Results = (() => {
             }
         }
 
+        // When rendering a recording replay, use the saved rendering context instead
+        // of the current (potentially stale) live State.  _lastResult carries these
+        // as _replay* fields set by _loadResults() in recordings.js.
+        const _headerOverrides = _lastResult?._replayTables
+            ? {
+                tables:         _lastResult._replayTables,
+                showSchemaAlias: _lastResult._replaySchemaAlias ?? true,
+                selectAliases:  _lastResult._replayAliases      ?? {},
+                sortAlphaOn:    _lastResult._replaySortAlpha    ?? false,
+                columnOrder:    _lastResult._replayColumnOrder  ?? [],
+              }
+            : {};
+
         // Reset sort state for every new query result
         _sortColIdx = -1;
         _sortDir = 0;
@@ -1858,7 +1873,11 @@ const Results = (() => {
             // Header label: prefix with table alias when possible (e.g. "u.id").
             // If the column has a user-defined alias, render it in italic so it's
             // visually distinct from real column names.
-            const labelText = _formatHeaderLabel(col, colIdx, cols, colTables[colIdx] || '', colTables, _activeResultIds);
+            // When rendering a recording, _activeResultIds reflects the *current* canvas island,
+            // which won't contain the recording's island table IDs. Pass null so the activeIds
+            // filter doesn't exclude the replay tables from the primary path.
+            const effectiveActiveIds = _headerOverrides.tables ? null : _activeResultIds;
+            const labelText = _formatHeaderLabel(col, colIdx, cols, colTables[colIdx] || '', colTables, effectiveActiveIds, _headerOverrides);
             const displayLabel = _lastResultIsCsv ? `${_excelCol(colIdx)} - ${labelText}` : labelText;
             if (_isDelimiterColumn(col)) {
                 th.classList.add('th-delimiter');
