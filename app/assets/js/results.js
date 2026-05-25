@@ -133,6 +133,13 @@ const Results = (() => {
     // Suppresses the residual click event that some browsers fire after preventDefault() on mousedown.
     let _suppressNextHeaderAltClick = false;
 
+    // Set in the results-table header click handler before it dispatches a synthetic 'change'
+    // event on the SELECT panel checkbox.  That dispatch triggers config.js → syncColDeselected,
+    // which would apply col-deselected via a colKey string lookup (potentially wrong column for
+    // same-named columns from different tables).  The click handler already applies col-deselected
+    // directly using the exact th reference, so we suppress the redundant callback.
+    let _suppressNextColDeselectedSync = false;
+
     const THEMES = [
         'col-highlight-1',
         'col-highlight-2',
@@ -2012,7 +2019,12 @@ const Results = (() => {
                     const chk = targetRow.querySelector('input[type="checkbox"]:not(.col-highlight-chk)');
                     if (chk) {
                         chk.checked = !chk.checked;
+                        // Suppress syncColDeselected inside the change handler — we apply
+                        // col-deselected directly below using the exact th reference, which
+                        // is correct even when duplicate-named columns share the same colKey.
+                        _suppressNextColDeselectedSync = true;
                         chk.dispatchEvent(new Event('change')); // may re-render the SELECT panel
+                        _suppressNextColDeselectedSync = false; // clear in case handler didn't consume it
                     }
                     const deselected = chk && !chk.checked;
                     th.classList.toggle('col-deselected', deselected);
@@ -8121,8 +8133,14 @@ async function _copyAsSqlSelect() {
         toggleTall:       _toggleTall,
         toggleFullscreen: _toggleFullscreen,
         setFullscreen:    _setFullscreen,
-        /** Apply or remove col-deselected styling on a result column by its select key. */
-        syncColDeselected: _applyColDeselected,
+        /** Apply or remove col-deselected styling on a result column by its select key.
+         *  Skipped if _suppressNextColDeselectedSync is set (the results-table header click
+         *  handler applies the styling directly and suppresses this to avoid wrong-column
+         *  application when duplicate column names are present). */
+        syncColDeselected(key, isDeselected) {
+            if (_suppressNextColDeselectedSync) { _suppressNextColDeselectedSync = false; return; }
+            _applyColDeselected(key, isDeselected);
+        },
         /** Re-apply table colors to all result header cells (call after a table color changes). */
         refreshHeaderColors: _applyResultHeaderColors,
         /** Toggle highlight on a result column. scrollTo=true scrolls to the column. */

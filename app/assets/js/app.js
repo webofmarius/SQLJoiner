@@ -312,6 +312,7 @@ const App = (() => {
      *   - Alt+1 -> Toggle Sidebar
      *   - Alt+2 -> Toggle Results Panel
      *   - Alt+3 -> Toggle Config Panel
+     *   - Alt+4 -> Toggle Recordings popup
      */
     function _toggleMaximizePopup(boxEl) {
         const btn = boxEl.querySelector('.btn-popup-maximize');
@@ -657,6 +658,10 @@ const App = (() => {
                 } else if (e.code === 'Digit3' || e.code === 'Numpad3') {
                     e.preventDefault();
                     _togglePane('config');
+
+                } else if (e.code === 'Digit4' || e.code === 'Numpad4') {
+                    e.preventDefault();
+                    if (typeof Recordings !== 'undefined') Recordings.toggle();
 
                 } else if (e.code === 'KeyF') {
                     e.preventDefault();
@@ -3808,6 +3813,7 @@ const App = (() => {
                 recordingActive:  parsed.recordingActive ?? true,
                 recordings:       Array.isArray(parsed.recordings)       ? parsed.recordings       : [],
                 recordingGroups:  Array.isArray(parsed.recordingGroups)  ? parsed.recordingGroups  : [],
+                recPanelSize:     parsed.recPanelSize ?? null,
             });
 
             if (opts.preserveWhereRaw && _prevWhereMode === 'raw') {

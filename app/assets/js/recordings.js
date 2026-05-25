@@ -86,6 +86,7 @@ const Recordings = (() => {
             document.getElementById('recordings-panel-header'),
             _panel
         );
+        _makeResizable(_panel);
 
         _updateBadges();
     }
@@ -96,6 +97,7 @@ const Recordings = (() => {
         document.getElementById('btn-recordings-toggle')
             ?.classList.toggle('is-active', _visible);
         if (_visible) {
+            _applyPanelSize(_panel);
             _searchTerm = '';
             const srch = document.getElementById('rec-search-input');
             if (srch) srch.value = '';
@@ -1233,8 +1235,81 @@ const Recordings = (() => {
     }
 
     // -------------------------------------------------------------------------
-    // Drag
+    // Drag & Resize
     // -------------------------------------------------------------------------
+
+    function _savePanelSize(panel) {
+        State.recPanelSize = {
+            w: Math.round(panel.offsetWidth),
+            h: Math.round(panel.offsetHeight),
+        };
+    }
+
+    function _applyPanelSize(panel) {
+        const s = State.recPanelSize;
+        if (!s) return;
+        if (s.w) { panel.style.width    = s.w + 'px'; panel.style.maxWidth  = 'none'; }
+        if (s.h) { panel.style.height   = s.h + 'px'; panel.style.maxHeight = 'none'; }
+    }
+
+    function _pinPanelPosition(panel) {
+        // Remove the initial centering transform if still active,
+        // so style.left/top map 1:1 to screen coordinates.
+        if (panel.style.transform !== 'none') {
+            const r = panel.getBoundingClientRect();
+            panel.style.left      = r.left + 'px';
+            panel.style.top       = r.top  + 'px';
+            panel.style.right     = 'auto';
+            panel.style.bottom    = 'auto';
+            panel.style.transform = 'none';
+        }
+    }
+
+    function _makeResizable(panel) {
+        const MIN_W = 340, MIN_H = 180;
+
+        [
+            { cls: 'rec-resize-e',  dirE: true,  dirS: false },
+            { cls: 'rec-resize-s',  dirE: false, dirS: true  },
+            { cls: 'rec-resize-se', dirE: true,  dirS: true  },
+        ].forEach(({ cls, dirE, dirS }) => {
+            const el = document.createElement('div');
+            el.className = `rec-resize-handle ${cls}`;
+            panel.appendChild(el);
+
+            el.addEventListener('mousedown', e => {
+                e.preventDefault();
+                e.stopPropagation();
+
+                _pinPanelPosition(panel);
+
+                const startX = e.clientX;
+                const startY = e.clientY;
+                const startW = panel.offsetWidth;
+                const startH = panel.offsetHeight;
+
+                const onMove = ev => {
+                    if (dirE) {
+                        const w = Math.max(MIN_W, startW + (ev.clientX - startX));
+                        panel.style.width    = w + 'px';
+                        panel.style.maxWidth = 'none';
+                    }
+                    if (dirS) {
+                        const h = Math.max(MIN_H, startH + (ev.clientY - startY));
+                        panel.style.height    = h + 'px';
+                        panel.style.maxHeight = 'none';
+                    }
+                };
+                const onUp = () => {
+                    document.removeEventListener('mousemove', onMove);
+                    document.removeEventListener('mouseup',   onUp);
+                    _savePanelSize(panel);
+                };
+                document.addEventListener('mousemove', onMove);
+                document.addEventListener('mouseup',   onUp);
+            });
+        });
+    }
 
     function _makeDraggable(handle, panel) {
         if (!handle || !panel) return;
