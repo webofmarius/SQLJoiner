@@ -821,10 +821,11 @@ const Recordings = (() => {
             e.stopPropagation();
             const n   = allGroupRecs.length;
             const msg = n
-                ? `Delete group "${group.name || 'this group'}"? Its ${n} recording${n !== 1 ? 's' : ''} will become ungrouped.`
+                ? `Delete group "${group.name || 'this group'}"? Its ${n} recording${n !== 1 ? 's' : ''} will also be deleted.`
                 : `Delete group "${group.name || 'this group'}"?`;
             if (!await Dialog.confirm(msg)) return;
-            allGroupRecs.forEach(r => { delete r.groupId; });
+            const groupRecIds = new Set(allGroupRecs.map(r => r.id));
+            State.recordings = (State.recordings || []).filter(r => !groupRecIds.has(r.id));
             State.recordingGroups = (State.recordingGroups || []).filter(g => g.id !== group.id);
             _renderList();
         });
