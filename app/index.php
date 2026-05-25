@@ -282,7 +282,7 @@
                         <div class="results-help-row"><kbd>Click</kbd> Select cell</div>
                         <div class="results-help-row"><kbd>Right-click</kbd> Cycle cell color</div>
                         <div class="results-help-row"><kbd>Alt + Click</kbd> Highlight / unhighlight row</div>
-                        <div class="results-help-row"><kbd>Alt + Right-click</kbd> Trace column origin</div>
+                        <div class="results-help-row"><kbd>⌘/Ctrl + Right-click</kbd> Trace column origin</div>
                         <div class="results-help-row"><kbd>Alt + Right-click</kbd> <em>in Compare / Duplicates mode</em> — override cell color (persists when mode exits)</div>
                         <div class="results-help-row"><kbd>Double-click</kbd> Add number to Calculus</div>
                         <div class="results-help-row"><kbd>Alt + J</kbd> Copy row as JSON</div>
@@ -295,8 +295,8 @@
                         <div class="results-help-row"><kbd>Click</kbd> Toggle SELECT checkbox</div>
                         <div class="results-help-row"><kbd>Right-click</kbd> Highlight SELECT checkbox</div>
                         <div class="results-help-row"><kbd>Alt + Click</kbd> Copy <code>`alias`.`column`</code></div>
-                        <div class="results-help-row"><kbd>Alt + Right-click</kbd> Preview column distribution</div>
-                        <div class="results-help-row"><kbd>⌘/Ctrl + Right-click</kbd> Toggle column highlight (low-yellow + italic; pinned in Dim)</div>
+                        <div class="results-help-row"><kbd>⌘/Ctrl + Right-click</kbd> Preview column distribution</div>
+                        <div class="results-help-row"><kbd>Alt + Right-click</kbd> Toggle column highlight (low-yellow + italic; pinned in Dim)</div>
                     </div>
                 </div>
                 <button id="btn-compare" title="Compare cell values">⊜ Compare</button>

@@ -122,13 +122,16 @@ const Results = (() => {
             .then(() => App.notify?.('Row copied as JSON', 'success'));
     });
 
-    // Flag set by the mousedown handler when Alt+right-click is detected, so the
-    // subsequent contextmenu event knows to skip its own logic (avoids double-firing
-    // on platforms where altKey is still present in the contextmenu event).
+    // Flag set by the mousedown handler when Cmd/Ctrl+right-click on a cell is detected,
+    // so the subsequent contextmenu event knows to skip its own logic (avoids double-firing).
     let _altRightClickHandled = false;
 
     // Same pattern for Cmd/Ctrl+right-click on header cells (column highlight toggle).
     let _cmdRightClickHandled = false;
+
+    // Set by the capture mousedown when Alt+right-click triggers column highlight on a header.
+    // Suppresses the residual click event that some browsers fire after preventDefault() on mousedown.
+    let _suppressNextHeaderAltClick = false;
 
     const THEMES = [
         'col-highlight-1',
@@ -158,32 +161,32 @@ const Results = (() => {
                 }
             });
 
-        // Cmd+right-click (macOS) / Ctrl+right-click (Windows) on any results header
-        // cell → toggle column highlight.
+        // Alt+right-click on any results header cell → toggle column highlight.
         //
         // Registered at document level in CAPTURE phase so we fire before any
         // bubble handlers (including the th's filter-wrap which stops mousedown
         // propagation) and before the browser starts rendering its menu.
         // preventDefault() + stopImmediatePropagation() on both events is the
         // only combination that reliably suppresses the browser context menu
-        // for cmd/ctrl+right-click across Chromium/Firefox/Safari.
-        const _isCmdRightClickOnHeader = e =>
-            (e.metaKey || e.ctrlKey) && e.target?.closest?.('#results-table thead th:not(.th-row-num)');
+        // for alt+right-click across Chromium/Firefox/Safari.
+        const _isAltRightClickOnHeader = e =>
+            e.altKey && e.target?.closest?.('#results-table thead th:not(.th-row-num)');
 
         document.addEventListener('mousedown', e => {
             if (e.button !== 2) return;
-            const th = _isCmdRightClickOnHeader(e);
+            const th = _isAltRightClickOnHeader(e);
             if (!th) return;
             e.preventDefault();
             e.stopImmediatePropagation();
             const colIdx = parseInt(th.dataset.colIdx, 10);
             if (isNaN(colIdx)) return;
             _cmdRightClickHandled = true;
+            _suppressNextHeaderAltClick = true;
             _toggleCmdColumnHighlight(colIdx);
         }, true);
 
         document.addEventListener('contextmenu', e => {
-            const th = _isCmdRightClickOnHeader(e);
+            const th = _isAltRightClickOnHeader(e);
             if (!th) return;
             e.preventDefault();
             e.stopImmediatePropagation();
@@ -197,7 +200,7 @@ const Results = (() => {
         // context menu can be triggered on mouseup rather than mousedown.
         document.addEventListener('mouseup', e => {
             if (e.button !== 2) return;
-            if (!_isCmdRightClickOnHeader(e)) return;
+            if (!_isAltRightClickOnHeader(e)) return;
             e.preventDefault();
             e.stopImmediatePropagation();
         }, true);
@@ -1268,7 +1271,7 @@ const Results = (() => {
     }
 
     /**
-     * Handle Alt+right-click on a result row.
+     * Toggle row highlight (called by # click, Alt+click on a cell, or programmatically).
      * Dim OFF: toggle row-highlighted (mark / unmark).
      * Dim ON (row-mode): cycle visible→faded→visible; if row is dim-hidden (shouldn't happen
      *   normally) it gets marked instead.
@@ -1825,7 +1828,7 @@ const Results = (() => {
 
             // Tooltip: show full schema.table origin on hover; also apply table color
             const colTableAlias = colTables[colIdx] || '';
-            const _distHint = 'Alt + right click: Preview Distribution column\nShift + right click: Toggle column highlight';
+            const _distHint = '⌘/Ctrl + right click: Preview Distribution column\nAlt + right click: Toggle column highlight';
             if (colTableAlias) {
                 const colTableLc  = colTableAlias.toLowerCase();
                 const originTable = (State.tables || []).find(t => t.alias?.toLowerCase() === colTableLc)
@@ -1892,11 +1895,11 @@ const Results = (() => {
                 th.classList.add('col-cmd-highlight');
             }
 
-            // Right-click: toggle SELECT checkbox · Alt+right-click: cycle column color
-            // Alt+right-click: open Distribution Preview popup
-            // (Shift+right-click is handled by the table-level capture listener in init.)
+            // Right-click: toggle SELECT checkbox
+            // Cmd/Ctrl+right-click: open Distribution Preview popup
+            // (Alt+right-click column highlight is handled by the capture listener in init.)
             th.addEventListener('mousedown', e => {
-                if (e.button !== 2 || !_altKeyHeld) return;
+                if (e.button !== 2 || !(e.metaKey || e.ctrlKey)) return;
                 e.preventDefault();
                 e.stopPropagation();
                 _distPreviewHandled = true;
@@ -1950,7 +1953,9 @@ const Results = (() => {
             let _thClickTimer = null;
             th.addEventListener('click', e => {
                 // Alt+click: copy `alias`.`column` to clipboard
+                // (skip if this click was spawned by an Alt+right-click that toggled column highlight)
                 if (e.altKey) {
+                    if (_suppressNextHeaderAltClick) { _suppressNextHeaderAltClick = false; return; }
                     const colKey  = th.dataset.colKey || '';
                     const raw     = th.dataset.raw    || '';
                     const hasDot  = colKey.includes('.');
@@ -2232,7 +2237,7 @@ const Results = (() => {
             tdRowNum.textContent = String(rowIdx + 1);
             tr.appendChild(tdRowNum);
 
-            // Left-click #: toggle row highlight (identical to Alt+right-click on a data cell).
+            // Left-click #: toggle row highlight (identical to Alt+click on a data cell).
             tdRowNum.addEventListener('click', () => _altRightClickRow(tr));
 
             // Right-click #: cycle the whole row through cell-color themes.
@@ -2361,41 +2366,43 @@ const Results = (() => {
                     td.classList.add('cell-calculus-flash');
                 });
 
-                // mousedown catches Alt+right-click reliably on Windows (where the
-                // contextmenu event may not carry altKey).
+                // mousedown catches Cmd/Ctrl+right-click reliably on Windows (where the
+                // contextmenu event may not carry metaKey/ctrlKey).
                 td.addEventListener('mousedown', e => {
-                    if (e.button === 2 && _altKeyHeld && !_compareMode && !_duplicateMode) {
+                    if (e.button === 2 && (e.metaKey || e.ctrlKey) && !_compareMode && !_duplicateMode) {
                         e.stopPropagation(); // prevent document mousedown from closing the popup it just opened
                         _showLineagePopup(td, col, colIdx, colTables);
                         _altRightClickHandled = true;
                     }
                 });
 
-                // Right-click: cycle cell color; Alt+right-click: lineage popup (or color override in Compare/Duplicates mode)
+                // Right-click: cycle cell color
+                // Cmd/Ctrl+right-click: lineage popup (outside Compare/Duplicates mode)
+                // Alt+right-click in Compare/Duplicates mode: override cell color
                 td.addEventListener('contextmenu', e => {
                     e.preventDefault();
                     e.stopPropagation(); // Don't trigger header contextmenu if somehow bubbled
 
-                    // If mousedown already handled this as an Alt+right-click, skip.
+                    // If mousedown already handled this as a Cmd/Ctrl+right-click, skip.
                     if (_altRightClickHandled) { _altRightClickHandled = false; return; }
 
-                    // Fallback: check our own Alt-key tracker in case mousedown was skipped.
-                    if (_altKeyHeld) {
-                        if (_compareMode || _duplicateMode) {
-                            // Override exception: strip feature coloring from this cell so the
-                            // manual color shows through, then fall through to color cycling.
-                            const featureCls = [
-                                'cell-compare-ref', 'cell-compare-match', 'cell-compare-diff',
-                                'cell-dup-origin',  'cell-dup-match',     'cell-dup-unique'
-                            ].filter(c => td.classList.contains(c));
-                            if (featureCls.length) {
-                                // Remember original feature class so cycling back to no-color can restore it
-                                td.dataset.featureOverride = featureCls.join(' ');
-                                td.classList.remove(...featureCls);
-                            }
-                        } else {
-                            _showLineagePopup(td, col, colIdx, colTables);
-                            return;
+                    // Fallback: check Cmd/Ctrl key in case mousedown was skipped.
+                    if ((e.metaKey || e.ctrlKey) && !_compareMode && !_duplicateMode) {
+                        _showLineagePopup(td, col, colIdx, colTables);
+                        return;
+                    }
+
+                    // Alt+right-click in Compare/Duplicates mode: override cell color
+                    // (strip feature coloring so manual color shows through, then fall through to cycling).
+                    if (_altKeyHeld && (_compareMode || _duplicateMode)) {
+                        const featureCls = [
+                            'cell-compare-ref', 'cell-compare-match', 'cell-compare-diff',
+                            'cell-dup-origin',  'cell-dup-match',     'cell-dup-unique'
+                        ].filter(c => td.classList.contains(c));
+                        if (featureCls.length) {
+                            // Remember original feature class so cycling back to no-color can restore it
+                            td.dataset.featureOverride = featureCls.join(' ');
+                            td.classList.remove(...featureCls);
                         }
                     }
 
