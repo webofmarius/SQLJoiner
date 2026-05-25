@@ -2161,17 +2161,19 @@ body.is-cut-mode * { cursor: crosshair !important; }
     animation: col-focus-flash 1.4s ease-out forwards;
 }
 @keyframes th-col-focus-flash {
-    0%   { background: color-mix(in srgb, var(--accent, #4a9eff) 70%, transparent); color: #fff; box-shadow: 0 0 0 2px var(--accent, #4a9eff); }
-    60%  { background: color-mix(in srgb, var(--accent, #4a9eff) 30%, transparent); color: inherit; box-shadow: none; }
-    100% { background: transparent; }
+    0%   { background: color-mix(in srgb, var(--accent, #4a9eff) 70%, transparent); color: #fff; box-shadow: 0 0 0 2px var(--accent, #4a9eff); font-size: 1.4em; }
+    60%  { background: color-mix(in srgb, var(--accent, #4a9eff) 30%, transparent); color: inherit; box-shadow: none; font-size: 1.4em; }
+    85%  { font-size: 1.4em; }
+    100% { background: transparent; font-size: 1em; }
 }
 .th-col-focus-flash {
     animation: th-col-focus-flash 2s ease-out forwards !important;
 }
 @keyframes td-col-focus-flash {
-    0%   { background: color-mix(in srgb, var(--accent, #4a9eff) 30%, transparent); box-shadow: inset 2px 0 0 var(--accent, #4a9eff), inset -2px 0 0 var(--accent, #4a9eff); }
-    60%  { background: color-mix(in srgb, var(--accent, #4a9eff) 12%, transparent); box-shadow: inset 1px 0 0 var(--accent, #4a9eff), inset -1px 0 0 var(--accent, #4a9eff); }
-    100% { background: transparent; box-shadow: none; }
+    0%   { background: color-mix(in srgb, var(--accent, #4a9eff) 30%, transparent); box-shadow: inset 2px 0 0 var(--accent, #4a9eff), inset -2px 0 0 var(--accent, #4a9eff); font-size: 1.4em; }
+    60%  { background: color-mix(in srgb, var(--accent, #4a9eff) 12%, transparent); box-shadow: inset 1px 0 0 var(--accent, #4a9eff), inset -1px 0 0 var(--accent, #4a9eff); font-size: 1.4em; }
+    85%  { font-size: 1.4em; }
+    100% { background: transparent; box-shadow: none; font-size: 1em; }
 }
 .td-col-focus-flash {
     animation: td-col-focus-flash 2s ease-out forwards !important;
