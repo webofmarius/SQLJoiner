@@ -3113,6 +3113,35 @@ const Results = (() => {
         footer.className   = 'dist-popup-footer';
         footer.textContent = isCapped ? 'Top 10 values · based on fetched rows' : 'Based on fetched rows';
         container.appendChild(footer);
+
+        // Copy CSV column — produces a deduplicated SQL IN-list from all fetched rows
+        const hr = document.createElement('hr');
+        hr.className = 'dist-popup-hr';
+        container.appendChild(hr);
+
+        const copyColBtn = document.createElement('button');
+        copyColBtn.className   = 'dist-popup-copy-col-btn';
+        copyColBtn.textContent = 'Copy CSV column';
+        copyColBtn.title       = 'Copy unique column values as SQL IN(…) list';
+        copyColBtn.addEventListener('click', () => {
+            if (colIdx === -1 || !_lastResult) return;
+            const seen   = new Set();
+            const parts  = [];
+            for (const row of (_lastResult.rows || [])) {
+                const v = row[colIdx];
+                if (v === null || v === undefined) continue; // skip NULLs — useless in IN()
+                const s = String(v);
+                if (seen.has(s)) continue;
+                seen.add(s);
+                // Numeric literal — no quotes needed
+                const isNum = s.trim() !== '' && !isNaN(s);
+                parts.push(isNum ? s : `'${s.replace(/'/g, "''")}'`);
+            }
+            if (!parts.length) { App.notify?.('Column has no non-NULL values', 'warn'); return; }
+            navigator.clipboard.writeText(parts.join(', '))
+                .then(() => App.notify?.(`${parts.length} value${parts.length === 1 ? '' : 's'} copied`, 'success'));
+        });
+        container.appendChild(copyColBtn);
     }
 
     // =========================================================================

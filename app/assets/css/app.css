@@ -5274,6 +5274,29 @@ th.calc-nop { opacity: 0.1; font-weight: bold; }
     color: #555;
     text-align: right;
 }
+.dist-popup-hr {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 2px 0 0;
+}
+.dist-popup-copy-col-btn {
+    display: block;
+    width: calc(100% - 20px);
+    margin: 6px 10px 8px;
+    padding: 4px 8px;
+    font-size: 11px;
+    background: var(--surface3);
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    cursor: pointer;
+    text-align: center;
+}
+.dist-popup-copy-col-btn:hover {
+    background: var(--surface2);
+    color: var(--text);
+    border-color: var(--border2);
+}
 
 /* ── Column Lineage Trace Popup ─────────────────────────────── */
 .lineage-popup {
