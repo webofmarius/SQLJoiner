@@ -3598,6 +3598,21 @@ tr.compare-banner-row--diff td {
     color: #fff;
 }
 
+#btn-trace.is-active {
+    background: #00838f;
+    color: #fff;
+}
+
+/* Trace mode: dim repeated-value cells so changes stand out */
+#results-table td.cell-trace-same {
+    color: rgba(255, 255, 255, 0.18) !important;
+    font-style: italic;
+}
+#results-table td.cell-trace-same > * {
+    opacity: 0.18;
+    font-style: italic;
+}
+
 #btn-calculus.is-active {
     background: #2e7d32;
     color: #fff;

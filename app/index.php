@@ -300,6 +300,7 @@
                 </div>
                 <button id="btn-compare" title="Compare cell values">⊜ Compare</button>
                 <button id="btn-duplicates" title="Highlight duplicate cell values">⧉ Duplicates</button>
+                <button id="btn-trace" title="Hide repeated values row-to-row (Trace)">⋮ Trace</button>
                 <button id="btn-toggle-dim" title="Dim unhighlighted cells">☾ Dim</button>
                 <button id="btn-calculus" title="Run a query first to enable Calculus mode" disabled>∑ Calculus</button>
                 <button id="btn-compare-datasets" title="Compare current result against a CSV">⇌ Compare Datasets</button>

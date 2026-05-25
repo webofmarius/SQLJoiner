@@ -36,6 +36,9 @@ const Results = (() => {
     let _duplicateMode = false;
     let _duplicateOriginCell = null; // the originally clicked cell
 
+    // Trace mode
+    let _traceMode = false;
+
     // Calculus note (independent of State.notes)
     let _calculusNote         = '';
     let _calculusNoteOriginal = '';
@@ -181,6 +184,9 @@ const Results = (() => {
 
         document.getElementById('btn-duplicates')
             .addEventListener('click', _toggleDuplicateMode);
+
+        document.getElementById('btn-trace')
+            .addEventListener('click', _toggleTraceMode);
 
         document.getElementById('btn-export-csv')
             .addEventListener('click', _exportCsv);
@@ -642,6 +648,11 @@ const Results = (() => {
                 btnDup.title = 'Highlight duplicate cell values';
             }
         }
+        if (_traceMode) {
+            _traceMode = false;
+            const btnTrace = document.getElementById('btn-trace');
+            if (btnTrace) btnTrace.classList.remove('is-active');
+        }
         const resultsPanel = document.getElementById('results-panel');
         if (resultsPanel?.classList.contains('search-active')) {
             resultsPanel.classList.remove('search-active');
@@ -754,6 +765,8 @@ const Results = (() => {
             btnDup.textContent = '⧉ Duplicates';
             btnDup.title = 'Highlight duplicate cell values';
         }
+        _traceMode = false;
+        document.getElementById('btn-trace')?.classList.remove('is-active');
         document.getElementById('results-panel').classList.add('hidden');
         const _snapBtnClear = document.getElementById('btn-diff-snapshot');
         if (_snapBtnClear) { _snapBtnClear.disabled = true; _snapBtnClear.classList.remove('hidden'); }
@@ -3874,6 +3887,43 @@ const Results = (() => {
         });
         const btn = document.getElementById('btn-duplicates');
         if (btn) btn.textContent = `⧉ Duplicates (${count})`;
+    }
+
+    // -------------------------------------------------------------------------
+    // Trace mode
+    // -------------------------------------------------------------------------
+
+    function _toggleTraceMode() {
+        _traceMode = !_traceMode;
+        const btn = document.getElementById('btn-trace');
+        btn.classList.toggle('is-active', _traceMode);
+        if (_traceMode) {
+            _applyTrace();
+        } else {
+            _clearTrace();
+        }
+    }
+
+    function _applyTrace() {
+        const tbody = document.querySelector('#results-table tbody');
+        if (!tbody) return;
+        const trs = Array.from(tbody.querySelectorAll('tr')).filter(tr => !tr.querySelector('.results-empty'));
+        for (let i = 1; i < trs.length; i++) {
+            const prevTds = Array.from(trs[i - 1].querySelectorAll('td:not(.td-row-num)'));
+            const currTds = Array.from(trs[i].querySelectorAll('td:not(.td-row-num)'));
+            currTds.forEach((td, ci) => {
+                const prev = prevTds[ci];
+                if (!prev) return;
+                const currVal = td.dataset.raw   ?? null;
+                const prevVal = prev.dataset.raw ?? null;
+                if (currVal === prevVal) td.classList.add('cell-trace-same');
+            });
+        }
+    }
+
+    function _clearTrace() {
+        document.querySelectorAll('#results-table td.cell-trace-same')
+            .forEach(td => td.classList.remove('cell-trace-same'));
     }
 
     // -------------------------------------------------------------------------
