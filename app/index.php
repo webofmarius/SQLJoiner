@@ -358,6 +358,8 @@
             <button id="btn-rec-compare" class="rec-compare-btn" disabled title="Select exactly 2 recordings to compare their results using Diff Snapshot">⊙ Compare</button>
             <button id="btn-rec-delete-selected" class="rec-delete-sel-btn" disabled>⊗</button>
             <span class="rec-header-sep"></span>
+            <button id="btn-rec-add-group" class="rec-add-group-btn" title="Create a new recording group">⊞ Group</button>
+            <span class="rec-header-sep"></span>
             <button id="btn-rec-record" class="rec-record-btn" title="Recording active — click to stop">■ Stop</button>
             <button id="btn-rec-help" title="Shortcuts &amp; tips">?</button>
             <button id="btn-recordings-close" title="Close panel">✕</button>
@@ -385,6 +387,16 @@
                 <div class="results-help-row"><kbd>Island</kbd> Restore island config</div>
                 <div class="results-help-row"><kbd>☐ (left of Island)</kbd> Restore in new island</div>
                 <div class="results-help-row"><kbd>■ Stop / ▶ Record</kbd> Pause / resume recording</div>
+            </div>
+            <div class="results-help-section">
+                <span class="results-help-group">Groups</span>
+                <div class="results-help-row"><kbd>⊞ Group</kbd> Create a new group</div>
+                <div class="results-help-row"><kbd>Drag rec → group header</kbd> Move recording into group</div>
+                <div class="results-help-row"><kbd>Drag rec → Ungrouped strip</kbd> Remove from group</div>
+                <div class="results-help-row"><kbd>Drag rec → other rec</kbd> Reorder (adopts target's group)</div>
+                <div class="results-help-row"><kbd>Drag group header → header</kbd> Reorder groups</div>
+                <div class="results-help-row"><kbd>▼ / ▶</kbd> Collapse / expand group</div>
+                <div class="results-help-row"><kbd>✎</kbd> Rename group · <kbd>✕</kbd> Delete group</div>
             </div>
         </div>
         <div id="rec-search-bar">

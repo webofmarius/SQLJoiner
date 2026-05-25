@@ -13,7 +13,8 @@ const Recordings = (() => {
     let _visible    = false;
     let _idSeq      = 0;
     let _newIsland  = false;   // global "restore in new island" preference
-    let _dragId     = null;    // id of entry currently being dragged
+    let _dragId      = null;    // id of recording currently being dragged
+    let _dragGroupId = null;    // id of group currently being dragged (group reorder)
     let _dimMode    = false;   // show only checked rows
     let _sameColor  = false;   // show only rows matching color of checked rows
     let _peekPopup     = null;   // currently visible SQL preview popup DOM element
@@ -29,8 +30,9 @@ const Recordings = (() => {
     // -------------------------------------------------------------------------
 
     function init() {
-        if (!Array.isArray(State.recordings))  State.recordings      = [];
-        if (State.recordingActive == null)      State.recordingActive = true;
+        if (!Array.isArray(State.recordings))      State.recordings      = [];
+        if (!Array.isArray(State.recordingGroups)) State.recordingGroups = [];
+        if (State.recordingActive == null)         State.recordingActive = true;
 
         _panel = document.getElementById('recordings-panel');
 
@@ -50,6 +52,8 @@ const Recordings = (() => {
             ?.addEventListener('keydown', e => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); } });
         document.getElementById('btn-rec-delete-selected')
             ?.addEventListener('click', _deleteSelected);
+        document.getElementById('btn-rec-add-group')
+            ?.addEventListener('click', _createGroup);
         document.getElementById('btn-rec-compare')
             ?.addEventListener('click', _compareSelected);
         document.getElementById('chk-rec-select-all')
@@ -196,10 +200,65 @@ const Recordings = (() => {
         if (_visible) _renderList();
     }
 
+    /**
+     * Replace an existing recording's data with the current query result, island
+     * config, and visual state — preserving the recording's label, color, and position.
+     */
+    async function _replaceWithCurrent(rec) {
+        const label = rec.name || _fmtTs(rec.timestamp);
+        if (!await Dialog.confirm(`Replace "${label}" with the current result?\n\nThe label will be kept.`)) return;
+
+        const lastResult = typeof Results !== 'undefined' ? Results.getLastResult?.() : null;
+        if (!lastResult?.cols) {
+            App.notify?.('No current result to replace with.', 'warn');
+            return;
+        }
+
+        App.flushCurrentIslandConfig?.();
+
+        const islandKey = State.selectedIslandKey;
+        if (!islandKey) {
+            App.notify?.('No active island to capture.', 'warn');
+            return;
+        }
+
+        const islandTableIds = new Set(islandKey.split('|'));
+        const tables = State.tables
+            .filter(t => islandTableIds.has(t.id))
+            .map(t => JSON.parse(JSON.stringify(t)));
+        const joins = State.joins
+            .filter(j => islandTableIds.has(j.fromTableId) && islandTableIds.has(j.toTableId))
+            .map(j => JSON.parse(JSON.stringify(j)));
+        const islandConfig = JSON.parse(JSON.stringify(State.islandConfigs?.[islandKey] ?? {}));
+
+        // Overwrite data — keep: name, id, seq, color, groupId, timestamp
+        rec.sql     = lastResult.sql || document.getElementById('sql-preview-text')?.textContent || '';
+        rec.results = {
+            cols:       (lastResult.cols       || []).slice(),
+            rows:       (lastResult.rows       || []).map(r => r.slice()),
+            col_tables: (lastResult.col_tables || []).slice(),
+            col_types:  (lastResult.col_types  || []).slice(),
+            count:      lastResult.count ?? lastResult.rows?.length ?? 0,
+        };
+        rec.island = {
+            key:    islandKey,
+            tables,
+            joins,
+            config: islandConfig,
+            name:   State.islandNames?.[islandKey]  ?? null,
+            color:  State.islandColors?.[islandKey] ?? null,
+        };
+        rec.viewState = Results.captureViewState?.() ?? null;
+
+        App.notify?.(`"${label}" replaced with current result.`, 'success');
+        _renderList();
+    }
+
     /** Resync badges and list after a context load. */
     function refresh() {
-        if (!Array.isArray(State.recordings)) State.recordings = [];
-        if (State.recordingActive == null)    State.recordingActive = true;
+        if (!Array.isArray(State.recordings))      State.recordings      = [];
+        if (!Array.isArray(State.recordingGroups)) State.recordingGroups = [];
+        if (State.recordingActive == null)         State.recordingActive = true;
         _updateBadges();
         if (_visible) _renderList();
     }
@@ -339,14 +398,35 @@ const Recordings = (() => {
 
     /** Hide/show rendered rows based on the current search term. No re-render. */
     function _filterRecordingList() {
+        const list = document.getElementById('recordings-list');
+        if (!list) return;
         const term = _searchTerm.toLowerCase();
-        document.querySelectorAll('#recordings-list .rec-entry').forEach(row => {
+
+        list.querySelectorAll('.rec-entry').forEach(row => {
             const id  = row.dataset.id;
             const rec = (State.recordings || []).find(r => r.id === id);
             if (!rec) return;
             const name = (rec.name || _fmtTs(rec.timestamp)).toLowerCase();
             row.classList.toggle('hidden', term !== '' && !name.includes(term));
         });
+
+        // Show/hide group headers: visible when the group name matches OR any member is visible
+        list.querySelectorAll('.rec-group-header').forEach(hdr => {
+            const gid   = hdr.dataset.groupId;
+            const group = (State.recordingGroups || []).find(g => g.id === gid);
+            const nameMatch = term === '' || (group?.name || '').toLowerCase().includes(term);
+            const hasVis    = term === '' || [...list.querySelectorAll(`.rec-entry[data-group-id="${gid}"]`)]
+                .some(r => !r.classList.contains('hidden'));
+            hdr.classList.toggle('hidden', !nameMatch && !hasVis);
+        });
+
+        // Show/hide the "Ungrouped" separator when there are visible ungrouped rows
+        const ugSep = list.querySelector('.rec-ungroup-sep');
+        if (ugSep) {
+            const hasVisUngrouped = [...list.querySelectorAll('.rec-entry[data-group-id=""]')]
+                .some(r => !r.classList.contains('hidden'));
+            ugSep.classList.toggle('rec-ungroup-sep--empty', !hasVisUngrouped);
+        }
     }
 
     function _renderList() {
@@ -372,20 +452,20 @@ const Recordings = (() => {
         document.getElementById('btn-rec-dim').disabled             = true;
         document.getElementById('btn-rec-same-color').disabled      = true;
 
-        const allRecs = State.recordings || [];
-        if (!allRecs.length) {
+        if (!Array.isArray(State.recordingGroups)) State.recordingGroups = [];
+        const allRecs   = State.recordings || [];
+        const allGroups = State.recordingGroups;
+
+        if (!allRecs.length && !allGroups.length) {
             list.innerHTML = '<div class="rec-empty">No recordings yet. Run a query while recording is active.</div>';
             return;
         }
 
         // --- compute visible set based on filter modes ---
-        // Intersect checkedIds with what still exists (deletions remove entries from State)
         const validCheckedRecs = allRecs.filter(r => checkedIds.has(r.id));
-
         let recs = allRecs;
         if (_dimMode) {
             if (validCheckedRecs.length === 0) {
-                // All checked rows were deleted — end DIM
                 _dimMode = false;
                 document.getElementById('btn-rec-dim')?.classList.remove('is-active');
             } else {
@@ -397,7 +477,6 @@ const Recordings = (() => {
                 validCheckedRecs.filter(r => (r.color ?? null) !== null).map(r => r.color)
             );
             if (activeColors.size === 0) {
-                // No colored checked rows remain — end Same color
                 _sameColor = false;
                 document.getElementById('btn-rec-same-color')?.classList.remove('is-active');
             } else {
@@ -405,183 +484,46 @@ const Recordings = (() => {
             }
         }
 
-        recs.forEach(rec => {
-            const row = document.createElement('div');
-            row.className  = 'rec-entry' + (rec.id === _currentRecId ? ' is-current-rec' : '');
-            row.dataset.id = rec.id;
-            row.draggable  = true;
+        const validGroupIds = new Set(allGroups.map(g => g.id));
 
-            // Drag-and-drop handlers
-            row.addEventListener('dragstart', e => {
-                _dragId = rec.id;
-                e.dataTransfer.effectAllowed = 'move';
-                requestAnimationFrame(() => row.classList.add('rec-entry--dragging'));
-            });
-            row.addEventListener('dragend', () => {
-                _dragId = null;
-                list.querySelectorAll('.rec-entry--dragging, .rec-entry--drag-over')
-                    .forEach(el => el.classList.remove('rec-entry--dragging', 'rec-entry--drag-over'));
-            });
-            row.addEventListener('dragover', e => {
-                if (!_dragId || _dragId === rec.id) return;
+        // --- Render groups then their contained recordings ---
+        allGroups.forEach(group => {
+            const allGroupRecs = allRecs.filter(r => r.groupId === group.id);
+            const visGroupRecs = recs.filter(r => r.groupId === group.id);
+            list.appendChild(_buildGroupHeader(group, allGroupRecs, list));
+            if (!group.collapsed) {
+                visGroupRecs.forEach(rec => list.appendChild(_buildRecEntry(rec, checkedIds, group.id, list)));
+            }
+        });
+
+        // --- Ungrouped separator (drop zone) — only when groups exist ---
+        if (allGroups.length) {
+            const ugSep = document.createElement('div');
+            ugSep.className       = 'rec-ungroup-sep';
+            ugSep.textContent     = 'Ungrouped';
+            ugSep.dataset.isUngroupZone = '1';
+            ugSep.addEventListener('dragover', e => {
+                if (!_dragId) return;
                 e.preventDefault();
                 e.dataTransfer.dropEffect = 'move';
-                list.querySelectorAll('.rec-entry--drag-over')
-                    .forEach(el => el.classList.remove('rec-entry--drag-over'));
-                row.classList.add('rec-entry--drag-over');
+                ugSep.classList.add('rec-ungroup-sep--active');
             });
-            row.addEventListener('dragleave', e => {
-                if (!row.contains(e.relatedTarget)) row.classList.remove('rec-entry--drag-over');
+            ugSep.addEventListener('dragleave', e => {
+                if (!ugSep.contains(e.relatedTarget)) ugSep.classList.remove('rec-ungroup-sep--active');
             });
-            row.addEventListener('drop', e => {
+            ugSep.addEventListener('drop', e => {
                 e.preventDefault();
-                if (!_dragId || _dragId === rec.id) return;
-                const fromIdx = State.recordings.findIndex(r => r.id === _dragId);
-                const toIdx   = State.recordings.findIndex(r => r.id === rec.id);
-                if (fromIdx === -1 || toIdx === -1) return;
-                const [moved] = State.recordings.splice(fromIdx, 1);
-                State.recordings.splice(toIdx, 0, moved);
-                _renderList();
+                ugSep.classList.remove('rec-ungroup-sep--active');
+                if (!_dragId) return;
+                const moved = State.recordings.find(r => r.id === _dragId);
+                if (moved) { delete moved.groupId; _renderList(); }
             });
+            list.appendChild(ugSep);
+        }
 
-            // Seq number
-            const seqEl = document.createElement('span');
-            seqEl.className   = 'rec-entry-seq';
-            seqEl.textContent = rec.seq ?? '';
-            row.appendChild(seqEl);
-
-            // Checkbox — restore checked state so filters & button states survive re-render
-            const chk = document.createElement('input');
-            chk.type    = 'checkbox';
-            chk.checked = checkedIds.has(rec.id);
-            chk.className = 'rec-entry-chk';
-            chk.addEventListener('change', _onCheckChange);
-            chk.addEventListener('click', e => { if (e.altKey) { e.preventDefault(); _openPeekPopup(rec, e.clientX, e.clientY, true); } });
-            row.appendChild(chk);
-
-            // Name
-            const nameWrap = document.createElement('span');
-            nameWrap.className = 'rec-entry-name';
-
-            const nameEl = document.createElement('span');
-            nameEl.className   = 'rec-entry-name-text';
-            nameEl.textContent = rec.name || _fmtTs(rec.timestamp);
-            nameEl.addEventListener('click', e => { e.stopPropagation(); if (e.altKey) { _openPeekPopup(rec, e.clientX, e.clientY, true); return; } chk.checked = !chk.checked; _onCheckChange(); });
-            nameWrap.appendChild(nameEl);
-
-            if (rec.viewState) {
-                const vsBadge   = document.createElement('span');
-                vsBadge.className = 'rec-viewstate-badge';
-                vsBadge.title   = 'Has saved visual state (Compare / Duplicates / colors / Dim)';
-                vsBadge.textContent = '🎨';
-                nameWrap.appendChild(vsBadge);
-            }
-
-            row.appendChild(nameWrap);
-
-            // Single click anywhere on the row toggles the checkbox;
-            // Alt+click opens/pins the SQL peek popup instead
-            row.addEventListener('click', e => {
-                if (e.altKey) {
-                    e.preventDefault();
-                    _openPeekPopup(rec, e.clientX, e.clientY, true);
-                    return;
-                }
-                if (e.target === chk) return;                 // checkbox handles itself
-                if (e.target.closest('button, input')) return; // buttons / rename input
-                chk.checked = !chk.checked;
-                _onCheckChange();
-            });
-
-            // Alt+hover → show SQL peek; leaving row hides it (unless pinned)
-            row.addEventListener('mouseenter', e => {
-                if (!e.altKey || _peekPinned) return;
-                _openPeekPopup(rec, e.clientX, e.clientY, false);
-            });
-            row.addEventListener('mousemove', e => {
-                if (_peekPinned) return;
-                if (e.altKey) {
-                    _openPeekPopup(rec, e.clientX, e.clientY, false);
-                } else if (_peekRec === rec) {
-                    clearTimeout(_peekHideTimer);
-                    _peekHideTimer = setTimeout(_closePeekPopup, 120);
-                }
-            });
-            row.addEventListener('mouseleave', () => {
-                if (_peekPinned || _peekRec !== rec) return;
-                clearTimeout(_peekHideTimer);
-                _peekHideTimer = setTimeout(_closePeekPopup, 120);
-            });
-
-            // Right-click cycles through colors (null → color[0] → color[1] → … → null)
-            row.addEventListener('contextmenu', e => {
-                e.preventDefault();
-                const colors = (typeof Canvas !== 'undefined' && Canvas.CARD_COLORS)
-                    ? Canvas.CARD_COLORS.map(c => c.hex)
-                    : [];
-                const currentIdx = colors.indexOf(rec.color ?? null);
-                // -1 = no color → first color; last color → null; otherwise advance
-                rec.color = currentIdx === -1
-                    ? colors[0]
-                    : currentIdx === colors.length - 1
-                        ? null
-                        : colors[currentIdx + 1];
-                _applyEntryColor(row, colorBtn, rec.color);
-                if (_sameColor) _renderList();
-            });
-
-            // Row count
-            const badge = document.createElement('span');
-            badge.className = 'rec-entry-rowcount';
-            badge.textContent = (rec.results?.count ?? rec.results?.rows?.length ?? '?') + ' rows';
-            row.appendChild(badge);
-
-            // Action buttons
-            const actions = document.createElement('div');
-            actions.className = 'rec-entry-actions';
-
-            // Color dot — left of Results
-            const colorBtn = document.createElement('button');
-            colorBtn.className = 'rec-color-btn';
-            colorBtn.title     = 'Set row color';
-            _applyEntryColor(row, colorBtn, rec.color ?? null);
-            colorBtn.addEventListener('click', e => {
-                e.stopPropagation();
-                _openEntryColorPopup(rec, row, colorBtn);
-            });
-            actions.appendChild(colorBtn);
-
-            const colorSep = document.createElement('span');
-            colorSep.className = 'rec-action-sep';
-            actions.appendChild(colorSep);
-
-            const renameActionBtn = _btn('✎', 'Rename this recording', () => _startRename(rec.id, nameEl, rec));
-            actions.appendChild(renameActionBtn);
-
-            const actionSep = document.createElement('span');
-            actionSep.className = 'rec-action-sep';
-            actions.appendChild(actionSep);
-
-            actions.appendChild(_btn('Results', 'Load results into table', () => _loadResults(rec)));
-            actions.appendChild(_btn('SQL',     'View generated SQL',      () => _showSQL(rec)));
-
-            // "New island" checkbox sits directly left of the Island button
-            const newIslChk = document.createElement('input');
-            newIslChk.type    = 'checkbox';
-            newIslChk.checked = _newIsland;
-            newIslChk.title   = 'Restore in a new island instead of replacing the current one';
-            newIslChk.className = 'rec-new-island-chk';
-            newIslChk.addEventListener('change', e => { _newIsland = e.target.checked; });
-            actions.appendChild(newIslChk);
-
-            actions.appendChild(_btn('Island',  'Restore island config',   () => _restoreIsland(rec)));
-            const del = _btn('✕', 'Delete', () => _deleteEntry(rec.id));
-            del.classList.add('rec-btn-del');
-            actions.appendChild(del);
-            row.appendChild(actions);
-
-            list.appendChild(row);
-        });
+        // --- Render ungrouped recordings ---
+        const ungrouped = recs.filter(r => !r.groupId || !validGroupIds.has(r.groupId));
+        ungrouped.forEach(rec => list.appendChild(_buildRecEntry(rec, checkedIds, null, list)));
 
         // Recompute button states — no re-render (we're already inside _renderList)
         _updateHeaderButtons(false);
@@ -595,6 +537,329 @@ const Recordings = (() => {
         if (selAllEl) {
             selAllEl.checked = allVisibleChks.length > 0 && allVisibleChks.every(c => c.checked);
         }
+    }
+
+    // -------------------------------------------------------------------------
+    // Build a single recording row element
+    // -------------------------------------------------------------------------
+
+    function _buildRecEntry(rec, checkedIds, groupId, list) {
+        const row = document.createElement('div');
+        row.className      = 'rec-entry' +
+            (rec.id === _currentRecId ? ' is-current-rec'   : '') +
+            (groupId                  ? ' rec-entry--in-group' : '');
+        row.dataset.id      = rec.id;
+        row.dataset.groupId = groupId || '';
+        row.draggable       = true;
+
+        // Drag-and-drop handlers (recording reorder + cross-group move)
+        row.addEventListener('dragstart', e => {
+            _dragId      = rec.id;
+            _dragGroupId = null;
+            e.dataTransfer.effectAllowed = 'move';
+            requestAnimationFrame(() => row.classList.add('rec-entry--dragging'));
+        });
+        row.addEventListener('dragend', () => {
+            _dragId = null;
+            list.querySelectorAll('.rec-entry--dragging, .rec-entry--drag-over')
+                .forEach(el => el.classList.remove('rec-entry--dragging', 'rec-entry--drag-over'));
+        });
+        row.addEventListener('dragover', e => {
+            if (!_dragId || _dragId === rec.id) return;
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            list.querySelectorAll('.rec-entry--drag-over')
+                .forEach(el => el.classList.remove('rec-entry--drag-over'));
+            row.classList.add('rec-entry--drag-over');
+        });
+        row.addEventListener('dragleave', e => {
+            if (!row.contains(e.relatedTarget)) row.classList.remove('rec-entry--drag-over');
+        });
+        row.addEventListener('drop', e => {
+            e.preventDefault();
+            if (!_dragId || _dragId === rec.id) return;
+            const fromIdx = State.recordings.findIndex(r => r.id === _dragId);
+            const toIdx   = State.recordings.findIndex(r => r.id === rec.id);
+            if (fromIdx === -1 || toIdx === -1) return;
+            const [moved] = State.recordings.splice(fromIdx, 1);
+            State.recordings.splice(toIdx, 0, moved);
+            // Adopt the target's group context
+            if (groupId) {
+                moved.groupId = groupId;
+            } else {
+                delete moved.groupId;
+            }
+            _renderList();
+        });
+
+        // Seq number
+        const seqEl = document.createElement('span');
+        seqEl.className   = 'rec-entry-seq';
+        seqEl.textContent = rec.seq ?? '';
+        row.appendChild(seqEl);
+
+        // Checkbox — restore checked state so filters & button states survive re-render
+        const chk = document.createElement('input');
+        chk.type      = 'checkbox';
+        chk.checked   = checkedIds.has(rec.id);
+        chk.className = 'rec-entry-chk';
+        chk.addEventListener('change', _onCheckChange);
+        chk.addEventListener('click', e => { if (e.altKey) { e.preventDefault(); _openPeekPopup(rec, e.clientX, e.clientY, true); } });
+        row.appendChild(chk);
+
+        // Name
+        const nameWrap = document.createElement('span');
+        nameWrap.className = 'rec-entry-name';
+
+        const nameEl = document.createElement('span');
+        nameEl.className   = 'rec-entry-name-text';
+        nameEl.textContent = rec.name || _fmtTs(rec.timestamp);
+        nameEl.addEventListener('click', e => { e.stopPropagation(); if (e.altKey) { _openPeekPopup(rec, e.clientX, e.clientY, true); return; } chk.checked = !chk.checked; _onCheckChange(); });
+        nameWrap.appendChild(nameEl);
+
+        if (rec.viewState) {
+            const vsBadge     = document.createElement('span');
+            vsBadge.className = 'rec-viewstate-badge';
+            vsBadge.title     = 'Has saved visual state (Compare / Duplicates / colors / Dim)';
+            vsBadge.textContent = '🎨';
+            nameWrap.appendChild(vsBadge);
+        }
+
+        row.appendChild(nameWrap);
+
+        // Single click anywhere on the row toggles the checkbox;
+        // Alt+click opens/pins the SQL peek popup instead
+        row.addEventListener('click', e => {
+            if (e.altKey) { e.preventDefault(); _openPeekPopup(rec, e.clientX, e.clientY, true); return; }
+            if (e.target === chk) return;
+            if (e.target.closest('button, input')) return;
+            chk.checked = !chk.checked;
+            _onCheckChange();
+        });
+
+        // Alt+hover → show SQL peek; leaving row hides it (unless pinned)
+        row.addEventListener('mouseenter', e => { if (!e.altKey || _peekPinned) return; _openPeekPopup(rec, e.clientX, e.clientY, false); });
+        row.addEventListener('mousemove', e => {
+            if (_peekPinned) return;
+            if (e.altKey) { _openPeekPopup(rec, e.clientX, e.clientY, false); }
+            else if (_peekRec === rec) { clearTimeout(_peekHideTimer); _peekHideTimer = setTimeout(_closePeekPopup, 120); }
+        });
+        row.addEventListener('mouseleave', () => {
+            if (_peekPinned || _peekRec !== rec) return;
+            clearTimeout(_peekHideTimer);
+            _peekHideTimer = setTimeout(_closePeekPopup, 120);
+        });
+
+        // Right-click cycles through colors
+        row.addEventListener('contextmenu', e => {
+            e.preventDefault();
+            const colors = (typeof Canvas !== 'undefined' && Canvas.CARD_COLORS) ? Canvas.CARD_COLORS.map(c => c.hex) : [];
+            const currentIdx = colors.indexOf(rec.color ?? null);
+            rec.color = currentIdx === -1 ? colors[0] : currentIdx === colors.length - 1 ? null : colors[currentIdx + 1];
+            _applyEntryColor(row, colorBtn, rec.color);
+            if (_sameColor) _renderList();
+        });
+
+        // Row count
+        const badge = document.createElement('span');
+        badge.className   = 'rec-entry-rowcount';
+        badge.textContent = (rec.results?.count ?? rec.results?.rows?.length ?? '?') + ' rows';
+        row.appendChild(badge);
+
+        // Action buttons
+        const actions   = document.createElement('div');
+        actions.className = 'rec-entry-actions';
+
+        const colorBtn    = document.createElement('button');
+        colorBtn.className = 'rec-color-btn';
+        colorBtn.title     = 'Set row color';
+        _applyEntryColor(row, colorBtn, rec.color ?? null);
+        colorBtn.addEventListener('click', e => { e.stopPropagation(); _openEntryColorPopup(rec, row, colorBtn); });
+        actions.appendChild(colorBtn);
+
+        const colorSep    = document.createElement('span');
+        colorSep.className = 'rec-action-sep';
+        actions.appendChild(colorSep);
+
+        actions.appendChild(_btn('✎', 'Rename this recording', () => _startRename(rec.id, nameEl, rec)));
+
+        const actionSep    = document.createElement('span');
+        actionSep.className = 'rec-action-sep';
+        actions.appendChild(actionSep);
+
+        actions.appendChild(_btn('Results', 'Load results into table', () => _loadResults(rec)));
+        actions.appendChild(_btn('SQL',     'View generated SQL',      () => _showSQL(rec)));
+
+        const newIslChk     = document.createElement('input');
+        newIslChk.type      = 'checkbox';
+        newIslChk.checked   = _newIsland;
+        newIslChk.title     = 'Restore in a new island instead of replacing the current one';
+        newIslChk.className = 'rec-new-island-chk';
+        newIslChk.addEventListener('change', e => { _newIsland = e.target.checked; });
+        actions.appendChild(newIslChk);
+
+        actions.appendChild(_btn('Island', 'Restore island config', () => _restoreIsland(rec)));
+        const replBtn = _btn('Replace', 'Replace this recording with the current result (keeps label)', () => _replaceWithCurrent(rec));
+        replBtn.classList.add('rec-btn-replace');
+        actions.appendChild(replBtn);
+        const del = _btn('✕', 'Delete', () => _deleteEntry(rec.id));
+        del.classList.add('rec-btn-del');
+        actions.appendChild(del);
+        row.appendChild(actions);
+
+        return row;
+    }
+
+    // -------------------------------------------------------------------------
+    // Build a group header row
+    // -------------------------------------------------------------------------
+
+    function _buildGroupHeader(group, allGroupRecs, list) {
+        const hdr = document.createElement('div');
+        hdr.className      = 'rec-group-header';
+        hdr.dataset.groupId = group.id;
+        hdr.draggable       = true;
+
+        // Group drag — reorder groups
+        hdr.addEventListener('dragstart', e => {
+            if (e.target.tagName === 'INPUT') { e.preventDefault(); return; }
+            _dragGroupId = group.id;
+            _dragId      = null;
+            e.dataTransfer.effectAllowed = 'move';
+            requestAnimationFrame(() => hdr.classList.add('rec-group-header--dragging'));
+        });
+        hdr.addEventListener('dragend', () => {
+            _dragGroupId = null;
+            list.querySelectorAll('.rec-group-header--dragging, .rec-group-header--drag-over, .rec-group-header--drop-target')
+                .forEach(el => el.classList.remove('rec-group-header--dragging', 'rec-group-header--drag-over', 'rec-group-header--drop-target'));
+        });
+        hdr.addEventListener('dragover', e => {
+            e.preventDefault();
+            if (_dragId) {
+                // A recording being dragged → offer "move into this group"
+                e.dataTransfer.dropEffect = 'move';
+                list.querySelectorAll('.rec-group-header--drop-target')
+                    .forEach(el => el.classList.remove('rec-group-header--drop-target'));
+                hdr.classList.add('rec-group-header--drop-target');
+            } else if (_dragGroupId && _dragGroupId !== group.id) {
+                // Another group being dragged → offer reorder
+                e.dataTransfer.dropEffect = 'move';
+                list.querySelectorAll('.rec-group-header--drag-over')
+                    .forEach(el => el.classList.remove('rec-group-header--drag-over'));
+                hdr.classList.add('rec-group-header--drag-over');
+            }
+        });
+        hdr.addEventListener('dragleave', e => {
+            if (!hdr.contains(e.relatedTarget))
+                hdr.classList.remove('rec-group-header--drop-target', 'rec-group-header--drag-over');
+        });
+        hdr.addEventListener('drop', e => {
+            e.preventDefault();
+            hdr.classList.remove('rec-group-header--drop-target', 'rec-group-header--drag-over');
+            if (_dragId) {
+                // Move recording into this group
+                const moved = State.recordings.find(r => r.id === _dragId);
+                if (moved) { moved.groupId = group.id; _renderList(); }
+            } else if (_dragGroupId && _dragGroupId !== group.id) {
+                // Reorder groups
+                const fromIdx = (State.recordingGroups || []).findIndex(g => g.id === _dragGroupId);
+                const toIdx   = (State.recordingGroups || []).findIndex(g => g.id === group.id);
+                if (fromIdx !== -1 && toIdx !== -1) {
+                    const [moved] = State.recordingGroups.splice(fromIdx, 1);
+                    State.recordingGroups.splice(toIdx, 0, moved);
+                    _renderList();
+                }
+            }
+        });
+
+        // Collapse / expand toggle
+        const toggle     = document.createElement('span');
+        toggle.className = 'rec-group-toggle';
+        toggle.textContent = group.collapsed ? '▶' : '▼';
+        toggle.title       = group.collapsed ? 'Expand group' : 'Collapse group';
+        toggle.addEventListener('click', e => { e.stopPropagation(); group.collapsed = !group.collapsed; _renderList(); });
+        hdr.appendChild(toggle);
+
+        // Group name label
+        const nameEl     = document.createElement('span');
+        nameEl.className = 'rec-group-name';
+        nameEl.textContent = group.name || 'Unnamed group';
+        hdr.appendChild(nameEl);
+
+        // Member count badge
+        const countEl     = document.createElement('span');
+        countEl.className = 'rec-group-count';
+        countEl.textContent = `(${allGroupRecs.length})`;
+        hdr.appendChild(countEl);
+
+        // Rename button
+        const renameBtn     = document.createElement('button');
+        renameBtn.className = 'rec-group-btn';
+        renameBtn.title     = 'Rename group';
+        renameBtn.textContent = '✎';
+        renameBtn.addEventListener('click', e => { e.stopPropagation(); _startGroupRename(group, nameEl, hdr); });
+        hdr.appendChild(renameBtn);
+
+        // Delete button
+        const delBtn     = document.createElement('button');
+        delBtn.className = 'rec-group-btn rec-group-btn--del';
+        delBtn.title     = 'Delete group — recordings become ungrouped';
+        delBtn.textContent = '✕';
+        delBtn.addEventListener('click', async e => {
+            e.stopPropagation();
+            const n   = allGroupRecs.length;
+            const msg = n
+                ? `Delete group "${group.name || 'this group'}"? Its ${n} recording${n !== 1 ? 's' : ''} will become ungrouped.`
+                : `Delete group "${group.name || 'this group'}"?`;
+            if (!await Dialog.confirm(msg)) return;
+            allGroupRecs.forEach(r => { delete r.groupId; });
+            State.recordingGroups = (State.recordingGroups || []).filter(g => g.id !== group.id);
+            _renderList();
+        });
+        hdr.appendChild(delBtn);
+
+        return hdr;
+    }
+
+    // -------------------------------------------------------------------------
+    // Group lifecycle helpers
+    // -------------------------------------------------------------------------
+
+    function _createGroup() {
+        if (!Array.isArray(State.recordingGroups)) State.recordingGroups = [];
+        const group = { id: _newId('grp'), name: '', collapsed: false };
+        State.recordingGroups.push(group);
+        _renderList();
+        // Immediately start inline rename on the freshly rendered group header
+        const hdrEl  = document.querySelector(`[data-group-id="${group.id}"]`);
+        const nameEl = hdrEl?.querySelector('.rec-group-name');
+        if (nameEl && hdrEl) _startGroupRename(group, nameEl, hdrEl);
+    }
+
+    function _startGroupRename(group, nameEl, hdrEl) {
+        const input     = document.createElement('input');
+        input.type      = 'text';
+        input.className = 'rec-rename-input';
+        input.value     = group.name || '';
+        input.placeholder = 'Group name…';
+        nameEl.replaceWith(input);
+        if (hdrEl) hdrEl.draggable = false;
+        input.focus();
+        input.select();
+
+        const restore = () => { if (hdrEl) hdrEl.draggable = true; };
+        const commit  = () => {
+            const val  = input.value.trim();
+            group.name = val || 'Group';
+            nameEl.textContent = group.name;
+            input.replaceWith(nameEl);
+            restore();
+        };
+        input.addEventListener('blur',    commit);
+        input.addEventListener('keydown', e => {
+            if (e.key === 'Enter')  { e.preventDefault(); commit(); }
+            if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); input.replaceWith(nameEl); restore(); }
+        });
     }
 
     function _btn(label, title, onClick) {

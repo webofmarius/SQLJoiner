@@ -8131,6 +8131,8 @@ async function _copyAsSqlSelect() {
          * Expands the results panel first if it is collapsed.
          */
         focusColumn,
+        /** Return the raw last-result object (cols, rows, sql, …) — used by Recordings.replace. */
+        getLastResult: () => _lastResult,
         /** Serialise the current results-table visual state for storage in a recording. */
         captureViewState,
         /** Restore a previously captured view-state onto the current results table. */

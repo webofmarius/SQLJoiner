@@ -7141,6 +7141,15 @@ textarea.sql-bd-active.scope-mode-on {
     border-color: var(--accent);
     background: rgba(74,158,255,0.1);
 }
+.rec-btn-replace {
+    border-color: transparent;
+    color: var(--text-muted);
+}
+.rec-btn-replace:hover {
+    color: #fbbf24;
+    border-color: #fbbf24;
+    background: rgba(251,191,36,0.1);
+}
 .rec-btn-del {
     border-color: transparent;
     color: var(--text-muted);
@@ -7217,6 +7226,111 @@ textarea.sql-bd-active.scope-mode-on {
     padding: 1px 4px;
     outline: none;
     min-width: 0;
+}
+
+/* ── Group header ────────────────────────────────────────────── */
+.rec-group-header {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 8px;
+    background: var(--surface3);
+    border-bottom: 1px solid var(--border2);
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    cursor: grab;
+    user-select: none;
+    letter-spacing: 0.03em;
+}
+.rec-group-header:active { cursor: grabbing; }
+.rec-group-header--dragging { opacity: 0.4; }
+.rec-group-header--drag-over {
+    border-top: 2px solid var(--accent);
+    margin-top: -1px;
+}
+.rec-group-header--drop-target {
+    background: color-mix(in srgb, var(--accent) 22%, var(--surface3));
+    border-color: var(--accent);
+    color: var(--text);
+}
+.rec-group-toggle {
+    font-size: 9px;
+    flex-shrink: 0;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 1px 2px;
+    border-radius: 2px;
+}
+.rec-group-toggle:hover { color: var(--text); background: var(--surface2); }
+.rec-group-name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text);
+}
+.rec-group-count {
+    flex-shrink: 0;
+    font-size: 10px;
+    color: var(--text-muted);
+    font-weight: 400;
+}
+.rec-group-btn {
+    flex-shrink: 0;
+    background: none;
+    border: 1px solid transparent;
+    color: var(--text-muted);
+    font-size: 10px;
+    padding: 1px 4px;
+    border-radius: 3px;
+    cursor: pointer;
+    line-height: 1.4;
+}
+.rec-group-btn:hover { color: var(--text); border-color: var(--border2); background: var(--surface2); }
+.rec-group-btn--del:hover { color: #f87171; border-color: #f87171; background: rgba(248,113,113,0.1); }
+
+/* Grouped recording entries — slight indent */
+.rec-entry.rec-entry--in-group {
+    padding-left: 20px;
+    background: rgba(0,0,0,0.08);
+}
+.rec-entry.rec-entry--in-group:nth-child(even) { background: rgba(139,90,43,0.13); }
+.rec-entry.rec-entry--in-group:hover {
+    background: color-mix(in srgb, var(--accent, #4a9eff) 12%, var(--surface2)) !important;
+}
+
+/* "Ungrouped" separator / drop zone */
+.rec-ungroup-sep {
+    padding: 3px 8px;
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-muted);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    background: var(--surface2);
+    border-bottom: 1px solid var(--border);
+    border-top: 1px solid var(--border);
+    user-select: none;
+    transition: background 0.1s, color 0.1s;
+}
+.rec-ungroup-sep--active {
+    background: color-mix(in srgb, var(--accent) 18%, var(--surface2));
+    color: var(--text);
+    border-color: var(--accent);
+}
+.rec-ungroup-sep--empty::after {
+    content: ' — drop here to ungroup';
+    font-weight: 400;
+    opacity: 0.55;
+}
+
+/* "Add Group" button in the recordings panel header */
+.rec-add-group-btn {
+    font-size: 11px;
+    padding: 2px 6px;
+    white-space: nowrap;
 }
 
 /* --- Recordings toggle button in bottombar --- */
