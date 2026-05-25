@@ -326,6 +326,7 @@
         <div class="results-legend">
             <span id="legend-compare" class="hidden"><strong>Compare mode:</strong> click header to compare column · click cell to compare column · right-click cell to compare row</span>
             <span id="legend-duplicates" class="hidden"><strong>Duplicates mode:</strong> click header to scan column for duplicates · click cell to scan column · right-click cell to scan row</span>
+            <span id="legend-trace" class="hidden"><strong>Trace mode:</strong> repeated values are dimmed — only changes from the previous row are shown at full intensity</span>
         </div>
         <div id="results-error" class="hidden"></div>
         <div id="results-table-wrapper">

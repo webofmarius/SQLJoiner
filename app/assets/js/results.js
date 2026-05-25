@@ -652,6 +652,7 @@ const Results = (() => {
             _traceMode = false;
             const btnTrace = document.getElementById('btn-trace');
             if (btnTrace) btnTrace.classList.remove('is-active');
+            document.getElementById('legend-trace')?.classList.add('hidden');
         }
         const resultsPanel = document.getElementById('results-panel');
         if (resultsPanel?.classList.contains('search-active')) {
@@ -767,6 +768,7 @@ const Results = (() => {
         }
         _traceMode = false;
         document.getElementById('btn-trace')?.classList.remove('is-active');
+        document.getElementById('legend-trace')?.classList.add('hidden');
         document.getElementById('results-panel').classList.add('hidden');
         const _snapBtnClear = document.getElementById('btn-diff-snapshot');
         if (_snapBtnClear) { _snapBtnClear.disabled = true; _snapBtnClear.classList.remove('hidden'); }
@@ -3897,6 +3899,7 @@ const Results = (() => {
         _traceMode = !_traceMode;
         const btn = document.getElementById('btn-trace');
         btn.classList.toggle('is-active', _traceMode);
+        document.getElementById('legend-trace')?.classList.toggle('hidden', !_traceMode);
         if (_traceMode) {
             _applyTrace();
         } else {
