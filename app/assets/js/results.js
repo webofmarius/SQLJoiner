@@ -3125,18 +3125,41 @@ const Results = (() => {
         copyColBtn.title       = 'Copy unique column values as SQL IN(…) list';
         copyColBtn.addEventListener('click', () => {
             if (colIdx === -1 || !_lastResult) return;
-            const seen   = new Set();
-            const parts  = [];
-            for (const row of (_lastResult.rows || [])) {
-                const v = row[colIdx];
-                if (v === null || v === undefined) continue; // skip NULLs — useless in IN()
-                const s = String(v);
-                if (seen.has(s)) continue;
-                seen.add(s);
-                // Numeric literal — no quotes needed
-                const isNum = s.trim() !== '' && !isNaN(s);
-                parts.push(isNum ? s : `'${s.replace(/'/g, "''")}'`);
+            const seen  = new Set();
+            const parts = [];
+
+            const table  = document.getElementById('results-table');
+            const isDimRowMode = table?.classList.contains('is-dimmed') && _dimRowMode;
+
+            if (isDimRowMode) {
+                // DIM row-mode: only include rows that are currently visible
+                const tbody = table.querySelector('tbody');
+                const trs   = tbody ? Array.from(tbody.querySelectorAll('tr')) : [];
+                for (const tr of trs) {
+                    if (tr.classList.contains('dim-row-hidden')) continue;
+                    // colIdx+1 because first td is the row-number column
+                    const td = tr.querySelectorAll('td')[colIdx + 1];
+                    if (!td || td.classList.contains('is-null')) continue;
+                    const s = td.dataset.raw ?? td.textContent;
+                    if (!s || seen.has(s)) continue;
+                    seen.add(s);
+                    const isNum = s.trim() !== '' && !isNaN(s);
+                    parts.push(isNum ? s : `'${s.replace(/'/g, "''")}'`);
+                }
+            } else {
+                // No DIM (or column-mode DIM): use all fetched rows
+                for (const row of (_lastResult.rows || [])) {
+                    const v = row[colIdx];
+                    if (v === null || v === undefined) continue; // skip NULLs — useless in IN()
+                    const s = String(v);
+                    if (seen.has(s)) continue;
+                    seen.add(s);
+                    // Numeric literal — no quotes needed
+                    const isNum = s.trim() !== '' && !isNaN(s);
+                    parts.push(isNum ? s : `'${s.replace(/'/g, "''")}'`);
+                }
             }
+
             if (!parts.length) { App.notify?.('Column has no non-NULL values', 'warn'); return; }
             navigator.clipboard.writeText(parts.join(', '))
                 .then(() => App.notify?.(`${parts.length} value${parts.length === 1 ? '' : 's'} copied`, 'success'));
