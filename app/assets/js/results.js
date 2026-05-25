@@ -2357,8 +2357,10 @@ const Results = (() => {
                     }
                     if (_compareMode) {
                         _compareCell(td);
+                        _selectedCell = td;
                     } else if (_duplicateMode) {
                         _duplicateCell(td);
+                        _selectedCell = td;
                     } else {
                         _selectCell(td);
                     }
