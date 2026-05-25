@@ -3805,8 +3805,9 @@ const App = (() => {
                 customQueryHighlight: parsed.customQueryHighlight ?? false,
                 islandPinnedPlots:  (!parsed.islandPinnedPlots  || Array.isArray(parsed.islandPinnedPlots))  ? {} : parsed.islandPinnedPlots,
                 islandPinSortOrder: (!parsed.islandPinSortOrder || Array.isArray(parsed.islandPinSortOrder)) ? {} : parsed.islandPinSortOrder,
-                recordingActive: parsed.recordingActive ?? true,
-                recordings:      Array.isArray(parsed.recordings) ? parsed.recordings : [],
+                recordingActive:  parsed.recordingActive ?? true,
+                recordings:       Array.isArray(parsed.recordings)       ? parsed.recordings       : [],
+                recordingGroups:  Array.isArray(parsed.recordingGroups)  ? parsed.recordingGroups  : [],
             });
 
             if (opts.preserveWhereRaw && _prevWhereMode === 'raw') {
