@@ -1903,7 +1903,7 @@ const Results = (() => {
                 e.preventDefault();
                 e.stopPropagation();
                 _distPreviewHandled = true;
-                _showDistributionPopup(th, col, colTables[colIdx] || '');
+                _showDistributionPopup(th, col, colTables[colIdx] || '', colIdx);
             });
 
             th.addEventListener('contextmenu', e => {
@@ -2877,7 +2877,7 @@ const Results = (() => {
         _distPopup.style.top  = top  + 'px';
     }
 
-    function _showDistributionPopup(th, col, colAlias) {
+    function _showDistributionPopup(th, col, colAlias, knownColIdx = -1) {
         _ensureDistPopup();
 
         // Header label
@@ -2937,8 +2937,9 @@ const Results = (() => {
             return;
         }
 
-        // Find the column index in the current result
-        const colIdx = _lastResult.cols.findIndex(c => c === col);
+        // Use the column index passed by the caller (positional, avoids duplicate-name collisions).
+        // Fall back to findIndex only when not provided (shouldn't happen in normal flow).
+        const colIdx = knownColIdx !== -1 ? knownColIdx : _lastResult.cols.findIndex(c => c === col);
         if (colIdx === -1) {
             body.innerHTML = '<span class="dist-popup-unavail">Column not found in current result.</span>';
             return;
