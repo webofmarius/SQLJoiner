@@ -296,6 +296,7 @@
                         <div class="results-help-row"><kbd>Right-click</kbd> Highlight SELECT checkbox</div>
                         <div class="results-help-row"><kbd>Alt + Click</kbd> Copy <code>`alias`.`column`</code></div>
                         <div class="results-help-row"><kbd>Alt + Right-click</kbd> Preview column distribution</div>
+                        <div class="results-help-row"><kbd>⌘/Ctrl + Right-click</kbd> Toggle column highlight (low-yellow + italic; pinned in Dim)</div>
                     </div>
                 </div>
                 <button id="btn-compare" title="Compare cell values">⊜ Compare</button>

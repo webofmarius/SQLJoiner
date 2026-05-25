@@ -4844,6 +4844,15 @@ th.calc-nop { opacity: 0.1; font-weight: bold; }
    the winner when a cell carries multiple feature classes — LAST rule wins.
    Generic .td-diff-changed (0,1,0) is automatically lowest via specificity. */
 
+/* Cmd/Ctrl+right-click column highlight — lowest-priority background.
+   Italic is orthogonal to bg colour, so it always applies. Placed FIRST so all
+   subsequent !important background rules win on document-order priority. */
+#results-table td.col-cmd-highlight,
+#results-table th.col-cmd-highlight {
+    background-color: rgba(253, 216, 53, 0.28) !important;
+    font-style: italic !important;
+}
+
 /* Compare Datasets */
 #results-table td.cell-ds-diff {
     background-color: #e53935 !important;

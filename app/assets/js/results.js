@@ -15,6 +15,7 @@
 const Results = (() => {
     let _lastResult = null;
     let _colThemes = {};
+    let _cmdColHighlights = new Set(); // colIdx values currently cmd/ctrl+right-click highlighted
     let _selectedCell = null;
 
     // Remembers whether the panel was 'fullscreen', 'tall', or 'normal' before
@@ -126,6 +127,9 @@ const Results = (() => {
     // on platforms where altKey is still present in the contextmenu event).
     let _altRightClickHandled = false;
 
+    // Same pattern for Cmd/Ctrl+right-click on header cells (column highlight toggle).
+    let _cmdRightClickHandled = false;
+
     const THEMES = [
         'col-highlight-1',
         'col-highlight-2',
@@ -153,6 +157,50 @@ const Results = (() => {
                     _clearExplainColors();
                 }
             });
+
+        // Cmd+right-click (macOS) / Ctrl+right-click (Windows) on any results header
+        // cell → toggle column highlight.
+        //
+        // Registered at document level in CAPTURE phase so we fire before any
+        // bubble handlers (including the th's filter-wrap which stops mousedown
+        // propagation) and before the browser starts rendering its menu.
+        // preventDefault() + stopImmediatePropagation() on both events is the
+        // only combination that reliably suppresses the browser context menu
+        // for cmd/ctrl+right-click across Chromium/Firefox/Safari.
+        const _isCmdRightClickOnHeader = e =>
+            (e.metaKey || e.ctrlKey) && e.target?.closest?.('#results-table thead th:not(.th-row-num)');
+
+        document.addEventListener('mousedown', e => {
+            if (e.button !== 2) return;
+            const th = _isCmdRightClickOnHeader(e);
+            if (!th) return;
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            const colIdx = parseInt(th.dataset.colIdx, 10);
+            if (isNaN(colIdx)) return;
+            _cmdRightClickHandled = true;
+            _toggleCmdColumnHighlight(colIdx);
+        }, true);
+
+        document.addEventListener('contextmenu', e => {
+            const th = _isCmdRightClickOnHeader(e);
+            if (!th) return;
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            if (_cmdRightClickHandled) { _cmdRightClickHandled = false; return; }
+            const colIdx = parseInt(th.dataset.colIdx, 10);
+            if (isNaN(colIdx)) return;
+            _toggleCmdColumnHighlight(colIdx);
+        }, true);
+
+        // Belt-and-braces: also catch mouseup. On macOS Safari, the browser
+        // context menu can be triggered on mouseup rather than mousedown.
+        document.addEventListener('mouseup', e => {
+            if (e.button !== 2) return;
+            if (!_isCmdRightClickOnHeader(e)) return;
+            e.preventDefault();
+            e.stopImmediatePropagation();
+        }, true);
 
         (function () {
             const helpBtn   = document.getElementById('btn-results-help');
@@ -749,6 +797,7 @@ const Results = (() => {
         }
         _lastResult = null;
         _colThemes = {};
+        _cmdColHighlights = new Set();
         _selectedCell = null;
         _compareMode = false;
         _compareRefValue = null;
@@ -1005,7 +1054,7 @@ const Results = (() => {
                     _dimPinnedCols = new Set();
                     if (_lastResult) {
                         _lastResult.cols.forEach((_col, colIdx) => {
-                            if (_colThemes[colIdx]) { _dimPinnedCols.add(colIdx); return; }
+                            if (_colThemes[colIdx] || _cmdColHighlights.has(colIdx)) { _dimPinnedCols.add(colIdx); return; }
                             const nth = colIdx + 2;
                             if (tbody && [...THEMES, ...FEATURE_COLOR_CLASSES].some(t => tbody.querySelector(`tr td:nth-child(${nth}).${t}`)))
                                 _dimPinnedCols.add(colIdx);
@@ -1200,7 +1249,7 @@ const Results = (() => {
                 _dimPinnedCols = new Set();
                 if (_lastResult) {
                     _lastResult.cols.forEach((_col, colIdx) => {
-                        if (_colThemes[colIdx]) { _dimPinnedCols.add(colIdx); return; }
+                        if (_colThemes[colIdx] || _cmdColHighlights.has(colIdx)) { _dimPinnedCols.add(colIdx); return; }
                         const nth = colIdx + 2;
                         if (tbody && [...THEMES, ...FEATURE_COLOR_CLASSES].some(t => tbody.querySelector(`tr td:nth-child(${nth}).${t}`)))
                             _dimPinnedCols.add(colIdx);
@@ -1279,6 +1328,35 @@ const Results = (() => {
     function _dimPinCol(colIdx) {
         if (document.getElementById('results-table')?.classList.contains('is-dimmed'))
             _dimPinnedCols.add(colIdx);
+    }
+
+    /**
+     * Toggle a column-wide cmd/ctrl+right-click highlight (low-yellow bg + italic).
+     * Lowest-priority background — any other cell coloring (right-click, Compare,
+     * Duplicates, Trace, Diff, etc.) overrides it. When applied, the column is
+     * also pinned in DIM so it stays visible.
+     */
+    function _toggleCmdColumnHighlight(colIdx) {
+        const table = document.getElementById('results-table');
+        if (!table) return;
+        const ths = table.querySelectorAll('thead th');
+        const th  = ths[colIdx + 1]; // +1 to skip leading # column
+        if (!th) return;
+        const nth   = colIdx + 2;    // nth-child is 1-based and skips # column
+        const cells = table.querySelectorAll(`tbody tr td:nth-child(${nth})`);
+
+        if (_cmdColHighlights.has(colIdx)) {
+            _cmdColHighlights.delete(colIdx);
+            th.classList.remove('col-cmd-highlight');
+            cells.forEach(td => td.classList.remove('col-cmd-highlight'));
+        } else {
+            _cmdColHighlights.add(colIdx);
+            th.classList.add('col-cmd-highlight');
+            cells.forEach(td => td.classList.add('col-cmd-highlight'));
+            _dimPinCol(colIdx);
+        }
+        _applyDimVisibility();
+        _applyDimRowVisibility();
     }
 
     // -------------------------------------------------------------------------
@@ -1747,7 +1825,7 @@ const Results = (() => {
 
             // Tooltip: show full schema.table origin on hover; also apply table color
             const colTableAlias = colTables[colIdx] || '';
-            const _distHint = 'Alt + right click: Preview Distribution column';
+            const _distHint = 'Alt + right click: Preview Distribution column\nShift + right click: Toggle column highlight';
             if (colTableAlias) {
                 const colTableLc  = colTableAlias.toLowerCase();
                 const originTable = (State.tables || []).find(t => t.alias?.toLowerCase() === colTableLc)
@@ -1809,9 +1887,14 @@ const Results = (() => {
             if (_colThemes[colIdx]) {
                 th.classList.add(_colThemes[colIdx]);
             }
+            // Restore cmd/ctrl+right-click column highlight
+            if (_cmdColHighlights.has(colIdx)) {
+                th.classList.add('col-cmd-highlight');
+            }
 
             // Right-click: toggle SELECT checkbox · Alt+right-click: cycle column color
             // Alt+right-click: open Distribution Preview popup
+            // (Shift+right-click is handled by the table-level capture listener in init.)
             th.addEventListener('mousedown', e => {
                 if (e.button !== 2 || !_altKeyHeld) return;
                 e.preventDefault();
@@ -2211,6 +2294,10 @@ const Results = (() => {
                 // Apply column theme if any
                 if (_colThemes[colIdx]) {
                     td.classList.add(_colThemes[colIdx]);
+                }
+                // Apply cmd/ctrl+right-click column highlight if any
+                if (_cmdColHighlights.has(colIdx)) {
+                    td.classList.add('col-cmd-highlight');
                 }
 
                 // Left-click: eval mode / bind mode intercept, then compare / duplicates / normal select
@@ -7855,6 +7942,7 @@ async function _copyAsSqlSelect() {
             dimActive:       table.classList.contains('is-dimmed'),
             dimRowMode:      _dimRowMode,
             dimPinnedCols:   [..._dimPinnedCols],
+            cmdColHighlights: [..._cmdColHighlights],
             colFilters:      { ..._colFilters },
             searchActive:    panel?.classList.contains('search-active') ?? false,
         };
@@ -7890,6 +7978,19 @@ async function _copyAsSqlSelect() {
         viewState.rowHighlights?.forEach(ri => {
             trs[ri]?.classList.add('row-highlighted');
         });
+
+        // Cmd/Ctrl+right-click column highlights (also checks legacy 'shiftColHighlights' key)
+        _cmdColHighlights = new Set(viewState.cmdColHighlights ?? viewState.shiftColHighlights ?? []);
+        if (_cmdColHighlights.size) {
+            const ths = table.querySelectorAll('thead th');
+            _cmdColHighlights.forEach(colIdx => {
+                const th = ths[colIdx + 1];
+                if (th) th.classList.add('col-cmd-highlight');
+                const nth = colIdx + 2;
+                table.querySelectorAll(`tbody tr td:nth-child(${nth})`)
+                    .forEach(td => td.classList.add('col-cmd-highlight'));
+            });
+        }
 
         // Compare mode
         _compareMode     = viewState.compareMode     ?? false;
