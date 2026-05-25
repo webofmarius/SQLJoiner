@@ -2116,6 +2116,16 @@ const Canvas = (() => {
             });
         }
 
+        // Results table columns — matches th by bare name or full colKey; no canvas highlighting
+        if (filter === 'results-col') {
+            document.querySelectorAll('#results-table thead th[data-col-key]').forEach(th => {
+                const raw    = (th.dataset.raw    || '').toLowerCase();
+                const colKey = (th.dataset.colKey || '').toLowerCase();
+                if (raw.includes(q) || colKey.includes(q))
+                    groups.push({ tableIds: [], colKey: th.dataset.colKey });
+            });
+        }
+
         _search.groups  = groups;
         _search.matches = [...new Set(groups.flatMap(g => g.tableIds))];
         _search.index   = groups.length > 0 ? 0 : -1;
@@ -2141,6 +2151,12 @@ const Canvas = (() => {
         const group = _search.groups[idx];
         if (!group) return;
 
+        // Results-column mode — delegate to Results.focusColumn, skip canvas logic
+        if (group.colKey !== undefined) {
+            if (typeof Results !== 'undefined') Results.focusColumn?.(group.colKey);
+            return;
+        }
+
         group.tableIds.forEach(id => {
             const card = document.querySelector(`.table-card[data-table-id="${id}"]`);
             if (card) card.classList.add('is-search-focus');
@@ -2155,6 +2171,9 @@ const Canvas = (() => {
     }
 
     function _applySearchHighlights() {
+        // Results-column mode has no canvas highlights — nothing to do
+        if (_search.groups.length && _search.groups[0].colKey !== undefined) return;
+
         _search.matches.forEach(tableId => {
             const card = document.querySelector(`.table-card[data-table-id="${tableId}"]`);
             if (card) card.classList.add('is-search-match');

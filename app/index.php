@@ -52,6 +52,7 @@
                     <option value="aliases">Aliases</option>
                     <option value="joins">Join labels</option>
                     <option value="islands">Island labels</option>
+                    <option value="results-col">Results column</option>
                 </select>
                 <span id="canvas-search-count"></span>
                 <button id="canvas-search-prev" title="Previous match (Shift+Enter)">↑</button>
