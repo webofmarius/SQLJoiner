@@ -733,6 +733,8 @@ const Results = (() => {
         }
 
         _colFilters = {};
+        _cmdColHighlights = new Set();
+        _colThemes = {};
         _lastResultIsCsv = !!result._csvSource;
 
         // If a diff snapshot exists, render the diff instead of plain table
