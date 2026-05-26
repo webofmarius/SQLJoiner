@@ -7159,11 +7159,16 @@ textarea.sql-bd-active.scope-mode-on {
     cursor: pointer;
     white-space: nowrap;
 }
-.rec-action-btn:hover,
+.rec-action-btn:hover:not(:disabled),
 .rec-action-btn.is-previewing {
     color: var(--text);
     border-color: var(--accent);
     background: rgba(74,158,255,0.1);
+}
+.rec-action-btn:disabled {
+    opacity: 0.35;
+    cursor: default;
+    pointer-events: none;
 }
 .rec-btn-replace {
     border-color: transparent;

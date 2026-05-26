@@ -142,11 +142,12 @@ const Recordings = (() => {
         const nextSeq = Math.max(0, ...(State.recordings || []).map(r => r.seq ?? 0)) + 1;
 
         const entry = {
-            id:        _newId('rec'),
-            seq:       nextSeq,
-            timestamp: Date.now(),
-            name:      null,
-            sql:       result.sql || document.getElementById('sql-preview-text')?.textContent || '',
+            id:           _newId('rec'),
+            seq:          nextSeq,
+            timestamp:    Date.now(),
+            name:         null,
+            fromRunQuery: !!result._fromRunQuery,
+            sql:          result.sql || document.getElementById('sql-preview-text')?.textContent || '',
             results: {
                 cols:       (result.cols       || []).slice(),
                 rows:       (result.rows       || []).map(r => r.slice()),
@@ -260,7 +261,8 @@ const Recordings = (() => {
             name:   State.islandNames?.[islandKey]  ?? null,
             color:  State.islandColors?.[islandKey] ?? null,
         };
-        rec.viewState = Results.captureViewState?.() ?? null;
+        rec.viewState    = Results.captureViewState?.() ?? null;
+        rec.fromRunQuery = !!lastResult._fromRunQuery;
 
         App.notify?.(`"${label}" replaced with current result.`, 'success');
         _renderList();
@@ -702,15 +704,32 @@ const Recordings = (() => {
         actions.appendChild(_btn('Results', 'Load results into table', () => _loadResults(rec)));
         actions.appendChild(_btn('SQL',     'View generated SQL',      () => _showSQL(rec)));
 
+        // Island button + new-island checkbox are only meaningful when the recording
+        // was produced by Run Query (right-panel filters → DB). CSV loads, custom
+        // queries, EXPLAIN runs etc. don't carry a matching island config.
+        // rec.fromRunQuery === undefined means an old recording → keep enabled for compat.
+        const canUseIsland = rec.fromRunQuery !== false;
+
         const newIslChk     = document.createElement('input');
         newIslChk.type      = 'checkbox';
         newIslChk.checked   = _newIsland;
-        newIslChk.title     = 'Restore in a new island instead of replacing the current one';
+        newIslChk.title     = canUseIsland
+            ? 'Restore in a new island instead of replacing the current one'
+            : 'Not available — result was not produced by Run Query';
         newIslChk.className = 'rec-new-island-chk';
+        newIslChk.disabled  = !canUseIsland;
         newIslChk.addEventListener('change', e => { _newIsland = e.target.checked; });
         actions.appendChild(newIslChk);
 
-        actions.appendChild(_btn('Island', 'Restore island config', () => _restoreIsland(rec)));
+        const islBtn = _btn(
+            'Island',
+            canUseIsland
+                ? 'Restore island config'
+                : 'Not available — result was not produced by Run Query',
+            canUseIsland ? () => _restoreIsland(rec) : null,
+        );
+        islBtn.disabled = !canUseIsland;
+        actions.appendChild(islBtn);
         const replBtn = _btn('Replace', 'Replace this recording with the current result (keeps label)', () => _replaceWithCurrent(rec));
         replBtn.classList.add('rec-btn-replace');
         actions.appendChild(replBtn);

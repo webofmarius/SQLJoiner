@@ -2161,6 +2161,7 @@ const App = (() => {
                     .join(', ');
             }
 
+            result._fromRunQuery = true;
             Results.calcMarkOutOfSync();
             Results.render(result);
         } catch (e) {
