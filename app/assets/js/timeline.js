@@ -80,6 +80,15 @@ const Timeline = (() => {
         return `stl_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
     }
 
+    function _newStlGroupId() {
+        return `stlg_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    }
+
+    function _savedTimelineGroups() {
+        if (!Array.isArray(State.savedTimelineGroups)) State.savedTimelineGroups = [];
+        return State.savedTimelineGroups;
+    }
+
     // -------------------------------------------------------------------------
     // Init
     // -------------------------------------------------------------------------
@@ -651,11 +660,8 @@ const Timeline = (() => {
         });
 
         const recSpan = document.createElement('span');
-        recSpan.className   = 'tl-tick-peek__rec' + (entry.recId ? ' tl-tick-peek__rec--link' : '');
+        recSpan.className   = 'tl-tick-peek__rec';
         recSpan.textContent = entry.recName;
-        if (entry.recId) {
-            recSpan.addEventListener('click', () => Recordings.loadResultsById(entry.recId));
-        }
 
         const labelInput = document.createElement('input');
         labelInput.type        = 'text';
@@ -674,6 +680,51 @@ const Timeline = (() => {
 
         hdr.appendChild(colorSwatch);
         hdr.appendChild(recSpan);
+        if (entry.recId) {
+            const loadRecBtn = document.createElement('button');
+            loadRecBtn.className   = 'tl-tick-peek__load-rec';
+            loadRecBtn.textContent = 'Results';
+            loadRecBtn.title       = 'Load this recording\'s results';
+            loadRecBtn.addEventListener('click', () => {
+                Recordings.loadResultsById(entry.recId);
+                requestAnimationFrame(() => {
+                    const tbody = document.querySelector('#results-table tbody');
+                    const thead = document.querySelector('#results-table thead');
+                    if (!tbody || !thead) return;
+
+                    // Build bare-column-name → th-index map
+                    const colIdxMap = {};
+                    Array.from(thead.querySelectorAll('th')).forEach((th, i) => {
+                        const key  = th.dataset.colKey || '';
+                        const bare = key.includes('.') ? key.split('.')[1] : key;
+                        if (bare) colIdxMap[bare] = i;
+                        if (key)  colIdxMap[key]  = i;
+                    });
+
+                    // Find first row whose cell values all match entry.rowData
+                    const rdEntries = Object.entries(entry.rowData || {});
+                    let matchTr = null;
+                    for (const tr of tbody.querySelectorAll('tr')) {
+                        const tds = tr.querySelectorAll('td');
+                        let ok = rdEntries.length > 0;
+                        for (const [col, val] of rdEntries) {
+                            const bare = col.includes('.') ? col.split('.')[1] : col;
+                            const idx  = colIdxMap[col] ?? colIdxMap[bare];
+                            if (idx == null) continue;
+                            const cell = tds[idx];
+                            if (!cell) { ok = false; break; }
+                            const raw = cell.dataset.raw ?? cell.textContent ?? null;
+                            if (String(raw) !== String(val == null ? '' : val)) { ok = false; break; }
+                        }
+                        if (ok) { matchTr = tr; break; }
+                    }
+
+                    if (matchTr) matchTr.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    Results.focusColumn(entry.colName);
+                });
+            });
+            hdr.appendChild(loadRecBtn);
+        }
         hdr.appendChild(labelInput);
         hdr.appendChild(closeBtn);
         peek.appendChild(hdr);
@@ -1126,92 +1177,309 @@ const Timeline = (() => {
     function _openSavedPopup(btnEl) {
         _closeSavedPopup();
         const stls = _savedTimelines();
+        const grps = _savedTimelineGroups();
 
         const pop = document.createElement('div');
         pop.className = 'tl-saved-popup';
         pop.addEventListener('click',     e => e.stopPropagation());
         pop.addEventListener('mousedown', e => e.stopPropagation());
 
+        let _dragStlId   = null;
+        let _dragGroupId = null;
+
+        function _rerender() {
+            _rebuild();
+            if (_multiTrackMode && _viewMode === 'visual') _render();
+        }
+
+        function _buildTimelineRow(stl) {
+            const row = document.createElement('div');
+            row.className = 'tl-saved-popup__row' + (stl.groupId ? ' tl-saved-popup__row--in-group' : '');
+            row.draggable = true;
+            row.dataset.stlId = stl.id;
+
+            row.addEventListener('dragstart', e => {
+                _dragStlId   = stl.id;
+                _dragGroupId = null;
+                e.dataTransfer.effectAllowed = 'move';
+                requestAnimationFrame(() => row.classList.add('tl-saved-popup__row--dragging'));
+            });
+            row.addEventListener('dragend', () => {
+                row.classList.remove('tl-saved-popup__row--dragging');
+                _dragStlId = null; _dragGroupId = null;
+            });
+            row.addEventListener('dragover', e => {
+                if (!_dragStlId || _dragStlId === stl.id) return;
+                e.preventDefault();
+                row.classList.add('tl-saved-popup__row--drag-over');
+            });
+            row.addEventListener('dragleave', () => row.classList.remove('tl-saved-popup__row--drag-over'));
+            row.addEventListener('drop', e => {
+                e.preventDefault();
+                row.classList.remove('tl-saved-popup__row--drag-over');
+                if (!_dragStlId || _dragStlId === stl.id) return;
+                const fromIdx = stls.findIndex(s => s.id === _dragStlId);
+                const toIdx   = stls.indexOf(stl);
+                if (fromIdx === -1 || toIdx === -1) return;
+                const [moved] = stls.splice(fromIdx, 1);
+                stls.splice(toIdx, 0, moved);
+                if (stl.groupId) moved.groupId = stl.groupId;
+                else              delete moved.groupId;
+                _dragStlId = null;
+                _rerender();
+            });
+
+            const chk = document.createElement('input');
+            chk.type      = 'checkbox';
+            chk.checked   = stl.visible !== false;
+            chk.className = 'tl-saved-popup__vis';
+            chk.title     = 'Show as track in multi-track view';
+            chk.addEventListener('change', () => {
+                stl.visible = chk.checked;
+                if (_multiTrackMode && _viewMode === 'visual') _render();
+            });
+            row.appendChild(chk);
+
+            const nameSpan = document.createElement('span');
+            nameSpan.className   = 'tl-saved-popup__name';
+            nameSpan.textContent = stl.name;
+            nameSpan.title       = new Date(stl.timestamp).toLocaleString();
+            row.appendChild(nameSpan);
+
+            const cnt = document.createElement('span');
+            cnt.className   = 'tl-saved-popup__count';
+            cnt.textContent = stl.entries.length + ' pts';
+            row.appendChild(cnt);
+
+            const loadBtn = document.createElement('button');
+            loadBtn.className   = 'tl-saved-popup__load';
+            loadBtn.textContent = 'Load';
+            loadBtn.title       = 'Replace current timeline entries with this snapshot';
+            loadBtn.addEventListener('click', async () => {
+                const cur = _st();
+                if (cur.entries.length) {
+                    if (!await Dialog.confirm(
+                        'Replace the ' + cur.entries.length + ' current entries with "' + stl.name + '"?'
+                    )) return;
+                }
+                cur.entries = JSON.parse(JSON.stringify(stl.entries));
+                cur.groups  = JSON.parse(JSON.stringify(stl.groups));
+                _render();
+            });
+            row.appendChild(loadBtn);
+
+            const replBtn = document.createElement('button');
+            replBtn.className   = 'tl-saved-popup__repl';
+            replBtn.textContent = '⇤ Replace';
+            replBtn.title       = 'Overwrite this snapshot with the current timeline';
+            replBtn.addEventListener('click', async () => {
+                const cur = _st();
+                if (!cur.entries.length) {
+                    App.notify?.('Current timeline is empty — nothing to save.', 'warn');
+                    return;
+                }
+                if (!await Dialog.confirm('Overwrite "' + stl.name + '" with the current timeline?')) return;
+                stl.entries   = JSON.parse(JSON.stringify(cur.entries));
+                stl.groups    = JSON.parse(JSON.stringify(cur.groups));
+                stl.timestamp = Date.now();
+                _rebuild();
+                if (_multiTrackMode && _viewMode === 'visual') _render();
+            });
+            row.appendChild(replBtn);
+
+            const renBtn = document.createElement('button');
+            renBtn.className   = 'tl-saved-popup__ren';
+            renBtn.textContent = '✎';
+            renBtn.title       = 'Rename saved timeline';
+            renBtn.addEventListener('click', async () => {
+                const name = await Dialog.prompt('Rename timeline:', stl.name);
+                if (!name || !name.trim()) return;
+                stl.name = name.trim();
+                _rebuild();
+                if (_multiTrackMode && _viewMode === 'visual') _render();
+            });
+            row.appendChild(renBtn);
+
+            const delBtn = document.createElement('button');
+            delBtn.className   = 'tl-saved-popup__del';
+            delBtn.textContent = '✕';
+            delBtn.title       = 'Delete saved timeline';
+            delBtn.addEventListener('click', async () => {
+                if (!await Dialog.confirm('Delete saved timeline "' + stl.name + '"?')) return;
+                const i = stls.indexOf(stl);
+                if (i !== -1) stls.splice(i, 1);
+                _updateSavedCount();
+                _rerender();
+            });
+            row.appendChild(delBtn);
+
+            return row;
+        }
+
+        function _buildGroupHeader(grp) {
+            const members = stls.filter(s => s.groupId === grp.id);
+
+            const hdr = document.createElement('div');
+            hdr.className       = 'tl-saved-popup__group-hdr';
+            hdr.dataset.groupId = grp.id;
+            hdr.draggable       = true;
+
+            hdr.addEventListener('dragstart', e => {
+                if (e.target.tagName === 'BUTTON') { e.preventDefault(); return; }
+                _dragGroupId = grp.id;
+                _dragStlId   = null;
+                e.dataTransfer.effectAllowed = 'move';
+                requestAnimationFrame(() => hdr.classList.add('tl-saved-popup__group-hdr--dragging'));
+            });
+            hdr.addEventListener('dragend', () => {
+                hdr.classList.remove('tl-saved-popup__group-hdr--dragging');
+                _dragGroupId = null; _dragStlId = null;
+            });
+            hdr.addEventListener('dragover', e => {
+                if (_dragStlId) {
+                    e.preventDefault();
+                    hdr.classList.add('tl-saved-popup__group-hdr--drop-target');
+                } else if (_dragGroupId && _dragGroupId !== grp.id) {
+                    e.preventDefault();
+                    hdr.classList.add('tl-saved-popup__group-hdr--drag-over');
+                }
+            });
+            hdr.addEventListener('dragleave', () => {
+                hdr.classList.remove('tl-saved-popup__group-hdr--drop-target',
+                                     'tl-saved-popup__group-hdr--drag-over');
+            });
+            hdr.addEventListener('drop', e => {
+                e.preventDefault();
+                hdr.classList.remove('tl-saved-popup__group-hdr--drop-target',
+                                     'tl-saved-popup__group-hdr--drag-over');
+                if (_dragStlId) {
+                    const moved = stls.find(s => s.id === _dragStlId);
+                    if (moved) { moved.groupId = grp.id; _dragStlId = null; _rerender(); }
+                } else if (_dragGroupId && _dragGroupId !== grp.id) {
+                    const fi = grps.findIndex(g => g.id === _dragGroupId);
+                    const ti = grps.findIndex(g => g.id === grp.id);
+                    if (fi !== -1 && ti !== -1) { const [m] = grps.splice(fi, 1); grps.splice(ti, 0, m); }
+                    _dragGroupId = null;
+                    _rerender();
+                }
+            });
+
+            const toggle = document.createElement('span');
+            toggle.className   = 'tl-saved-popup__group-toggle';
+            toggle.textContent = grp.collapsed ? '▶' : '▼';
+            toggle.addEventListener('click', e => {
+                e.stopPropagation();
+                grp.collapsed = !grp.collapsed;
+                _rebuild();
+            });
+            hdr.appendChild(toggle);
+
+            const nameSp = document.createElement('span');
+            nameSp.className   = 'tl-saved-popup__group-name';
+            nameSp.textContent = grp.name;
+            hdr.appendChild(nameSp);
+
+            const cntSp = document.createElement('span');
+            cntSp.className   = 'tl-saved-popup__group-count';
+            cntSp.textContent = '(' + members.length + ')';
+            hdr.appendChild(cntSp);
+
+            const renBtn = document.createElement('button');
+            renBtn.className   = 'tl-saved-popup__ren';
+            renBtn.textContent = '✎';
+            renBtn.title       = 'Rename group';
+            renBtn.addEventListener('click', async e => {
+                e.stopPropagation();
+                const name = await Dialog.prompt('Rename group:', grp.name);
+                if (!name || !name.trim()) return;
+                grp.name = name.trim();
+                _rebuild();
+                if (_multiTrackMode && _viewMode === 'visual') _render();
+            });
+            hdr.appendChild(renBtn);
+
+            const delBtn = document.createElement('button');
+            delBtn.className   = 'tl-saved-popup__del';
+            delBtn.textContent = '✕';
+            delBtn.title       = 'Delete group (timelines will be ungrouped)';
+            delBtn.addEventListener('click', async e => {
+                e.stopPropagation();
+                if (!await Dialog.confirm('Delete group "' + grp.name + '"?\nSaved timelines will be ungrouped.')) return;
+                stls.forEach(s => { if (s.groupId === grp.id) delete s.groupId; });
+                const gi = grps.findIndex(g => g.id === grp.id);
+                if (gi !== -1) grps.splice(gi, 1);
+                _rerender();
+            });
+            hdr.appendChild(delBtn);
+
+            return hdr;
+        }
+
         function _rebuild() {
             pop.innerHTML = '';
+
+            // Toolbar
+            const toolbar = document.createElement('div');
+            toolbar.className = 'tl-saved-popup__toolbar';
+            const addGrpBtn = document.createElement('button');
+            addGrpBtn.className   = 'tl-saved-popup__add-grp';
+            addGrpBtn.textContent = '⊞ Group';
+            addGrpBtn.title       = 'Create a new group';
+            addGrpBtn.addEventListener('click', async () => {
+                const name = await Dialog.prompt('Group name:', '');
+                if (!name || !name.trim()) return;
+                grps.push({ id: _newStlGroupId(), name: name.trim(), collapsed: false });
+                _rebuild();
+            });
+            toolbar.appendChild(addGrpBtn);
+            pop.appendChild(toolbar);
+
             if (!stls.length) {
                 const empty = document.createElement('p');
                 empty.className   = 'tl-saved-popup__empty';
-                empty.textContent = 'No saved timelines yet. Use 💾 Save to save the current one.';
+                empty.textContent = 'No saved timelines yet. Use Save to save the current one.';
                 pop.appendChild(empty);
                 return;
             }
-            stls.forEach((stl, idx) => {
-                const row = document.createElement('div');
-                row.className = 'tl-saved-popup__row';
 
-                const chk = document.createElement('input');
-                chk.type    = 'checkbox';
-                chk.checked = stl.visible !== false;
-                chk.className = 'tl-saved-popup__vis';
-                chk.title   = 'Show as track in multi-track view';
-                chk.addEventListener('change', () => {
-                    stl.visible = chk.checked;
-                    if (_multiTrackMode && _viewMode === 'visual') _render();
-                });
-                row.appendChild(chk);
+            const validGroupIds = new Set(grps.map(g => g.id));
 
-                const nameSpan = document.createElement('span');
-                nameSpan.className   = 'tl-saved-popup__name';
-                nameSpan.textContent = stl.name;
-                nameSpan.title       = new Date(stl.timestamp).toLocaleString();
-                row.appendChild(nameSpan);
-
-                const cnt = document.createElement('span');
-                cnt.className   = 'tl-saved-popup__count';
-                cnt.textContent = stl.entries.length + ' pts';
-                row.appendChild(cnt);
-
-                const loadBtn = document.createElement('button');
-                loadBtn.className   = 'tl-saved-popup__load';
-                loadBtn.textContent = '⇥ Load';
-                loadBtn.title       = 'Replace current timeline entries with this snapshot';
-                loadBtn.addEventListener('click', async () => {
-                    const cur = _st();
-                    if (cur.entries.length) {
-                        if (!await Dialog.confirm(
-                            `Replace the ${cur.entries.length} current entries with "${stl.name}"?`
-                        )) return;
-                    }
-                    cur.entries = JSON.parse(JSON.stringify(stl.entries));
-                    cur.groups  = JSON.parse(JSON.stringify(stl.groups));
-                    _render();
-                });
-                row.appendChild(loadBtn);
-
-                const renBtn = document.createElement('button');
-                renBtn.className   = 'tl-saved-popup__ren';
-                renBtn.textContent = '✎';
-                renBtn.title       = 'Rename saved timeline';
-                renBtn.addEventListener('click', async () => {
-                    const name = await Dialog.prompt('Rename timeline:', stl.name);
-                    if (!name || !name.trim()) return;
-                    stl.name = name.trim();
-                    _rebuild();
-                    if (_multiTrackMode && _viewMode === 'visual') _render();
-                });
-                row.appendChild(renBtn);
-
-                const delBtn = document.createElement('button');
-                delBtn.className   = 'tl-saved-popup__del';
-                delBtn.textContent = '✕';
-                delBtn.title       = 'Delete saved timeline';
-                delBtn.addEventListener('click', async () => {
-                    if (!await Dialog.confirm(`Delete saved timeline "${stl.name}"?`)) return;
-                    stls.splice(idx, 1);
-                    _updateSavedCount();
-                    _rebuild();
-                    if (_multiTrackMode && _viewMode === 'visual') _render();
-                });
-                row.appendChild(delBtn);
-
-                pop.appendChild(row);
+            // Groups with their members
+            grps.forEach(grp => {
+                pop.appendChild(_buildGroupHeader(grp));
+                if (!grp.collapsed) {
+                    stls.filter(s => s.groupId === grp.id)
+                        .forEach(stl => pop.appendChild(_buildTimelineRow(stl)));
+                }
             });
+
+            // Ungrouped drop-zone separator (only when groups exist)
+            if (grps.length > 0) {
+                const sep = document.createElement('div');
+                sep.className   = 'tl-saved-popup__ungroup-sep';
+                sep.textContent = 'Ungrouped';
+                sep.addEventListener('dragover', e => {
+                    if (!_dragStlId) return;
+                    e.preventDefault();
+                    sep.classList.add('tl-saved-popup__ungroup-sep--active');
+                });
+                sep.addEventListener('dragleave', () =>
+                    sep.classList.remove('tl-saved-popup__ungroup-sep--active'));
+                sep.addEventListener('drop', e => {
+                    e.preventDefault();
+                    sep.classList.remove('tl-saved-popup__ungroup-sep--active');
+                    const moved = stls.find(s => s.id === _dragStlId);
+                    if (moved) { delete moved.groupId; _dragStlId = null; _rerender(); }
+                });
+                pop.appendChild(sep);
+            }
+
+            // Ungrouped timelines (clean up orphaned groupIds on the fly)
+            stls.filter(s => !s.groupId || !validGroupIds.has(s.groupId))
+                .forEach(stl => {
+                    if (stl.groupId && !validGroupIds.has(stl.groupId)) delete stl.groupId;
+                    pop.appendChild(_buildTimelineRow(stl));
+                });
         }
         _rebuild();
 
@@ -1225,7 +1493,6 @@ const Timeline = (() => {
             document.addEventListener('click', _closeSavedPopup, { once: true });
         }, 0);
     }
-
     function _closeSavedPopup() {
         if (_savedPopup) { _savedPopup.remove(); _savedPopup = null; }
     }

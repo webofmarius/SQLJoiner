@@ -3822,7 +3822,8 @@ const App = (() => {
                 timeline: (parsed.timeline && !Array.isArray(parsed.timeline))
                     ? parsed.timeline
                     : { entries: [], groups: [], panelSize: null },
-                savedTimelines: Array.isArray(parsed.savedTimelines) ? parsed.savedTimelines : [],
+                savedTimelines:      Array.isArray(parsed.savedTimelines)      ? parsed.savedTimelines      : [],
+                savedTimelineGroups: Array.isArray(parsed.savedTimelineGroups) ? parsed.savedTimelineGroups : [],
             });
 
             if (opts.preserveWhereRaw && _prevWhereMode === 'raw') {
