@@ -306,6 +306,13 @@ const Canvas = (() => {
             _autoSize(card, tableData);
         }
 
+        // Normal tables always show all columns without scrolling.
+        // _autoSize covers new tables; this covers context-restored tables where
+        // only size.w is saved (no size.h) so _applySize never adds is-resized.
+        if (!tableData.isSubquery) {
+            card.classList.add('is-resized');
+        }
+
         // Position: find a free spot if none stored (new table, not context restore)
         const isNew = !tableData.position;
         if (isNew) {
