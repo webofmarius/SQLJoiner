@@ -6823,7 +6823,7 @@ textarea.sql-bd-active.scope-mode-on {
     border: 1px solid var(--border2);
     border-radius: 8px;
     box-shadow: 0 6px 24px rgba(0,0,0,0.55);
-    z-index: 200;
+    z-index: 210;
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -7631,6 +7631,15 @@ textarea.sql-bd-active.scope-mode-on {
     overflow: hidden;
     text-overflow: ellipsis;
 }
+.tl-entry__rec--link {
+    cursor: pointer;
+    text-decoration: underline dotted;
+    text-underline-offset: 2px;
+}
+.tl-entry__rec--link:hover {
+    text-decoration: underline;
+    color: var(--accent, #4a9eff);
+}
 .tl-entry__kv {
     color: var(--text);
     white-space: nowrap;
@@ -7880,6 +7889,15 @@ textarea.sql-bd-active.scope-mode-on {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+.tl-tick-peek__rec--link {
+    cursor: pointer;
+    text-decoration: underline dotted;
+    text-underline-offset: 2px;
+}
+.tl-tick-peek__rec--link:hover {
+    text-decoration: underline;
+    color: var(--accent, #4a9eff);
 }
 .tl-tick-peek__label {
     flex: 1.5;

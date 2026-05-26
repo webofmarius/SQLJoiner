@@ -1396,5 +1396,10 @@ const Recordings = (() => {
     }
 
     // -------------------------------------------------------------------------
-    return { init, toggle, toggleRecord, onQuerySuccess, refresh, setCurrentRec, getCurrentRecId: () => _currentRecId };
+    function loadResultsById(recId) {
+        const rec = (State.recordings || []).find(r => r.id === recId);
+        if (rec) _loadResults(rec);
+    }
+
+    return { init, toggle, toggleRecord, onQuerySuccess, refresh, setCurrentRec, getCurrentRecId: () => _currentRecId, loadResultsById };
 })();

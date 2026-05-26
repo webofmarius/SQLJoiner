@@ -204,9 +204,15 @@ const Timeline = (() => {
         const info = document.createElement('div');
         info.className = 'tl-entry__info';
         info.innerHTML =
-            `<span class="tl-entry__rec" title="${_esc(entry.recName)}">${_esc(_trunc(entry.recName, 20))}</span>` +
+            `<span class="tl-entry__rec${entry.recId ? ' tl-entry__rec--link' : ''}" title="${_esc(entry.recName)}">${_esc(_trunc(entry.recName, 20))}</span>` +
             `<span class="tl-entry__kv">${_esc(entry.colName)}: <strong>${_esc(_trunc(_fmtVal(entry.colValue), 28))}</strong></span>`;
         div.appendChild(info);
+        if (entry.recId) {
+            info.querySelector('.tl-entry__rec').addEventListener('click', e => {
+                e.stopPropagation();
+                Recordings.loadResultsById(entry.recId);
+            });
+        }
 
         // Label input
         const labelInput = document.createElement('input');
@@ -610,8 +616,11 @@ const Timeline = (() => {
         });
 
         const recSpan = document.createElement('span');
-        recSpan.className   = 'tl-tick-peek__rec';
+        recSpan.className   = 'tl-tick-peek__rec' + (entry.recId ? ' tl-tick-peek__rec--link' : '');
         recSpan.textContent = entry.recName;
+        if (entry.recId) {
+            recSpan.addEventListener('click', () => Recordings.loadResultsById(entry.recId));
+        }
 
         const labelInput = document.createElement('input');
         labelInput.type        = 'text';
