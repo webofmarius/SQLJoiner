@@ -362,7 +362,7 @@ const Timeline = (() => {
         userLabelTop: 98,   // user label below axis
         userLabelH:   56,   // height
         totalH:       160,  // total track height
-        padPct:       0.08, // horizontal padding (fraction of track width on each side)
+        padPct:       0.10, // horizontal padding (fraction of track width on each side)
         tickMinPx:    140,  // min px per tick (drives horizontal scroll)
     };
 
@@ -488,13 +488,29 @@ const Timeline = (() => {
             dot.style.background = color;
             dot.style.boxShadow  = `0 0 0 2px ${color}44`;
 
+            // Labels are 120 px wide and normally centered on the tick via CSS
+            // `left: 50%; transform: translateX(-50%)`.  Near the track edges
+            // the centered position would extend past x=0 or x=trackPx and get
+            // silently clipped by the scroll container.  Override left/transform
+            // inline to clamp the label fully within the track.
+            const LABEL_W      = 120;
+            const centeredLeft = xpx - LABEL_W / 2;           // ideal left edge
+            const clampedLeft  = Math.max(0, Math.min(centeredLeft, trackPx - LABEL_W));
+            // Offset is relative to the tick's own left (= xpx; tick has width 0
+            // because all its children are position:absolute, so transform:
+            // translateX(-50%) on the tick itself is a 0-px translation).
+            const lblOffsetPx  = clampedLeft - xpx;
+            const lblTransform = 'none';   // disable the CSS translateX(-50%)
+
             // Top label — col name on first line, value on second.
             // Pushed upward for colliding labels (topLv > 0).
             const topLbl = document.createElement('div');
             topLbl.className = 'tl-tick__top';
             topLbl.title     = timeLabel;
-            topLbl.style.top    = (Y(VIS.labelTop) - topLv * LEVEL_STEP) + 'px';
-            topLbl.style.height = (VIS.stemTopY - VIS.labelTop) + 'px';
+            topLbl.style.top       = (Y(VIS.labelTop) - topLv * LEVEL_STEP) + 'px';
+            topLbl.style.height    = (VIS.stemTopY - VIS.labelTop) + 'px';
+            topLbl.style.left      = lblOffsetPx + 'px';
+            topLbl.style.transform = lblTransform;
             const topColSpan = document.createElement('span');
             topColSpan.className   = 'tl-tick__top-col';
             topColSpan.textContent = entry.colName;
@@ -506,9 +522,11 @@ const Timeline = (() => {
 
             // Bottom label — pushed downward for colliding labels (botLv > 0).
             const botLbl = document.createElement('div');
-            botLbl.className    = 'tl-tick__bottom';
-            botLbl.style.top    = (Y(VIS.userLabelTop) + botLv * LEVEL_STEP) + 'px';
-            botLbl.style.height = VIS.userLabelH + 'px';
+            botLbl.className       = 'tl-tick__bottom';
+            botLbl.style.top       = (Y(VIS.userLabelTop) + botLv * LEVEL_STEP) + 'px';
+            botLbl.style.height    = VIS.userLabelH + 'px';
+            botLbl.style.left      = lblOffsetPx + 'px';
+            botLbl.style.transform = lblTransform;
             _refreshBotLabel(botLbl, entry);
 
             tick.appendChild(topLbl);
