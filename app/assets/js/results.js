@@ -2340,6 +2340,29 @@ const Results = (() => {
 
                 // Left-click: eval mode / bind mode intercept, then compare / duplicates / normal select
                 td.addEventListener('click', e => {
+                    // Cmd/Ctrl+left-click: pin cell row to Timeline
+                    if ((e.metaKey || e.ctrlKey) && typeof Timeline !== 'undefined') {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const rowObj = {};
+                        cols.forEach((c, i) => { rowObj[c] = row[i] ?? null; });
+                        const recId  = Recordings?.getCurrentRecId?.() ?? null;
+                        const rec    = recId
+                            ? (State.recordings || []).find(r => r.id === recId)
+                            : null;
+                        const recName = rec
+                            ? (rec.name || new Date(rec.timestamp).toLocaleString())
+                            : 'Live result';
+                        Timeline.addEntry(
+                            recId,
+                            recName,
+                            rec?.color  || null,
+                            rowObj,
+                            col,
+                            row[colIdx] ?? null
+                        );
+                        return;
+                    }
                     // Alt+click: highlight/unhighlight entire row
                     if (e.altKey) {
                         e.preventDefault();

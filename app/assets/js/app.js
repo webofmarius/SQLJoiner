@@ -157,6 +157,9 @@ const State = {
 
     /** Saved query recordings. Array of { id, timestamp, name, sql, results, island }. */
     recordings: [],
+
+    /** Timeline entries + config. Managed by timeline.js. */
+    timeline: { entries: [], groups: [], panelSize: null },
 };
 
 /* =============================================================================
@@ -283,6 +286,7 @@ const App = (() => {
 
         if (typeof Minimap     !== 'undefined') Minimap.init();
         if (typeof Recordings  !== 'undefined') Recordings.init();
+        if (typeof Timeline    !== 'undefined') Timeline.init();
 
         // Capture the initial clean-slate baseline so dirty checks work from the start.
         // Use setTimeout so any non-awaited async init work (e.g. _activateProfile)
@@ -3815,6 +3819,9 @@ const App = (() => {
                 recordings:       Array.isArray(parsed.recordings)       ? parsed.recordings       : [],
                 recordingGroups:  Array.isArray(parsed.recordingGroups)  ? parsed.recordingGroups  : [],
                 recPanelSize:     parsed.recPanelSize ?? null,
+                timeline: (parsed.timeline && !Array.isArray(parsed.timeline))
+                    ? parsed.timeline
+                    : { entries: [], groups: [], panelSize: null },
             });
 
             if (opts.preserveWhereRaw && _prevWhereMode === 'raw') {
@@ -3917,6 +3924,7 @@ const App = (() => {
             loadTables();
 
             if (typeof Recordings !== 'undefined') Recordings.refresh();
+            if (typeof Timeline   !== 'undefined') Timeline.refresh();
 
         } catch (e) {
             _notify('Error: ' + e.message, 'error');

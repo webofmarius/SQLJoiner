@@ -1396,5 +1396,5 @@ const Recordings = (() => {
     }
 
     // -------------------------------------------------------------------------
-    return { init, toggle, toggleRecord, onQuerySuccess, refresh, setCurrentRec };
+    return { init, toggle, toggleRecord, onQuerySuccess, refresh, setCurrentRec, getCurrentRecId: () => _currentRecId };
 })();

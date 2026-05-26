@@ -1,0 +1,1216 @@
+/**
+ * Timeline — cross-recording row annotation and visual sequencing.
+ *
+ * Cmd/Ctrl+click any results cell → snapshot that row into the timeline.
+ * Each entry remembers which recording it came from, the full row, and which
+ * cell triggered it.  Two views:
+ *   • List   — compact rows with inline peek and editable labels.
+ *   • Visual — horizontal axis, entries as tick marks, grouped by brackets.
+ *
+ * Public API:
+ *   Timeline.init()
+ *   Timeline.toggle()
+ *   Timeline.addEntry(recId, recName, recColor, rowData, colName, colValue)
+ *   Timeline.refresh()          — call after applyContext to re-render
+ */
+const Timeline = (() => {
+
+    // -------------------------------------------------------------------------
+    // Module-level vars
+    // -------------------------------------------------------------------------
+    let _visible  = false;
+    let _viewMode = 'list';   // 'list' | 'visual'
+    let _panel, _listEl, _visualEl;
+    let _idSeq = 0;
+
+    // Floating peek popup in visual mode
+    let _tickPeekEl = null;
+
+    // Floating group-management popup
+    let _groupPopup = null;
+
+    // Floating per-entry color picker
+    let _colorPickerEl = null;
+    const _ENTRY_PALETTE = [
+        '#f87171','#fb923c','#fbbf24','#a3e635',
+        '#34d399','#22d3ee','#60a5fa','#818cf8',
+        '#a78bfa','#f472b6','#e2e8f0','#94a3b8',
+    ];
+
+    // Maximize state (same pattern as Calculus toolbox)
+    let _preMaxStyles       = null;   // snapshot of inline styles before maximize
+    let _maxResizeObserver  = null;
+    let _maxResizeWinListener = null;
+
+    // Auto-color palette for recordings that have no color set
+    const _AUTO_COLORS = [
+        '#4a9eff','#f87171','#34d399','#fbbf24','#a78bfa',
+        '#fb923c','#60a5fa','#f472b6','#2dd4bf','#e879f9',
+    ];
+    const _recColorMap = {};
+    let   _autoColorIdx = 0;
+
+    // -------------------------------------------------------------------------
+    // State helpers
+    // -------------------------------------------------------------------------
+    function _emptyState() {
+        return { entries: [], groups: [], panelSize: null };
+    }
+    /** Always returns (and ensures) State.timeline. */
+    function _st() {
+        if (!State.timeline || Array.isArray(State.timeline)) {
+            State.timeline = _emptyState();
+        }
+        return State.timeline;
+    }
+
+    // -------------------------------------------------------------------------
+    // Init
+    // -------------------------------------------------------------------------
+    function init() {
+        _panel   = document.getElementById('timeline-panel');
+        _listEl  = document.getElementById('timeline-list');
+        _visualEl= document.getElementById('timeline-visual');
+
+        document.getElementById('btn-timeline-toggle')
+            ?.addEventListener('click', toggle);
+        document.getElementById('btn-timeline-close')
+            ?.addEventListener('click', toggle);
+        document.getElementById('btn-timeline-view-list')
+            ?.addEventListener('click', () => _setView('list'));
+        document.getElementById('btn-timeline-view-visual')
+            ?.addEventListener('click', () => _setView('visual'));
+        document.getElementById('btn-timeline-maximize')
+            ?.addEventListener('click', _toggleMaximize);
+        const _groupBtn = document.getElementById('btn-timeline-add-group');
+        _groupBtn?.addEventListener('click', e => {
+            e.stopPropagation();
+            _toggleGroupPopup(_groupBtn);
+        });
+        document.getElementById('btn-timeline-clear')
+            ?.addEventListener('click', _clearAll);
+
+        _makeDraggable(document.getElementById('timeline-panel-header'), _panel);
+        _makeResizable(_panel);
+    }
+
+    // -------------------------------------------------------------------------
+    // Toggle
+    // -------------------------------------------------------------------------
+    function toggle() {
+        if (_visible && _panel?.classList.contains('is-maximized')) {
+            _restoreMaximize(); // always un-maximize before hiding
+        }
+        _visible = !_visible;
+        _panel?.classList.toggle('hidden', !_visible);
+        document.getElementById('btn-timeline-toggle')
+            ?.classList.toggle('is-active', _visible);
+        if (_visible) {
+            _applyPanelSize();
+            _render();
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Public: add an entry (called from results.js on Cmd/Ctrl+click)
+    // -------------------------------------------------------------------------
+    function addEntry(recId, recName, recColor, rowData, colName, colValue) {
+        const st = _st();
+        const entry = {
+            id:         _newId(),
+            recId:      recId    ?? null,
+            recName:    recName  || 'Live result',
+            recColor:   recColor || null,
+            rowData:    rowData  || {},
+            colName:    colName  || '',
+            colValue:   colValue ?? null,
+            label:      '',
+            color:      null, // custom dot/bar color (null = use recColor / autoColor)
+            groupId:    null,
+            pinned:     false,
+            pinnedCols: [],   // column names shown under the tick label in visual view
+            addedAt:    Date.now(),
+        };
+        st.entries.push(entry);
+        if (_visible) _render();
+        const preview = _fmtVal(colValue);
+        const short   = preview.length > 30 ? preview.slice(0, 30) + '…' : preview;
+        App.notify?.(
+            `Timeline ← ${entry.recName} · ${colName}: ${short}`,
+            'info'
+        );
+    }
+
+    // -------------------------------------------------------------------------
+    // Public: refresh after applyContext
+    // -------------------------------------------------------------------------
+    function refresh() {
+        if (_visible) _render();
+    }
+
+    // -------------------------------------------------------------------------
+    // Render dispatcher
+    // -------------------------------------------------------------------------
+    function _render() {
+        _updateCount();
+        if (_viewMode === 'list') {
+            _renderList();
+        } else {
+            _renderVisual();
+        }
+    }
+
+    // =========================================================================
+    // LIST VIEW
+    // =========================================================================
+    function _renderList() {
+        const st = _st();
+        _listEl.classList.remove('hidden');
+        _visualEl.classList.add('hidden');
+        _listEl.innerHTML = '';
+
+        if (st.entries.length === 0) {
+            _listEl.innerHTML =
+                '<p class="tl-empty">No entries yet.<br>' +
+                'Cmd/Ctrl+click any result cell to pin it here.</p>';
+            return;
+        }
+
+        // Flat chronological list — groups only affect the visual view
+        _sortedEntries().forEach(e => _listEl.appendChild(_buildListEntry(e, st)));
+    }
+
+    function _buildListEntry(entry, st) {
+        const div   = document.createElement('div');
+        div.className  = 'tl-entry';
+        div.dataset.id = entry.id;
+
+        // Color bar — click to open color picker
+        const colorBar = document.createElement('div');
+        colorBar.className = 'tl-entry__color-bar';
+        colorBar.style.background = _entryColor(entry);
+        colorBar.title = 'Click to change color';
+        colorBar.addEventListener('click', e => {
+            e.stopPropagation();
+            _openColorPicker(colorBar, entry, () => {
+                colorBar.style.background = _entryColor(entry);
+            });
+        });
+        div.appendChild(colorBar);
+
+        // Info section
+        const info = document.createElement('div');
+        info.className = 'tl-entry__info';
+        info.innerHTML =
+            `<span class="tl-entry__rec" title="${_esc(entry.recName)}">${_esc(_trunc(entry.recName, 20))}</span>` +
+            `<span class="tl-entry__kv">${_esc(entry.colName)}: <strong>${_esc(_trunc(_fmtVal(entry.colValue), 28))}</strong></span>`;
+        div.appendChild(info);
+
+        // Label input
+        const labelInput = document.createElement('input');
+        labelInput.className   = 'tl-entry__label';
+        labelInput.type        = 'text';
+        labelInput.placeholder = 'label…';
+        labelInput.value       = entry.label;
+        labelInput.title       = 'Annotation label';
+        labelInput.addEventListener('change', () => { entry.label = labelInput.value; });
+        div.appendChild(labelInput);
+
+        // Actions cluster
+        const actions = document.createElement('div');
+        actions.className = 'tl-entry__actions';
+
+        // Group selector (if groups exist)
+        if (st.groups.length) {
+            const sel = document.createElement('select');
+            sel.className = 'tl-entry__group-sel';
+            sel.title = 'Assign to group';
+            sel.innerHTML =
+                '<option value="">— group —</option>' +
+                st.groups.map(g =>
+                    `<option value="${_esc(g.id)}"${entry.groupId === g.id ? ' selected' : ''}>`+
+                    `${_esc(g.label)}</option>`
+                ).join('');
+            sel.addEventListener('change', () => {
+                entry.groupId = sel.value || null;
+                _render();
+            });
+            actions.appendChild(sel);
+        }
+
+        // Peek button
+        const peekBtn = document.createElement('button');
+        peekBtn.className   = 'tl-entry__peek-btn';
+        peekBtn.title       = 'Toggle full row detail';
+        peekBtn.textContent = '👁';
+        actions.appendChild(peekBtn);
+
+        // Delete button
+        const delBtn = document.createElement('button');
+        delBtn.className   = 'tl-entry__del-btn';
+        delBtn.title       = 'Remove from timeline';
+        delBtn.textContent = '✕';
+        delBtn.addEventListener('click', () => _removeEntry(entry.id));
+        actions.appendChild(delBtn);
+
+        div.appendChild(actions);
+
+        // Peek panel (full row)
+        const peekPanel = document.createElement('div');
+        peekPanel.className = 'tl-entry__peek';
+        if (!entry.pinned) peekPanel.classList.add('hidden');
+        _fillPeekPanel(peekPanel, entry);
+        div.appendChild(peekPanel);
+
+        peekBtn.addEventListener('click', () => {
+            entry.pinned = !entry.pinned;
+            peekPanel.classList.toggle('hidden', !entry.pinned);
+            peekBtn.classList.toggle('is-active', entry.pinned);
+        });
+        if (entry.pinned) peekBtn.classList.add('is-active');
+
+        return div;
+    }
+
+    /**
+     * Fill a peek panel with the full row table.
+     * @param {HTMLElement} el       — container to fill
+     * @param {object}      entry    — timeline entry
+     * @param {HTMLElement} [botLblEl] — if provided, adds checkboxes that toggle
+     *                                   pinned column labels under the tick
+     */
+    function _fillPeekPanel(el, entry, botLblEl) {
+        if (!entry.pinnedCols) entry.pinnedCols = []; // migrate old entries
+        const table = document.createElement('table');
+        table.className = 'tl-peek-table';
+        Object.entries(entry.rowData).forEach(([k, v]) => {
+            const tr = document.createElement('tr');
+            const isNull = v === null || v === undefined;
+
+            const keyTd = document.createElement('td');
+            keyTd.className   = 'tl-peek-key';
+            keyTd.textContent = k;
+
+            const valTd = document.createElement('td');
+            valTd.className   = 'tl-peek-val' + (isNull ? ' is-null' : '');
+            valTd.textContent = _fmtVal(v);
+
+            tr.appendChild(keyTd);
+            tr.appendChild(valTd);
+
+            // Checkbox column — only shown in visual peek popup (botLblEl provided)
+            if (botLblEl) {
+                const chkTd = document.createElement('td');
+                chkTd.className = 'tl-peek-chk-td';
+                const chk = document.createElement('input');
+                chk.type    = 'checkbox';
+                chk.className = 'tl-peek-chk';
+                chk.title   = 'Show this column under the tick label';
+                chk.checked = entry.pinnedCols.includes(k);
+                chk.addEventListener('change', e => {
+                    e.stopPropagation();
+                    if (chk.checked) {
+                        if (!entry.pinnedCols.includes(k)) entry.pinnedCols.push(k);
+                    } else {
+                        entry.pinnedCols = entry.pinnedCols.filter(c => c !== k);
+                    }
+                    _refreshBotLabel(botLblEl, entry);
+                });
+                chkTd.appendChild(chk);
+                tr.appendChild(chkTd);
+            }
+
+            table.appendChild(tr);
+        });
+        el.appendChild(table);
+    }
+
+    /** Rebuild the bottom-label content for a tick based on label + pinnedCols. */
+    function _refreshBotLabel(botLblEl, entry) {
+        if (!entry.pinnedCols) entry.pinnedCols = [];
+        const lines = [];
+        const mainLabel = entry.label || _trunc(entry.recName, 16);
+        if (mainLabel) lines.push(mainLabel);
+        entry.pinnedCols.forEach(col => {
+            const v = entry.rowData[col];
+            lines.push(`${col}: ${_fmtVal(v)}`);
+        });
+        botLblEl.innerHTML = '';
+        lines.forEach((line, i) => {
+            const span = document.createElement('span');
+            span.className   = i === 0 ? 'tl-bot-main' : 'tl-bot-extra';
+            span.textContent = line;
+            botLblEl.appendChild(span);
+        });
+    }
+
+    // =========================================================================
+    // VISUAL TIMELINE
+    // =========================================================================
+    // Layout constants (px) — tune here to adjust vertical spacing
+    const VIS = {
+        bracketTop:   4,    // top of group bracket
+        bracketH:     20,   // height of bracket bar
+        labelTop:     26,   // top of "time value" label area
+        labelH:       58,   // height of that label area
+        axisY:        86,   // y of axis line
+        dotR:         6,    // dot radius
+        stemTopY:     56,   // where the tick stem starts (inside label area)
+        stemBotY:     96,   // where it ends (below axis)
+        userLabelTop: 98,   // user label below axis
+        userLabelH:   56,   // height
+        totalH:       160,  // total track height
+        padPct:       0.08, // horizontal padding (fraction of track width on each side)
+        tickMinPx:    140,  // min px per tick (drives horizontal scroll)
+    };
+
+    function _renderVisual() {
+        const st = _st();
+        _listEl.classList.add('hidden');
+        _visualEl.classList.remove('hidden');
+        _visualEl.innerHTML = '';
+        _closeTickPeek();
+
+        if (st.entries.length === 0) {
+            _visualEl.innerHTML =
+                '<p class="tl-empty">No entries yet.<br>' +
+                'Cmd/Ctrl+click any result cell to pin it here.</p>';
+            return;
+        }
+
+        const sorted  = _sortedEntries();
+        const n       = sorted.length;
+        const trackPx = Math.max(600, n * VIS.tickMinPx + 100);
+
+        // Horizontal layout helpers
+        const pad  = VIS.padPct;
+        const pxOf = pos => (pad + pos * (1 - 2 * pad)) * trackPx;
+        const positions = _computePositions(sorted);
+        const xPxArr    = sorted.map((_, i) => pxOf(positions[i]));
+
+        // ── Label collision avoidance ────────────────────────────────────────
+        // Each label is 120px wide (CSS); use 128px for the effective slot so
+        // adjacent labels get a small gap instead of touching edge-to-edge.
+        const LEVEL_STEP = 18;   // px to shift each stagger level
+        const topLevels  = _assignLabelLevels(xPxArr, 128);
+        const botLevels  = _assignLabelLevels(xPxArr, 128);
+        const maxTopLv   = topLevels.length ? Math.max(...topLevels) : 0;
+        const maxBotLv   = botLevels.length ? Math.max(...botLevels) : 0;
+        // Reserve extra vertical room: top labels grow upward, bot labels downward
+        const extraTop   = maxTopLv * LEVEL_STEP;
+        const extraBot   = maxBotLv * LEVEL_STEP;
+        // Shift every fixed y-coordinate down by extraTop so pushed-up labels
+        // still have room above y=0 in the track.
+        const Y = base => base + extraTop;
+
+        // Outer scroll wrapper
+        const scroller = document.createElement('div');
+        scroller.className = 'tl-visual-scroller';
+
+        // Track — taller when labels stagger
+        const track = document.createElement('div');
+        track.className  = 'tl-track';
+        track.style.width  = trackPx + 'px';
+        track.style.height = (VIS.totalH + extraTop + extraBot) + 'px';
+
+        // Axis line
+        const axis = document.createElement('div');
+        axis.className = 'tl-axis';
+        axis.style.top = Y(VIS.axisY) + 'px';
+        track.appendChild(axis);
+
+        // Draw group brackets
+        const groupBuckets = {};
+        sorted.forEach((e, i) => {
+            if (!e.groupId) return;
+            if (!groupBuckets[e.groupId]) groupBuckets[e.groupId] = [];
+            groupBuckets[e.groupId].push(xPxArr[i]);
+        });
+
+        st.groups.forEach(g => {
+            const pxList = groupBuckets[g.id];
+            if (!pxList || !pxList.length) return;
+            const minPx = Math.min(...pxList);
+            const maxPx = Math.max(...pxList);
+            const bracket = document.createElement('div');
+            bracket.className = 'tl-group-bracket';
+            bracket.style.top         = Y(VIS.bracketTop) + 'px';
+            bracket.style.height      = VIS.bracketH + 'px';
+            bracket.style.left        = (minPx - 30) + 'px';
+            bracket.style.width       = (maxPx - minPx + 60) + 'px';
+            bracket.style.borderColor = g.color;
+            const lbl = document.createElement('span');
+            lbl.className   = 'tl-group-bracket__label';
+            lbl.textContent = g.label;
+            lbl.style.color = g.color;
+            lbl.title       = 'Double-click to rename';
+            lbl.addEventListener('dblclick', async e => {
+                e.stopPropagation();
+                const name = await Dialog.prompt('Rename group:', g.label);
+                if (!name || !name.trim()) return;
+                g.label = name.trim();
+                _render();
+            });
+            bracket.appendChild(lbl);
+            track.appendChild(bracket);
+        });
+
+        // Draw ticks
+        sorted.forEach((entry, i) => {
+            const color     = _entryColor(entry);
+            const xpx       = xPxArr[i];
+            const timeLabel = `${entry.colName}: ${_fmtVal(entry.colValue)}`;
+            const topLv     = topLevels[i];
+            const botLv     = botLevels[i];
+
+            const tick = document.createElement('div');
+            tick.className  = 'tl-tick';
+            tick.dataset.id = entry.id;
+            tick.style.left = xpx + 'px';
+
+            // Stem — extends from the bottom edge of the top label down to
+            // below the axis.  When the top label is pushed up (topLv > 0) the
+            // stem grows taller to stay connected to the dot.
+            const stemTopY = Y(VIS.stemTopY) - topLv * LEVEL_STEP;
+            const stem = document.createElement('div');
+            stem.className = 'tl-tick__stem';
+            stem.style.top    = stemTopY + 'px';
+            stem.style.height = (Y(VIS.stemBotY) - stemTopY) + 'px';
+
+            // Dot
+            const dot = document.createElement('div');
+            dot.className = 'tl-tick__dot';
+            dot.style.top        = (Y(VIS.axisY) - VIS.dotR) + 'px';
+            dot.style.width      = (VIS.dotR * 2) + 'px';
+            dot.style.height     = (VIS.dotR * 2) + 'px';
+            dot.style.background = color;
+            dot.style.boxShadow  = `0 0 0 2px ${color}44`;
+
+            // Top label — col name on first line, value on second.
+            // Pushed upward for colliding labels (topLv > 0).
+            const topLbl = document.createElement('div');
+            topLbl.className = 'tl-tick__top';
+            topLbl.title     = timeLabel;
+            topLbl.style.top    = (Y(VIS.labelTop) - topLv * LEVEL_STEP) + 'px';
+            topLbl.style.height = (VIS.stemTopY - VIS.labelTop) + 'px';
+            const topColSpan = document.createElement('span');
+            topColSpan.className   = 'tl-tick__top-col';
+            topColSpan.textContent = entry.colName;
+            const topValSpan = document.createElement('span');
+            topValSpan.className   = 'tl-tick__top-val';
+            topValSpan.textContent = _fmtVal(entry.colValue);
+            topLbl.appendChild(topColSpan);
+            topLbl.appendChild(topValSpan);
+
+            // Bottom label — pushed downward for colliding labels (botLv > 0).
+            const botLbl = document.createElement('div');
+            botLbl.className    = 'tl-tick__bottom';
+            botLbl.style.top    = (Y(VIS.userLabelTop) + botLv * LEVEL_STEP) + 'px';
+            botLbl.style.height = VIS.userLabelH + 'px';
+            _refreshBotLabel(botLbl, entry);
+
+            tick.appendChild(topLbl);
+            tick.appendChild(stem);
+            tick.appendChild(dot);
+            tick.appendChild(botLbl);
+
+            tick.addEventListener('click', e => {
+                e.stopPropagation();
+                _showTickPeek(entry, tick, color, xpx, trackPx);
+            });
+
+            track.appendChild(tick);
+        });
+
+        scroller.appendChild(track);
+        _visualEl.appendChild(scroller);
+
+        // Close floating peek on outside click
+        scroller.addEventListener('click', () => _closeTickPeek());
+    }
+
+    function _showTickPeek(entry, tickEl, color, xpx, trackPx) {
+        _closeTickPeek();
+
+        const botLbl = tickEl.querySelector('.tl-tick__bottom');
+
+        // Append to the track (not the tick) so the popup escapes each tick's
+        // individual CSS stacking context (caused by transform: translateX(-50%)).
+        // This way the popup's z-index is compared against the ticks directly.
+        const trackEl = tickEl.closest('.tl-track') || tickEl.parentElement;
+
+        const peek = document.createElement('div');
+        peek.className = 'tl-tick-peek';
+
+        // Stop ALL clicks/mousedowns inside the peek from reaching the tick or
+        // scroller — prevents the tick handler from recreating the popup (which
+        // would kill focus on the label input) and prevents the scroller's
+        // outside-click handler from closing it.
+        peek.addEventListener('click',     e => e.stopPropagation());
+        peek.addEventListener('mousedown', e => e.stopPropagation());
+
+        // Position popup with track-relative coordinates.
+        // Width is fixed at 280px (see CSS); leave 14px gap from the tick centre.
+        const PEEK_W  = 280;
+        const onRight = xpx < trackPx * 0.65;
+        peek.style.top  = '0px';
+        if (onRight) {
+            peek.style.left  = (xpx + 14) + 'px';
+            peek.style.right = 'auto';
+        } else {
+            peek.style.left  = (xpx - PEEK_W - 14) + 'px';
+            peek.style.right = 'auto';
+        }
+
+        // Always resolve current color (may have been changed since render)
+        const resolvedColor = _entryColor(entry);
+
+        const hdr = document.createElement('div');
+        hdr.className = 'tl-tick-peek__header';
+        hdr.style.borderLeftColor = resolvedColor;
+
+        // Color swatch — click to open color picker; updates dot + header live
+        const colorSwatch = document.createElement('button');
+        colorSwatch.className = 'tl-tick-peek__color-swatch';
+        colorSwatch.style.background = resolvedColor;
+        colorSwatch.title = 'Change dot color';
+        colorSwatch.addEventListener('click', e => {
+            e.stopPropagation();
+            _openColorPicker(colorSwatch, entry, () => {
+                const c = _entryColor(entry);
+                colorSwatch.style.background = c;
+                hdr.style.borderLeftColor    = c;
+                // Update dot + shadow on the tick in the track
+                const dotEl = tickEl.querySelector('.tl-tick__dot');
+                if (dotEl) {
+                    dotEl.style.background = c;
+                    dotEl.style.boxShadow  = `0 0 0 2px ${c}44`;
+                }
+            });
+        });
+
+        const recSpan = document.createElement('span');
+        recSpan.className   = 'tl-tick-peek__rec';
+        recSpan.textContent = entry.recName;
+
+        const labelInput = document.createElement('input');
+        labelInput.type        = 'text';
+        labelInput.className   = 'tl-tick-peek__label';
+        labelInput.placeholder = 'label…';
+        labelInput.value       = entry.label;
+        labelInput.addEventListener('change', () => {
+            entry.label = labelInput.value;
+            if (botLbl) _refreshBotLabel(botLbl, entry);
+        });
+
+        const closeBtn = document.createElement('button');
+        closeBtn.className   = 'tl-tick-peek__close';
+        closeBtn.textContent = '✕';
+        closeBtn.addEventListener('click', () => _closeTickPeek());
+
+        hdr.appendChild(colorSwatch);
+        hdr.appendChild(recSpan);
+        hdr.appendChild(labelInput);
+        hdr.appendChild(closeBtn);
+        peek.appendChild(hdr);
+
+        const panel = document.createElement('div');
+        panel.className = 'tl-peek-panel';
+        _fillPeekPanel(panel, entry, botLbl); // pass botLbl so checkboxes can update it
+        peek.appendChild(panel);
+
+        // Delete button
+        const delBtn = document.createElement('button');
+        delBtn.className   = 'tl-tick-peek__del';
+        delBtn.textContent = '✕ Remove from timeline';
+        delBtn.addEventListener('click', () => {
+            _closeTickPeek();
+            _removeEntry(entry.id);
+        });
+        peek.appendChild(delBtn);
+
+        _tickPeekEl = peek;
+        trackEl.appendChild(peek);
+    }
+
+    function _closeTickPeek() {
+        if (_tickPeekEl) { _tickPeekEl.remove(); _tickPeekEl = null; }
+    }
+
+    // -------------------------------------------------------------------------
+    // Sorted entry list — used by both views
+    // -------------------------------------------------------------------------
+    /**
+     * Returns a copy of entries sorted ascending by the clicked cell value (colValue).
+     * Each entry's colValue is whatever cell was Cmd/Ctrl+clicked — it IS the time
+     * value, regardless of which table or column it came from.
+     * Entries whose colValue cannot be parsed as a date/number sink to the end,
+     * falling back to insertion order among themselves.
+     */
+    function _sortedEntries() {
+        const entries = _st().entries.slice(); // never mutate stored order
+        return entries.sort((a, b) => {
+            const ta = _parseTime(a.colValue);
+            const tb = _parseTime(b.colValue);
+            if (ta === null && tb === null) return a.addedAt - b.addedAt;
+            if (ta === null) return 1;
+            if (tb === null) return -1;
+            return ta - tb; // ascending: earliest first
+        });
+    }
+
+    // -------------------------------------------------------------------------
+    // Time value parser (shared by sort and position computation)
+    // -------------------------------------------------------------------------
+    function _parseTime(v) {
+        if (v === null || v === undefined || v === '') return null;
+        const n = Number(v);
+        if (!isNaN(n)) return n;
+        const d = Date.parse(String(v));
+        return isNaN(d) ? null : d;
+    }
+
+    // -------------------------------------------------------------------------
+    // Position computation for visual view
+    // -------------------------------------------------------------------------
+    /**
+     * Maps each entry to a 0..1 horizontal position based on its colValue.
+     * Entries are already sorted ascending by the caller; positions follow
+     * the parsed numeric/datetime magnitude of colValue so the visual spacing
+     * is proportional to the actual time gaps (not just evenly spaced).
+     */
+    function _computePositions(entries) {
+        if (entries.length === 0) return [];
+        if (entries.length === 1) return [0.5];
+
+        const numVals = entries.map(e => _parseTime(e.colValue));
+        const valid   = numVals.filter(v => v !== null);
+
+        // If fewer than 2 parseable values, fall back to even spacing
+        if (valid.length < 2) {
+            return entries.map((_, i) => i / (entries.length - 1));
+        }
+
+        const min   = Math.min(...valid);
+        const max   = Math.max(...valid);
+        const range = max - min;
+
+        if (range === 0) return entries.map(() => 0.5);
+
+        return numVals.map((v, i) =>
+            v !== null ? (v - min) / range : i / (entries.length - 1)
+        );
+    }
+
+    // -------------------------------------------------------------------------
+    // Label collision — greedy level assignment
+    // -------------------------------------------------------------------------
+    /**
+     * Given an array of x-pixel centres (already in sorted order), assigns each
+     * label a non-negative integer "level" so that no two labels at the same level
+     * overlap horizontally.  Level 0 = default position; higher levels are offset
+     * further away from the axis (up for top labels, down for bottom labels).
+     *
+     * @param {number[]} xArr         — sorted tick x-positions in px
+     * @param {number}   [labelW=124] — effective label width (CSS width + gap)
+     * @returns {number[]}
+     */
+    function _assignLabelLevels(xArr, labelW = 124) {
+        const levels     = new Array(xArr.length).fill(0);
+        const levelRight = []; // rightmost right-edge placed at each level
+
+        for (let i = 0; i < xArr.length; i++) {
+            const left  = xArr[i] - labelW / 2;
+            const right = xArr[i] + labelW / 2;
+            let l = 0;
+            for (;;) {
+                if (l >= levelRight.length || levelRight[l] <= left) {
+                    if (l >= levelRight.length) levelRight.push(right);
+                    else levelRight[l] = right;
+                    levels[i] = l;
+                    break;
+                }
+                l++;
+            }
+        }
+        return levels;
+    }
+
+    // -------------------------------------------------------------------------
+    // Group management
+    // -------------------------------------------------------------------------
+    const _GROUP_COLORS = [
+        '#e85555','#4a9eff','#f5a623','#7ed321',
+        '#bd10e0','#f8e71c','#17c4ba','#ff6b9d',
+    ];
+
+    function _toggleGroupPopup(btnEl) {
+        if (_groupPopup) {
+            _closeGroupPopup();
+        } else {
+            _openGroupPopup(btnEl);
+        }
+    }
+
+    function _openGroupPopup(btnEl) {
+        _closeGroupPopup();
+
+        const st  = _st();
+        const pop = document.createElement('div');
+        pop.className = 'tl-group-popup';
+
+        // Stop clicks inside the popup from bubbling to the document close handler
+        pop.addEventListener('click',     e => e.stopPropagation());
+        pop.addEventListener('mousedown', e => e.stopPropagation());
+
+        function _rebuildRows() {
+            // Clear everything except the "+ New Group" button (added last)
+            pop.innerHTML = '';
+
+            if (st.groups.length === 0) {
+                const empty = document.createElement('p');
+                empty.className   = 'tl-group-popup__empty';
+                empty.textContent = 'No groups yet.';
+                pop.appendChild(empty);
+            } else {
+                st.groups.forEach(g => {
+                    const row = document.createElement('div');
+                    row.className = 'tl-group-popup__row';
+
+                    // Color chip
+                    const chip = document.createElement('span');
+                    chip.className = 'tl-group-popup__chip';
+                    chip.style.background = g.color;
+                    row.appendChild(chip);
+
+                    // Name
+                    const name = document.createElement('span');
+                    name.className   = 'tl-group-popup__name';
+                    name.textContent = g.label;
+                    row.appendChild(name);
+
+                    // Rename button
+                    const renBtn = document.createElement('button');
+                    renBtn.className   = 'tl-group-popup__rename-btn';
+                    renBtn.title       = 'Rename group';
+                    renBtn.textContent = '✎';
+                    renBtn.addEventListener('click', async e => {
+                        e.stopPropagation();
+                        const newName = await Dialog.prompt('Rename group:', g.label);
+                        if (!newName || !newName.trim()) return;
+                        g.label = newName.trim();
+                        _render();
+                        _rebuildRows();
+                    });
+                    row.appendChild(renBtn);
+
+                    // Delete button
+                    const delBtn = document.createElement('button');
+                    delBtn.className   = 'tl-group-popup__del-btn';
+                    delBtn.title       = 'Delete group';
+                    delBtn.textContent = '✕';
+                    delBtn.addEventListener('click', e => {
+                        e.stopPropagation();
+                        _deleteGroup(g.id);
+                        _rebuildRows();
+                    });
+                    row.appendChild(delBtn);
+
+                    pop.appendChild(row);
+                });
+            }
+
+            // "+ New Group" button — always at the bottom
+            const addBtn = document.createElement('button');
+            addBtn.className   = 'tl-group-popup__add';
+            addBtn.textContent = '＋ New Group';
+            addBtn.addEventListener('click', async e => {
+                e.stopPropagation();
+                const name = await Dialog.prompt('Group name:', '');
+                if (!name || !name.trim()) return;
+                const color = _GROUP_COLORS[st.groups.length % _GROUP_COLORS.length];
+                st.groups.push({ id: _newId(), label: name.trim(), color });
+                _render();
+                _rebuildRows();
+            });
+            pop.appendChild(addBtn);
+        }
+
+        _rebuildRows();
+
+        // Position below the button, aligned to its left edge
+        document.body.appendChild(pop);
+        const br = btnEl.getBoundingClientRect();
+        pop.style.top  = (br.bottom + window.scrollY + 4) + 'px';
+        pop.style.left = (br.left   + window.scrollX)     + 'px';
+
+        _groupPopup = pop;
+
+        // Close on outside click (next tick so this click doesn't immediately close)
+        setTimeout(() => {
+            document.addEventListener('click', _closeGroupPopup, { once: true });
+        }, 0);
+    }
+
+    function _closeGroupPopup() {
+        if (_groupPopup) { _groupPopup.remove(); _groupPopup = null; }
+    }
+
+    function _deleteGroup(groupId) {
+        const st  = _st();
+        const idx = st.groups.findIndex(g => g.id === groupId);
+        if (idx === -1) return;
+        st.groups.splice(idx, 1);
+        // Unassign entries that belonged to this group
+        st.entries.forEach(e => { if (e.groupId === groupId) e.groupId = null; });
+        _render();
+    }
+
+    function _removeEntry(id) {
+        const st  = _st();
+        const idx = st.entries.findIndex(e => e.id === id);
+        if (idx === -1) return;
+        st.entries.splice(idx, 1);
+        _render();
+    }
+
+    async function _clearAll() {
+        const st = _st();
+        if (!st.entries.length) return;
+        const ok = await Dialog.confirm(
+            `Remove all ${st.entries.length} timeline entries?`
+        );
+        if (!ok) return;
+        st.entries = [];
+        st.groups  = [];
+        _render();
+    }
+
+    // -------------------------------------------------------------------------
+    // View toggle
+    // -------------------------------------------------------------------------
+    function _setView(mode) {
+        _viewMode = mode;
+        document.getElementById('btn-timeline-view-list')
+            ?.classList.toggle('is-active', mode === 'list');
+        document.getElementById('btn-timeline-view-visual')
+            ?.classList.toggle('is-active', mode === 'visual');
+        _render();
+    }
+
+    // -------------------------------------------------------------------------
+    // Badge
+    // -------------------------------------------------------------------------
+    function _updateCount() {
+        const n = _st().entries.length;
+        // Panel header badge
+        const badge = document.getElementById('timeline-count-badge');
+        if (badge) badge.textContent = String(n);
+        // Toolbar button badge (uses class, not id)
+        const btn = document.getElementById('btn-timeline-toggle');
+        if (btn) {
+            btn.classList.toggle('tl-has-entries', n > 0);
+            const btnBadge = btn.querySelector('.tl-btn-badge');
+            if (btnBadge) btnBadge.textContent = String(n);
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Auto-color by recId
+    // -------------------------------------------------------------------------
+    function _autoColor(recId) {
+        if (!recId) return '#888888';
+        if (_recColorMap[recId]) return _recColorMap[recId];
+        const c = _AUTO_COLORS[_autoColorIdx++ % _AUTO_COLORS.length];
+        _recColorMap[recId] = c;
+        return c;
+    }
+
+    /** Resolved color for an entry: custom > recColor > autoColor. */
+    function _entryColor(entry) {
+        return entry.color || entry.recColor || _autoColor(entry.recId);
+    }
+
+    // -------------------------------------------------------------------------
+    // Per-entry color picker
+    // -------------------------------------------------------------------------
+    /**
+     * Opens a small floating color picker anchored below `anchorEl`.
+     * Calls `onChanged()` whenever the entry color is updated so the caller
+     * can refresh the relevant DOM element(s) without a full re-render.
+     */
+    function _openColorPicker(anchorEl, entry, onChanged) {
+        _closeColorPicker();
+        _closeGroupPopup();
+
+        const pop = document.createElement('div');
+        pop.className = 'tl-color-picker';
+        pop.addEventListener('click',     e => e.stopPropagation());
+        pop.addEventListener('mousedown', e => e.stopPropagation());
+
+        // Preset swatch grid
+        const grid = document.createElement('div');
+        grid.className = 'tl-color-picker__grid';
+        _ENTRY_PALETTE.forEach(hex => {
+            const sw = document.createElement('button');
+            sw.className = 'tl-color-picker__swatch';
+            sw.style.background = hex;
+            sw.title = hex;
+            if (entry.color === hex) sw.classList.add('is-active');
+            sw.addEventListener('click', () => {
+                entry.color = hex;
+                _closeColorPicker();
+                onChanged();
+            });
+            grid.appendChild(sw);
+        });
+        pop.appendChild(grid);
+
+        // Bottom row: native color input + reset
+        const row = document.createElement('div');
+        row.className = 'tl-color-picker__row';
+
+        const customInput = document.createElement('input');
+        customInput.type      = 'color';
+        customInput.className = 'tl-color-picker__custom';
+        customInput.title     = 'Custom color';
+        customInput.value     = entry.color || _entryColor(entry);
+        customInput.addEventListener('input', () => {
+            entry.color = customInput.value;
+            onChanged();
+        });
+        customInput.addEventListener('change', () => {
+            entry.color = customInput.value;
+            _closeColorPicker();
+            onChanged();
+        });
+
+        const resetBtn = document.createElement('button');
+        resetBtn.className   = 'tl-color-picker__reset';
+        resetBtn.textContent = '↺ Reset';
+        resetBtn.title       = 'Reset to recording color';
+        resetBtn.addEventListener('click', () => {
+            entry.color = null;
+            _closeColorPicker();
+            onChanged();
+        });
+
+        row.appendChild(customInput);
+        row.appendChild(resetBtn);
+        pop.appendChild(row);
+
+        document.body.appendChild(pop);
+        const br = anchorEl.getBoundingClientRect();
+        pop.style.top  = (br.bottom + window.scrollY + 4) + 'px';
+        pop.style.left = (br.left   + window.scrollX)     + 'px';
+
+        _colorPickerEl = pop;
+        setTimeout(() => {
+            document.addEventListener('click', _closeColorPicker, { once: true });
+        }, 0);
+    }
+
+    function _closeColorPicker() {
+        if (_colorPickerEl) { _colorPickerEl.remove(); _colorPickerEl = null; }
+    }
+
+    // -------------------------------------------------------------------------
+    // -------------------------------------------------------------------------
+    // Maximize / restore (identical pattern to Calculus toolbox)
+    // -------------------------------------------------------------------------
+    function _toggleMaximize() {
+        if (_panel.classList.contains('is-maximized')) {
+            _restoreMaximize();
+        } else {
+            // Snapshot inline styles so we can restore them exactly
+            _preMaxStyles = {
+                top: _panel.style.top, left: _panel.style.left,
+                right: _panel.style.right, bottom: _panel.style.bottom,
+                width: _panel.style.width, height: _panel.style.height,
+                transform: _panel.style.transform,
+                maxWidth: _panel.style.maxWidth, maxHeight: _panel.style.maxHeight,
+            };
+            _panel.classList.add('is-maximized');
+            _syncMaximizeGeometry();
+            _attachMaximizeWatch();
+            const btn = document.getElementById('btn-timeline-maximize');
+            if (btn) { btn.textContent = '⤡'; btn.title = 'Restore'; }
+        }
+    }
+
+    function _restoreMaximize() {
+        _detachMaximizeWatch();
+        _panel.classList.remove('is-maximized');
+        if (_preMaxStyles) {
+            Object.assign(_panel.style, _preMaxStyles);
+            _preMaxStyles = null;
+        }
+        const btn = document.getElementById('btn-timeline-maximize');
+        if (btn) { btn.textContent = '⤢'; btn.title = 'Maximize'; }
+    }
+
+    /** Fill the canvas-wrapper area, clipped by the results panel when visible. */
+    function _syncMaximizeGeometry() {
+        if (!_panel || !_panel.classList.contains('is-maximized')) return;
+        const cw = document.getElementById('canvas-wrapper');
+        if (!cw) return;
+        const r      = cw.getBoundingClientRect();
+        let top    = r.top,  left   = r.left;
+        let width  = r.width, height = r.height;
+
+        const rp = document.getElementById('results-panel');
+        if (rp && !rp.classList.contains('hidden') && !rp.classList.contains('is-fullscreen')) {
+            const rr = rp.getBoundingClientRect();
+            if (rr.top < r.bottom && rr.bottom > r.top) {
+                const h = rr.top - r.top;
+                if (h >= 80) height = h;
+            }
+        }
+
+        Object.assign(_panel.style, {
+            top: Math.round(top) + 'px',       left: Math.round(left) + 'px',
+            width: Math.round(width) + 'px',   height: Math.round(height) + 'px',
+            right: 'auto',                     bottom: 'auto',
+            transform: 'none',
+            maxWidth: 'none',                  maxHeight: 'none',
+        });
+    }
+
+    function _attachMaximizeWatch() {
+        _detachMaximizeWatch();
+        const sync = () => _syncMaximizeGeometry();
+        _maxResizeWinListener = sync;
+        window.addEventListener('resize', sync);
+        _maxResizeObserver = new ResizeObserver(sync);
+        const cw = document.getElementById('canvas-wrapper');
+        const rp = document.getElementById('results-panel');
+        if (cw) _maxResizeObserver.observe(cw);
+        if (rp) _maxResizeObserver.observe(rp);
+    }
+
+    function _detachMaximizeWatch() {
+        if (_maxResizeObserver)  { _maxResizeObserver.disconnect(); _maxResizeObserver = null; }
+        if (_maxResizeWinListener) {
+            window.removeEventListener('resize', _maxResizeWinListener);
+            _maxResizeWinListener = null;
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Panel size, drag, resize (same pattern as recordings panel)
+    // -------------------------------------------------------------------------
+    function _savePanelSize() {
+        if (!_panel) return;
+        _st().panelSize = {
+            w: Math.round(_panel.offsetWidth),
+            h: Math.round(_panel.offsetHeight),
+        };
+    }
+    function _applyPanelSize() {
+        if (!_panel) return;
+        const s = _st().panelSize;
+        if (!s) return;
+        if (s.w) { _panel.style.width = s.w + 'px'; _panel.style.maxWidth  = 'none'; }
+        if (s.h) { _panel.style.height= s.h + 'px'; _panel.style.maxHeight = 'none'; }
+    }
+    function _pinPanelPosition() {
+        if (!_panel || _panel.style.transform === 'none') return;
+        const r = _panel.getBoundingClientRect();
+        _panel.style.left      = r.left + 'px';
+        _panel.style.top       = r.top  + 'px';
+        _panel.style.right     = 'auto';
+        _panel.style.bottom    = 'auto';
+        _panel.style.transform = 'none';
+    }
+
+    function _makeDraggable(handle, panel) {
+        if (!handle || !panel) return;
+        handle.style.cursor = 'move';
+        let ox = 0, oy = 0;
+        handle.addEventListener('mousedown', e => {
+            if (['BUTTON','INPUT','SELECT'].includes(e.target.tagName)) return;
+            e.preventDefault();
+            const r = panel.getBoundingClientRect();
+            panel.style.left      = r.left + 'px';
+            panel.style.top       = r.top  + 'px';
+            panel.style.right     = 'auto';
+            panel.style.bottom    = 'auto';
+            panel.style.transform = 'none';
+            ox = e.clientX - r.left;
+            oy = e.clientY - r.top;
+            const onMove = ev => {
+                panel.style.left = (ev.clientX - ox) + 'px';
+                panel.style.top  = (ev.clientY - oy) + 'px';
+            };
+            const onUp = () => {
+                document.removeEventListener('mousemove', onMove);
+                document.removeEventListener('mouseup',   onUp);
+            };
+            document.addEventListener('mousemove', onMove);
+            document.addEventListener('mouseup',   onUp);
+        });
+    }
+
+    function _makeResizable(panel) {
+        if (!panel) return;
+        const MIN_W = 420, MIN_H = 180;
+        [
+            { cls: 'tl-resize-e',  dirE: true,  dirS: false },
+            { cls: 'tl-resize-s',  dirE: false, dirS: true  },
+            { cls: 'tl-resize-se', dirE: true,  dirS: true  },
+        ].forEach(({ cls, dirE, dirS }) => {
+            const el = document.createElement('div');
+            el.className = `tl-resize-handle ${cls}`;
+            panel.appendChild(el);
+            el.addEventListener('mousedown', e => {
+                e.preventDefault();
+                e.stopPropagation();
+                _pinPanelPosition();
+                const startX = e.clientX, startY = e.clientY;
+                const startW = panel.offsetWidth, startH = panel.offsetHeight;
+                const onMove = ev => {
+                    if (dirE) {
+                        const w = Math.max(MIN_W, startW + (ev.clientX - startX));
+                        panel.style.width    = w + 'px';
+                        panel.style.maxWidth = 'none';
+                    }
+                    if (dirS) {
+                        const h = Math.max(MIN_H, startH + (ev.clientY - startY));
+                        panel.style.height    = h + 'px';
+                        panel.style.maxHeight = 'none';
+                    }
+                };
+                const onUp = () => {
+                    document.removeEventListener('mousemove', onMove);
+                    document.removeEventListener('mouseup',   onUp);
+                    _savePanelSize();
+                };
+                document.addEventListener('mousemove', onMove);
+                document.addEventListener('mouseup',   onUp);
+            });
+        });
+    }
+
+    // -------------------------------------------------------------------------
+    // Tiny helpers
+    // -------------------------------------------------------------------------
+    function _fmtVal(v) {
+        if (v === null || v === undefined) return 'NULL';
+        return String(v);
+    }
+    function _trunc(s, n) {
+        s = String(s ?? '');
+        return s.length > n ? s.slice(0, n) + '…' : s;
+    }
+    function _esc(s) {
+        return String(s ?? '')
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+    function _newId() {
+        return `tl_${Date.now()}_${++_idSeq}_${Math.random().toString(36).slice(2, 6)}`;
+    }
+
+    // -------------------------------------------------------------------------
+    return { init, toggle, addEntry, refresh };
+})();

@@ -264,6 +264,7 @@
             <input type="checkbox" id="chk-explain-colors" checked title="Color-code EXPLAIN results">
             <button id="btn-explain-query" class="btn-outline-blue" title="Run EXPLAIN on the current query (Alt+E)">⚙ Explain</button>
             <button id="btn-recordings-toggle" class="rec-toggle-btn" title="Query Recordings — left-click to open, right-click to toggle recording"><span class="rec-dot"></span>Rec <span class="rec-toggle-count">0</span></button>
+            <button id="btn-timeline-toggle" class="tl-toggle-btn" title="Timeline — Cmd/Ctrl+click any result cell to pin it here">⊶ TL <span class="tl-count-badge tl-btn-badge">0</span></button>
             <button id="btn-minimap-badge" class="minimap-badge-toggle" title="Toggle minimap (canvas overview)">⊹</button>
             <button id="btn-run-custom-query" class="btn-outline-blue" title="Run a custom SQL query">▶ Run Custom Query</button>
             <button id="btn-cancel-query" class="btn-danger hidden" title="Kill the running query on the server">✕ Cancel Query</button>
@@ -405,6 +406,26 @@
         </div>
         <div id="recordings-list"></div>
     </div>
+
+    <!-- ==================== TIMELINE PANEL ==================== -->
+    <div id="timeline-panel" class="hidden">
+        <div id="timeline-panel-header">
+            <span class="tl-panel-title">Timeline <span id="timeline-count-badge" class="tl-count-badge">0</span></span>
+            <span class="tl-header-sep"></span>
+            <button id="btn-timeline-view-list"   class="tl-view-btn is-active" title="List view">≡ List</button>
+            <button id="btn-timeline-view-visual" class="tl-view-btn"           title="Visual timeline">⊶ Visual</button>
+            <span class="tl-header-sep"></span>
+            <button id="btn-timeline-add-group" class="tl-btn-sm" title="Create a named group to bracket entries">⊞ Group</button>
+            <button id="btn-timeline-clear"     class="tl-btn-sm" title="Clear all timeline entries">⊗ Clear</button>
+            <button id="btn-timeline-maximize" title="Maximize">⤢</button>
+            <button id="btn-timeline-close"    title="Close timeline panel">✕</button>
+        </div>
+        <div id="timeline-body">
+            <div id="timeline-list"></div>
+            <div id="timeline-visual" class="hidden"></div>
+        </div>
+    </div>
+
 
     <div id="calculus-toolbox" class="hidden">
         <div id="calculus-toolbox-header">
@@ -1100,6 +1121,7 @@
     <script src="assets/js/sql-backdrop.js"></script>
     <script src="assets/js/minimap.js"></script>
     <script src="assets/js/recordings.js"></script>
+    <script src="assets/js/timeline.js"></script>
 
     <!-- ==================== TABLE SEARCH MODAL ==================== -->
     <div id="modal-table-search" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modal-table-search-title">
