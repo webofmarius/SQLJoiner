@@ -417,6 +417,7 @@
             <span class="tl-header-sep"></span>
             <button id="btn-timeline-add-group" class="tl-btn-sm" title="Create a named group to bracket entries">⊞ Group</button>
             <button id="btn-timeline-clear"     class="tl-btn-sm" title="Clear all timeline entries">⊗ Clear</button>
+            <button id="btn-timeline-screenshot" title="Copy visual timeline as image to clipboard">📸</button>
             <button id="btn-timeline-maximize" title="Maximize">⤢</button>
             <button id="btn-timeline-close"    title="Close timeline panel">✕</button>
         </div>

@@ -80,6 +80,8 @@ const Timeline = (() => {
             ?.addEventListener('click', () => _setView('list'));
         document.getElementById('btn-timeline-view-visual')
             ?.addEventListener('click', () => _setView('visual'));
+        document.getElementById('btn-timeline-screenshot')
+            ?.addEventListener('click', _screenshotVisual);
         document.getElementById('btn-timeline-maximize')
             ?.addEventListener('click', _toggleMaximize);
         const _groupBtn = document.getElementById('btn-timeline-add-group');
@@ -1012,6 +1014,162 @@ const Timeline = (() => {
 
     function _closeColorPicker() {
         if (_colorPickerEl) { _colorPickerEl.remove(); _colorPickerEl = null; }
+    }
+
+    // -------------------------------------------------------------------------
+    // Visual timeline screenshot (html2canvas → clipboard / PNG download)
+    // -------------------------------------------------------------------------
+    /**
+     * Captures the full `.tl-track` element (including horizontally scrolled
+     * content) as a PNG, writes it to the clipboard, and falls back to a direct
+     * download if the Clipboard API is unavailable.
+     *
+     * Uses the same lazy-load + CSS-patching approach as _screenshotCanvas in
+     * canvas.js to handle modern CSS colour functions (oklch, color-mix, etc.)
+     * that html2canvas 1.4.1 cannot parse.
+     */
+    async function _screenshotVisual() {
+        if (_viewMode !== 'visual') {
+            App.notify?.('Switch to Visual view first.', 'warn');
+            return;
+        }
+
+        const trackEl = _visualEl?.querySelector('.tl-track');
+        if (!trackEl || _st().entries.length === 0) {
+            App.notify?.('Nothing to screenshot — add entries first.', 'warn');
+            return;
+        }
+
+        const btn      = document.getElementById('btn-timeline-screenshot');
+        const origText = btn?.textContent;
+        if (btn) { btn.textContent = '⏳'; btn.disabled = true; }
+
+        try {
+            // ── 1. Lazy-load html2canvas ────────────────────────────────────
+            if (!window.html2canvas) {
+                await new Promise((resolve, reject) => {
+                    const s  = document.createElement('script');
+                    s.src    = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+                    s.onload = resolve;
+                    s.onerror = () => reject(new Error(
+                        'Could not load html2canvas — check your internet connection.'
+                    ));
+                    document.head.appendChild(s);
+                });
+            }
+
+            // ── 2. Resolve background colour to a safe rgb() string ─────────
+            let bgColor = getComputedStyle(document.documentElement)
+                .getPropertyValue('--surface').trim() || '#1e2128';
+            try {
+                const tmp = document.createElement('canvas');
+                tmp.width = tmp.height = 1;
+                const ctx = tmp.getContext('2d');
+                ctx.fillStyle = bgColor;
+                ctx.fillRect(0, 0, 1, 1);
+                const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
+                bgColor = `rgb(${r},${g},${b})`;
+            } catch (_) { /* keep as-is */ }
+
+            // ── 3. Pre-fetch & patch stylesheets (strip color-mix / box-shadow)
+            const _colorMixRe  = /color-mix\s*\([^)(]*(?:\([^)(]*\)[^)(]*)*\)/g;
+            const _boxShadowRe = /box-shadow\s*:[^;}{]+/g;
+            const _patchedCss  = new Map();
+            await Promise.all(
+                [...document.querySelectorAll('link[rel="stylesheet"]')].map(async lnk => {
+                    try {
+                        const res  = await fetch(lnk.href, { cache: 'force-cache' });
+                        let   text = await res.text();
+                        text = text.replace(_colorMixRe,  'transparent');
+                        text = text.replace(_boxShadowRe, 'box-shadow: none');
+                        _patchedCss.set(lnk.href, text);
+                    } catch (_) { /* leave unpatchable sheets untouched */ }
+                })
+            );
+
+            // ── 4. Stamp computed colours on every element before capture ───
+            //    html2canvas reads computed styles; resolving them now prevents
+            //    it from trying (and failing) to parse oklch / color-mix values.
+            function _resolveColor(val) {
+                if (!val || !/\b(oklch|oklab|lch|lab|color-mix|hwb)\s*\(/.test(val)) return val;
+                try {
+                    const t = document.createElement('canvas');
+                    t.width = t.height = 1;
+                    const c = t.getContext('2d');
+                    c.fillStyle = val;
+                    c.fillRect(0, 0, 1, 1);
+                    const [r, g, b, a] = c.getImageData(0, 0, 1, 1).data;
+                    return a === 255
+                        ? `rgb(${r},${g},${b})`
+                        : `rgba(${r},${g},${b},${+(a / 255).toFixed(3)})`;
+                } catch (_) { return val; }
+            }
+
+            const onclone = (_clonedDoc) => {
+                // Swap linked stylesheets → patched inline <style> blocks
+                _clonedDoc.querySelectorAll('link[rel="stylesheet"]').forEach(link => {
+                    const patched = _patchedCss.get(link.href);
+                    if (patched == null) return;
+                    const style       = _clonedDoc.createElement('style');
+                    style.textContent = patched;
+                    link.replaceWith(style);
+                });
+
+                // Walk every element inside the cloned track and bake computed
+                // colours into inline styles so html2canvas never touches CSS vars.
+                const clonedTrack = _clonedDoc.querySelector('.tl-track');
+                if (!clonedTrack) return;
+                [...clonedTrack.querySelectorAll('*')].forEach((clonedEl, idx) => {
+                    const origEl = trackEl.querySelectorAll('*')[idx];
+                    if (!origEl) return;
+                    const cs = window.getComputedStyle(origEl);
+                    [
+                        'color', 'background-color', 'border-color',
+                        'border-top-color', 'border-bottom-color',
+                        'border-left-color', 'border-right-color',
+                    ].forEach(prop => {
+                        const v = cs.getPropertyValue(prop);
+                        if (v) clonedEl.style.setProperty(prop, _resolveColor(v), 'important');
+                    });
+                    // Remove filters / backdrop-filter that html2canvas mishandles
+                    clonedEl.style.setProperty('filter',          'none', 'important');
+                    clonedEl.style.setProperty('backdrop-filter', 'none', 'important');
+                });
+            };
+
+            // ── 5. Capture ──────────────────────────────────────────────────
+            const PAD = 20;
+            const offscreen = await window.html2canvas(trackEl, {
+                x:               -PAD,
+                y:               -PAD,
+                width:           trackEl.offsetWidth  + PAD * 2,
+                height:          trackEl.offsetHeight + PAD * 2,
+                backgroundColor: bgColor,
+                useCORS:         false,
+                allowTaint:      false,
+                logging:         false,
+                scale:           window.devicePixelRatio || 1,
+                onclone,
+            });
+
+            // ── 6. Clipboard → fallback download ────────────────────────────
+            try {
+                const blob = await new Promise(res => offscreen.toBlob(res, 'image/png'));
+                await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+                App.notify?.('Timeline screenshot copied to clipboard!', 'success');
+            } catch (_) {
+                const a      = document.createElement('a');
+                a.href       = offscreen.toDataURL('image/png');
+                a.download   = `timeline-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.png`;
+                a.click();
+                App.notify?.('Timeline screenshot downloaded.', 'success');
+            }
+
+        } catch (err) {
+            App.notify?.('Screenshot failed: ' + err.message, 'error');
+        } finally {
+            if (btn) { btn.textContent = origText; btn.disabled = false; }
+        }
     }
 
     // -------------------------------------------------------------------------
