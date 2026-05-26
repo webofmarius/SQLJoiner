@@ -7741,6 +7741,107 @@ textarea.sql-bd-active.scope-mode-on {
     /* width & height set inline by JS */
 }
 
+/* Multi-track layout */
+.tl-multi-wrapper {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+}
+.tl-multi-labels {
+    width: 110px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--border2);
+    overflow: hidden;
+    padding-top: 10px;
+}
+.tl-multi-label {
+    display: flex;
+    align-items: center;
+    padding: 0 8px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    border-bottom: 1px solid var(--border2);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    box-sizing: border-box;
+}
+.tl-multi-scroller {
+    flex: 1;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding-top: 10px;
+}
+.tl-multi-inner {
+    display: flex;
+    flex-direction: column;
+}
+.tl-multi-lane {
+    border-bottom: 1px solid var(--border2);
+    overflow: visible;
+}
+
+/* Saved timelines popup */
+.tl-saved-popup {
+    position: fixed;
+    z-index: 300;
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    border-radius: 6px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.45);
+    min-width: 300px;
+    max-width: 440px;
+    padding: 6px 0;
+    max-height: 380px;
+    overflow-y: auto;
+}
+.tl-saved-popup__empty {
+    padding: 10px 14px;
+    color: var(--text-muted);
+    font-size: 12px;
+    margin: 0;
+}
+.tl-saved-popup__row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 10px;
+}
+.tl-saved-popup__row:hover { background: var(--surface2); }
+.tl-saved-popup__vis { flex-shrink: 0; cursor: pointer; }
+.tl-saved-popup__name {
+    flex: 1;
+    font-size: 12px;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.tl-saved-popup__count {
+    font-size: 10px;
+    color: var(--text-muted);
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+.tl-saved-popup__load,
+.tl-saved-popup__ren,
+.tl-saved-popup__del {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-size: 11px;
+    padding: 2px 6px;
+    border-radius: 3px;
+    color: var(--text-muted);
+    flex-shrink: 0;
+}
+.tl-saved-popup__load:hover { background: var(--surface3); color: var(--text); }
+.tl-saved-popup__ren:hover  { background: var(--surface3); color: var(--text); }
+.tl-saved-popup__del:hover  { background: rgba(248,113,113,0.12); color: #f87171; }
+
 /* Axis line */
 .tl-axis {
     position: absolute;

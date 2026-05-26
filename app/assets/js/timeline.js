@@ -31,6 +31,12 @@ const Timeline = (() => {
 
     // Floating per-entry color picker
     let _colorPickerEl = null;
+
+    // Multi-track mode (visual view only)
+    let _multiTrackMode = false;
+
+    // Saved timelines popup
+    let _savedPopup = null;
     const _ENTRY_PALETTE = [
         '#f87171','#fb923c','#fbbf24','#a3e635',
         '#34d399','#22d3ee','#60a5fa','#818cf8',
@@ -64,6 +70,16 @@ const Timeline = (() => {
         return State.timeline;
     }
 
+    /** Always returns (and ensures) State.savedTimelines array. */
+    function _savedTimelines() {
+        if (!Array.isArray(State.savedTimelines)) State.savedTimelines = [];
+        return State.savedTimelines;
+    }
+
+    function _newStlId() {
+        return `stl_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    }
+
     // -------------------------------------------------------------------------
     // Init
     // -------------------------------------------------------------------------
@@ -91,6 +107,15 @@ const Timeline = (() => {
         });
         document.getElementById('btn-timeline-clear')
             ?.addEventListener('click', _clearAll);
+        document.getElementById('btn-timeline-save')
+            ?.addEventListener('click', _saveCurrentTimeline);
+        const _savedBtn = document.getElementById('btn-timeline-saved');
+        _savedBtn?.addEventListener('click', e => {
+            e.stopPropagation();
+            _savedPopup ? _closeSavedPopup() : _openSavedPopup(_savedBtn);
+        });
+        document.getElementById('btn-timeline-multi')
+            ?.addEventListener('click', _toggleMultiTrack);
 
         _makeDraggable(document.getElementById('timeline-panel-header'), _panel);
         _makeResizable(_panel);
@@ -147,6 +172,8 @@ const Timeline = (() => {
     // Public: refresh after applyContext
     // -------------------------------------------------------------------------
     function refresh() {
+        _updateSavedCount();
+        _updateCount();
         if (_visible) _render();
     }
 
@@ -157,6 +184,8 @@ const Timeline = (() => {
         _updateCount();
         if (_viewMode === 'list') {
             _renderList();
+        } else if (_multiTrackMode) {
+            _renderMultiTrack();
         } else {
             _renderVisual();
         }
@@ -258,7 +287,10 @@ const Timeline = (() => {
         delBtn.className   = 'tl-entry__del-btn';
         delBtn.title       = 'Remove from timeline';
         delBtn.textContent = '✕';
-        delBtn.addEventListener('click', () => _removeEntry(entry.id));
+        delBtn.addEventListener('click', async () => {
+            if (!await Dialog.confirm('Remove this entry from the timeline?')) return;
+            _removeEntry(entry.id);
+        });
         actions.appendChild(delBtn);
 
         div.appendChild(actions);
@@ -323,6 +355,9 @@ const Timeline = (() => {
                         entry.pinnedCols = entry.pinnedCols.filter(c => c !== k);
                     }
                     _refreshBotLabel(botLblEl, entry);
+                    // In multi-track mode adjust lane heights in-place so the peek
+                    // popup is not closed by a full re-render.
+                    if (_multiTrackMode) _updateMultiLaneHeights();
                 });
                 chkTd.appendChild(chk);
                 tr.appendChild(chkTd);
@@ -555,7 +590,7 @@ const Timeline = (() => {
         scroller.addEventListener('click', () => _closeTickPeek());
     }
 
-    function _showTickPeek(entry, tickEl, color, xpx, trackPx) {
+    function _showTickPeek(entry, tickEl, color, xpx, trackPx, deletable = true) {
         _closeTickPeek();
 
         const botLbl = tickEl.querySelector('.tl-tick__bottom');
@@ -648,15 +683,18 @@ const Timeline = (() => {
         _fillPeekPanel(panel, entry, botLbl); // pass botLbl so checkboxes can update it
         peek.appendChild(panel);
 
-        // Delete button
-        const delBtn = document.createElement('button');
-        delBtn.className   = 'tl-tick-peek__del';
-        delBtn.textContent = '✕ Remove from timeline';
-        delBtn.addEventListener('click', () => {
-            _closeTickPeek();
-            _removeEntry(entry.id);
-        });
-        peek.appendChild(delBtn);
+        // Delete button (hidden for read-only saved-timeline tracks)
+        if (deletable) {
+            const delBtn = document.createElement('button');
+            delBtn.className   = 'tl-tick-peek__del';
+            delBtn.textContent = '✕ Remove from timeline';
+            delBtn.addEventListener('click', async () => {
+                if (!await Dialog.confirm('Remove this entry from the timeline?')) return;
+                _closeTickPeek();
+                _removeEntry(entry.id);
+            });
+            peek.appendChild(delBtn);
+        }
 
         _tickPeekEl = peek;
         trackEl.appendChild(peek);
@@ -1041,6 +1079,378 @@ const Timeline = (() => {
 
     function _closeColorPicker() {
         if (_colorPickerEl) { _colorPickerEl.remove(); _colorPickerEl = null; }
+    }
+
+    // -------------------------------------------------------------------------
+    // Saved timelines — save / load / delete / visibility
+    // -------------------------------------------------------------------------
+
+    function _updateSavedCount() {
+        const n  = _savedTimelines().length;
+        const el = document.getElementById('tl-saved-count');
+        if (el) el.textContent = n > 0 ? String(n) : '';
+    }
+
+    async function _saveCurrentTimeline() {
+        const st = _st();
+        if (!st.entries.length) {
+            App.notify?.('Nothing to save — timeline is empty.', 'warn');
+            return;
+        }
+        const def  = `Timeline ${new Date().toLocaleDateString()}`;
+        const name = await Dialog.prompt('Save timeline as:', def);
+        if (!name || !name.trim()) return;
+        _savedTimelines().push({
+            id:        _newStlId(),
+            name:      name.trim(),
+            timestamp: Date.now(),
+            visible:   true,
+            entries:   JSON.parse(JSON.stringify(st.entries)),
+            groups:    JSON.parse(JSON.stringify(st.groups)),
+        });
+        _updateSavedCount();
+        App.notify?.('Timeline saved.', 'success');
+    }
+
+    function _toggleMultiTrack() {
+        _multiTrackMode = !_multiTrackMode;
+        document.getElementById('btn-timeline-multi')
+            ?.classList.toggle('is-active', _multiTrackMode);
+        if (_viewMode !== 'visual') {
+            _setView('visual');
+        } else {
+            _render();
+        }
+    }
+
+    function _openSavedPopup(btnEl) {
+        _closeSavedPopup();
+        const stls = _savedTimelines();
+
+        const pop = document.createElement('div');
+        pop.className = 'tl-saved-popup';
+        pop.addEventListener('click',     e => e.stopPropagation());
+        pop.addEventListener('mousedown', e => e.stopPropagation());
+
+        function _rebuild() {
+            pop.innerHTML = '';
+            if (!stls.length) {
+                const empty = document.createElement('p');
+                empty.className   = 'tl-saved-popup__empty';
+                empty.textContent = 'No saved timelines yet. Use 💾 Save to save the current one.';
+                pop.appendChild(empty);
+                return;
+            }
+            stls.forEach((stl, idx) => {
+                const row = document.createElement('div');
+                row.className = 'tl-saved-popup__row';
+
+                const chk = document.createElement('input');
+                chk.type    = 'checkbox';
+                chk.checked = stl.visible !== false;
+                chk.className = 'tl-saved-popup__vis';
+                chk.title   = 'Show as track in multi-track view';
+                chk.addEventListener('change', () => {
+                    stl.visible = chk.checked;
+                    if (_multiTrackMode && _viewMode === 'visual') _render();
+                });
+                row.appendChild(chk);
+
+                const nameSpan = document.createElement('span');
+                nameSpan.className   = 'tl-saved-popup__name';
+                nameSpan.textContent = stl.name;
+                nameSpan.title       = new Date(stl.timestamp).toLocaleString();
+                row.appendChild(nameSpan);
+
+                const cnt = document.createElement('span');
+                cnt.className   = 'tl-saved-popup__count';
+                cnt.textContent = stl.entries.length + ' pts';
+                row.appendChild(cnt);
+
+                const loadBtn = document.createElement('button');
+                loadBtn.className   = 'tl-saved-popup__load';
+                loadBtn.textContent = '⇥ Load';
+                loadBtn.title       = 'Replace current timeline entries with this snapshot';
+                loadBtn.addEventListener('click', async () => {
+                    const cur = _st();
+                    if (cur.entries.length) {
+                        if (!await Dialog.confirm(
+                            `Replace the ${cur.entries.length} current entries with "${stl.name}"?`
+                        )) return;
+                    }
+                    cur.entries = JSON.parse(JSON.stringify(stl.entries));
+                    cur.groups  = JSON.parse(JSON.stringify(stl.groups));
+                    _render();
+                });
+                row.appendChild(loadBtn);
+
+                const renBtn = document.createElement('button');
+                renBtn.className   = 'tl-saved-popup__ren';
+                renBtn.textContent = '✎';
+                renBtn.title       = 'Rename saved timeline';
+                renBtn.addEventListener('click', async () => {
+                    const name = await Dialog.prompt('Rename timeline:', stl.name);
+                    if (!name || !name.trim()) return;
+                    stl.name = name.trim();
+                    _rebuild();
+                    if (_multiTrackMode && _viewMode === 'visual') _render();
+                });
+                row.appendChild(renBtn);
+
+                const delBtn = document.createElement('button');
+                delBtn.className   = 'tl-saved-popup__del';
+                delBtn.textContent = '✕';
+                delBtn.title       = 'Delete saved timeline';
+                delBtn.addEventListener('click', async () => {
+                    if (!await Dialog.confirm(`Delete saved timeline "${stl.name}"?`)) return;
+                    stls.splice(idx, 1);
+                    _updateSavedCount();
+                    _rebuild();
+                    if (_multiTrackMode && _viewMode === 'visual') _render();
+                });
+                row.appendChild(delBtn);
+
+                pop.appendChild(row);
+            });
+        }
+        _rebuild();
+
+        document.body.appendChild(pop);
+        const br = btnEl.getBoundingClientRect();
+        pop.style.top  = (br.bottom + window.scrollY + 4) + 'px';
+        pop.style.left = (br.left   + window.scrollX)     + 'px';
+        _savedPopup = pop;
+
+        setTimeout(() => {
+            document.addEventListener('click', _closeSavedPopup, { once: true });
+        }, 0);
+    }
+
+    function _closeSavedPopup() {
+        if (_savedPopup) { _savedPopup.remove(); _savedPopup = null; }
+    }
+
+    // -------------------------------------------------------------------------
+    // Multi-track visual render — shared axis across all visible saved timelines
+    // -------------------------------------------------------------------------
+
+    function _findEntryById(id) {
+        const live = _st().entries.find(e => e.id === id);
+        if (live) return live;
+        for (const stl of _savedTimelines()) {
+            const e = stl.entries.find(e => e.id === id);
+            if (e) return e;
+        }
+        return null;
+    }
+
+    // Adjust multi-track lane heights in-place (without closing the peek popup).
+    function _updateMultiLaneHeights() {
+        const BOT_Y  = 68;   // must match BOT_LBL_Y in _renderMultiTrack
+        const LINE_H = 13;   // must match LINE_H_PX
+        const MIN_H  = 120;  // must match LANE_H_MIN
+        const lanes  = _visualEl.querySelectorAll('.tl-multi-lane');
+        const labels = _visualEl.querySelectorAll('.tl-multi-label');
+        lanes.forEach((lane, i) => {
+            let maxLines = 0;
+            lane.querySelectorAll('.tl-tick').forEach(tickEl => {
+                const entry = _findEntryById(tickEl.dataset.id);
+                if (!entry) return;
+                const hasMain = !!(entry.label || entry.recName);
+                const lines   = (hasMain ? 1 : 0) + (entry.pinnedCols?.length || 0);
+                if (lines > maxLines) maxLines = lines;
+            });
+            const h = Math.max(MIN_H, BOT_Y + maxLines * LINE_H + 16);
+            lane.style.height = h + 'px';
+            if (labels[i]) labels[i].style.height = h + 'px';
+            lane.querySelectorAll('.tl-tick__bottom').forEach(b => {
+                b.style.height = (h - BOT_Y) + 'px';
+            });
+        });
+    }
+
+    function _renderMultiTrack() {
+        _listEl.classList.add('hidden');
+        _visualEl.classList.remove('hidden');
+        _visualEl.innerHTML = '';
+        _closeTickPeek();
+
+        const stls   = _savedTimelines().filter(s => s.visible !== false);
+        const liveSt = _st();
+
+        // Live track is first (omitted when empty); saved tracks follow
+        const tracks = [
+            ...(liveSt.entries.length > 0
+                ? [{ name: 'Current', entries: liveSt.entries, groups: liveSt.groups, isCurrent: true }]
+                : []),
+            ...stls.map(s => ({ name: s.name, entries: s.entries, groups: s.groups, isCurrent: false })),
+        ];
+
+        const hasAny = tracks.some(t => t.entries.length > 0);
+        if (!hasAny) {
+            _visualEl.innerHTML =
+                '<p class="tl-empty">No entries yet.<br>' +
+                'Cmd/Ctrl+click any result cell to pin it here.</p>';
+            return;
+        }
+
+        // Global axis: min/max from all entries across all tracks
+        const allValues = tracks.flatMap(t =>
+            t.entries.map(e => _parseTime(e.colValue)).filter(v => v !== null)
+        );
+        let globalMin, globalMax;
+        if (allValues.length >= 2) {
+            globalMin = Math.min(...allValues);
+            globalMax = Math.max(...allValues);
+        } else if (allValues.length === 1) {
+            globalMin = allValues[0] - 1;
+            globalMax = allValues[0] + 1;
+        } else {
+            globalMin = 0; globalMax = 1;
+        }
+        const globalRange = globalMax - globalMin || 1;
+
+        const maxN    = Math.max(1, ...tracks.map(t => t.entries.length));
+        const trackPx = Math.max(700, maxN * 90 + 100);
+
+        const PAD    = 0.05;
+        const pxOf   = pos => (PAD + pos * (1 - 2 * PAD)) * trackPx;
+        const gPos   = v => {
+            const n = _parseTime(v);
+            return n !== null ? (n - globalMin) / globalRange : 0.5;
+        };
+
+        // Per-lane layout constants (LANE_H is a minimum; grows per-track below)
+        const LANE_H_MIN  = 120;
+        const AXIS_Y      = 60;
+        const DOT_R       = 5;
+        const LBL_TOP_Y   = 4;    // breathing room from lane top
+        const LBL_TOP_H   = 30;   // tall enough for col-name + value
+        const STEM_TOP_Y  = 34;   // = LBL_TOP_Y + LBL_TOP_H
+        const STEM_BOT_Y  = 65;
+        const BOT_LBL_Y   = 68;
+        const LINE_H_PX   = 13;   // approx height per pinned-col line
+        const LABEL_W_PX  = 100;
+
+        const wrapper   = document.createElement('div');
+        wrapper.className = 'tl-multi-wrapper';
+
+        const labelsCol = document.createElement('div');
+        labelsCol.className = 'tl-multi-labels';
+
+        const scroller = document.createElement('div');
+        scroller.className = 'tl-multi-scroller';
+
+        const inner = document.createElement('div');
+        inner.className   = 'tl-multi-inner';
+        inner.style.width = trackPx + 'px';
+
+        tracks.forEach(trackData => {
+            // Dynamic lane height: grows to fit the most-pinned entry in this track
+            const maxLines = trackData.entries.length === 0 ? 0 :
+                Math.max(...trackData.entries.map(e => {
+                    const hasMain = !!(e.label || e.recName);
+                    return (hasMain ? 1 : 0) + (e.pinnedCols?.length || 0);
+                }));
+            const laneH = Math.max(LANE_H_MIN, BOT_LBL_Y + maxLines * LINE_H_PX + 16);
+
+            // Left label
+            const labelEl = document.createElement('div');
+            labelEl.className    = 'tl-multi-label';
+            labelEl.style.height = laneH + 'px';
+            labelEl.textContent  = trackData.name;
+            labelsCol.appendChild(labelEl);
+
+            // Lane
+            const lane = document.createElement('div');
+            lane.className    = 'tl-track tl-multi-lane';
+            lane.style.width  = trackPx + 'px';
+            lane.style.height = laneH + 'px';
+
+            const axisEl = document.createElement('div');
+            axisEl.className = 'tl-axis';
+            axisEl.style.top = AXIS_Y + 'px';
+            lane.appendChild(axisEl);
+
+            const sorted = trackData.entries.slice().sort((a, b) => {
+                const ta = _parseTime(a.colValue), tb = _parseTime(b.colValue);
+                if (ta === null && tb === null) return a.addedAt - b.addedAt;
+                if (ta === null) return 1;
+                if (tb === null) return -1;
+                return ta - tb;
+            });
+
+            sorted.forEach(entry => {
+                const color = _entryColor(entry);
+                const xpx   = pxOf(gPos(entry.colValue));
+
+                const tick = document.createElement('div');
+                tick.className  = 'tl-tick';
+                tick.dataset.id = entry.id;
+                tick.style.left = xpx + 'px';
+
+                const stem = document.createElement('div');
+                stem.className    = 'tl-tick__stem';
+                stem.style.top    = STEM_TOP_Y + 'px';
+                stem.style.height = (STEM_BOT_Y - STEM_TOP_Y) + 'px';
+
+                const dot = document.createElement('div');
+                dot.className      = 'tl-tick__dot';
+                dot.style.top      = (AXIS_Y - DOT_R) + 'px';
+                dot.style.width    = (DOT_R * 2) + 'px';
+                dot.style.height   = (DOT_R * 2) + 'px';
+                dot.style.background = color;
+                dot.style.boxShadow  = `0 0 0 2px ${color}44`;
+
+                const centered = xpx - LABEL_W_PX / 2;
+                const clamped  = Math.max(0, Math.min(centered, trackPx - LABEL_W_PX));
+                const lblOff   = clamped - xpx;
+
+                const topLbl = document.createElement('div');
+                topLbl.className       = 'tl-tick__top';
+                topLbl.title           = `${entry.colName}: ${_fmtVal(entry.colValue)}`;
+                topLbl.style.top       = LBL_TOP_Y + 'px';
+                topLbl.style.height    = LBL_TOP_H + 'px';
+                topLbl.style.left      = lblOff + 'px';
+                topLbl.style.transform = 'none';
+                const colSpan = document.createElement('span');
+                colSpan.className   = 'tl-tick__top-col';
+                colSpan.textContent = entry.colName;
+                const valSpan = document.createElement('span');
+                valSpan.className   = 'tl-tick__top-val';
+                valSpan.textContent = _fmtVal(entry.colValue);
+                topLbl.appendChild(colSpan);
+                topLbl.appendChild(valSpan);
+
+                const botLbl = document.createElement('div');
+                botLbl.className       = 'tl-tick__bottom';
+                botLbl.style.top       = BOT_LBL_Y + 'px';
+                botLbl.style.height    = (laneH - BOT_LBL_Y) + 'px';
+                botLbl.style.left      = lblOff + 'px';
+                botLbl.style.transform = 'none';
+                _refreshBotLabel(botLbl, entry);
+
+                tick.appendChild(topLbl);
+                tick.appendChild(stem);
+                tick.appendChild(dot);
+                tick.appendChild(botLbl);
+
+                tick.addEventListener('click', e => {
+                    e.stopPropagation();
+                    _showTickPeek(entry, tick, color, xpx, trackPx, trackData.isCurrent);
+                });
+
+                lane.appendChild(tick);
+            });
+
+            lane.addEventListener('click', () => _closeTickPeek());
+            inner.appendChild(lane);
+        });
+
+        scroller.appendChild(inner);
+        wrapper.appendChild(labelsCol);
+        wrapper.appendChild(scroller);
+        _visualEl.appendChild(wrapper);
     }
 
     // -------------------------------------------------------------------------
