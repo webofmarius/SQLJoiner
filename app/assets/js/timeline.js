@@ -213,10 +213,22 @@ const Timeline = (() => {
     // -------------------------------------------------------------------------
     function _render() {
         _updateCount();
+        // Preserve scroll position across full DOM rebuild
+        const _scrollerSel = '.tl-visual-scroller, .tl-multi-scroller';
+        const _prevScroller = _visualEl?.querySelector(_scrollerSel);
+        const _savedScrollLeft = _prevScroller?.scrollLeft || 0;
+        const _savedScrollTop  = _prevScroller?.scrollTop  || 0;
         if (_multiTrackMode) {
             _renderMultiTrack();
         } else {
             _renderVisual();
+        }
+        if (_savedScrollLeft || _savedScrollTop) {
+            const _newScroller = _visualEl?.querySelector(_scrollerSel);
+            if (_newScroller) {
+                _newScroller.scrollLeft = _savedScrollLeft;
+                _newScroller.scrollTop  = _savedScrollTop;
+            }
         }
         // Re-apply isolation after DOM rebuild
         if (_isolatedTickId) {
@@ -315,14 +327,6 @@ const Timeline = (() => {
         if (!entry.pinnedCols) entry.pinnedCols = [];
         botLblEl.innerHTML = '';
 
-        const mainLabel = entry.label || _trunc(entry.recName, 16);
-        if (mainLabel) {
-            const span = document.createElement('span');
-            span.className   = 'tl-bot-main';
-            span.textContent = mainLabel;
-            botLblEl.appendChild(span);
-        }
-
         if (entry.pinnedCols.length > 0) {
             const table = document.createElement('table');
             table.className = 'tl-bot-table';
@@ -394,7 +398,7 @@ const Timeline = (() => {
         const maxTopLv   = topLevels.length ? Math.max(...topLevels) : 0;
         const maxBotLv   = botLevels.length ? Math.max(...botLevels) : 0;
         // Reserve extra vertical room: top labels grow upward, bot labels downward
-        const extraTop   = maxTopLv * LEVEL_STEP;
+        const extraTop   = maxTopLv * LEVEL_STEP + 120; // extra headroom for dragging labels upward
         const extraBot   = maxBotLv * LEVEL_STEP;
         // Shift every fixed y-coordinate down by extraTop so pushed-up labels
         // still have room above y=0 in the track.
@@ -491,14 +495,21 @@ const Timeline = (() => {
             tick.style.left  = xpx + 'px';
             tick.style.color = color;
 
-            // Stem — extends from the bottom edge of the top label down to
-            // below the axis.  When the top label is pushed up (topLv > 0) the
-            // stem grows taller to stay connected to the dot.
-            const stemTopY = Y(VIS.stemTopY) - topLv * LEVEL_STEP;
+            // Top label position — collision stagger + any saved drag offset,
+            // clamped so the label bottom never crosses the axis.
+            const topLblH       = VIS.stemTopY - VIS.labelTop;           // 30 px
+            const topLblDefTop  = Y(VIS.labelTop) - topLv * LEVEL_STEP;
+            const topLblActTop  = Math.min(
+                topLblDefTop + (entry.topOffsetY || 0),
+                Y(VIS.axisY) - topLblH
+            );
+
+            // Stem — bottom edge of top label → below axis.
+            const stemActTop = topLblActTop + topLblH;
             const stem = document.createElement('div');
             stem.className = 'tl-tick__stem';
-            stem.style.top    = stemTopY + 'px';
-            stem.style.height = (Y(VIS.stemBotY) - stemTopY) + 'px';
+            stem.style.top    = stemActTop + 'px';
+            stem.style.height = Math.max(0, Y(VIS.stemBotY) - stemActTop) + 'px';
 
             // Dot
             const dot = document.createElement('div');
@@ -523,18 +534,17 @@ const Timeline = (() => {
             const lblOffsetPx  = clampedLeft - xpx;
             const lblTransform = 'none';   // disable the CSS translateX(-50%)
 
-            // Top label — col name on first line, value on second.
-            // Pushed upward for colliding labels (topLv > 0).
+            // Top label — col name / label on first line, value on second.
             const topLbl = document.createElement('div');
             topLbl.className = 'tl-tick__top';
             topLbl.title     = timeLabel;
-            topLbl.style.top       = (Y(VIS.labelTop) - topLv * LEVEL_STEP) + 'px';
-            topLbl.style.height    = (VIS.stemTopY - VIS.labelTop) + 'px';
+            topLbl.style.top       = topLblActTop + 'px';
+            topLbl.style.height    = topLblH + 'px';
             topLbl.style.left      = lblOffsetPx + 'px';
             topLbl.style.transform = lblTransform;
             const topColSpan = document.createElement('span');
             topColSpan.className   = 'tl-tick__top-col';
-            topColSpan.textContent = entry.colName;
+            topColSpan.textContent = entry.label || entry.colName;
             const topValSpan = document.createElement('span');
             topValSpan.className   = 'tl-tick__top-val';
             topValSpan.textContent = _fmtVal(entry.colValue);
@@ -542,9 +552,11 @@ const Timeline = (() => {
             topLbl.appendChild(topValSpan);
 
             // Bottom label — pushed downward for colliding labels (botLv > 0).
+            const botLblDefTop = Y(VIS.userLabelTop) + botLv * LEVEL_STEP;
+            const botLblActTop = Math.max(botLblDefTop + (entry.botOffsetY || 0), Y(VIS.axisY));
             const botLbl = document.createElement('div');
             botLbl.className       = 'tl-tick__bottom';
-            botLbl.style.top       = (Y(VIS.userLabelTop) + botLv * LEVEL_STEP) + 'px';
+            botLbl.style.top       = botLblActTop + 'px';
             botLbl.style.height    = VIS.userLabelH + 'px';
             botLbl.style.left      = lblOffsetPx + 'px';
             botLbl.style.transform = lblTransform;
@@ -554,6 +566,17 @@ const Timeline = (() => {
             tick.appendChild(stem);
             tick.appendChild(dot);
             tick.appendChild(botLbl);
+
+            _makeLabelDraggable(topLbl, stem, entry, {
+                isTop: true, offsetKey: 'topOffsetY',
+                defaultY: topLblDefTop, axisY: Y(VIS.axisY),
+                labelH: topLblH, stemBotY: Y(VIS.stemBotY),
+            });
+            _makeLabelDraggable(botLbl, null, entry, {
+                isTop: false, offsetKey: 'botOffsetY',
+                defaultY: botLblDefTop, axisY: Y(VIS.axisY),
+                labelH: 0, stemBotY: 0,
+            });
 
             tick.addEventListener('click', e => {
                 e.stopPropagation();
@@ -644,6 +667,8 @@ const Timeline = (() => {
         labelInput.addEventListener('change', () => {
             entry.label = labelInput.value;
             if (botLbl) _refreshBotLabel(botLbl, entry);
+            const topColEl = tickEl.querySelector('.tl-tick__top-col');
+            if (topColEl) topColEl.textContent = entry.label || entry.colName;
         });
         labelInput.addEventListener('keydown', e => {
             if (e.key === 'Escape') {
@@ -954,6 +979,63 @@ const Timeline = (() => {
             });
             _isolatedGroupId = groupId;
         }
+    }
+
+    // -------------------------------------------------------------------------
+    // Label drag — vertical-only repositioning for top/bottom tick labels
+    // -------------------------------------------------------------------------
+    /**
+     * Makes a tick label draggable vertically.
+     * @param {HTMLElement} labelEl  — .tl-tick__top or .tl-tick__bottom
+     * @param {HTMLElement} stemEl   — .tl-tick__stem (only used when isTop)
+     * @param {object}      entry    — timeline entry (offset is saved here)
+     * @param {object}      opts
+     *   isTop      {boolean} — true for top label, false for bottom
+     *   defaultY   {number}  — pixel top when no custom offset
+     *   axisY      {number}  — axis line y in the track (absolute px)
+     *   labelH     {number}  — label element height in px
+     *   stemBotY   {number}  — absolute y where stem ends (only for isTop)
+     *   offsetKey  {string}  — 'topOffsetY' or 'botOffsetY'
+     */
+    function _makeLabelDraggable(labelEl, stemEl, entry, opts) {
+        const { isTop, defaultY, axisY, labelH, stemBotY, offsetKey } = opts;
+        labelEl.style.cursor = 'ns-resize';
+
+        labelEl.addEventListener('mousedown', e => {
+            if (e.button !== 0) return;
+
+            let didDrag  = false;
+            const startY = e.clientY;
+            const startTop = parseFloat(labelEl.style.top) || defaultY;
+            const minTop   = isTop ? -9999         : axisY;
+            const maxTop   = isTop ? axisY - labelH : 9999;
+
+            const onMove = ev => {
+                ev.preventDefault();
+                const dy = ev.clientY - startY;
+                if (!didDrag && Math.abs(dy) > 2) didDrag = true;
+                if (!didDrag) return;
+                const newTop = Math.max(minTop, Math.min(maxTop, startTop + dy));
+                labelEl.style.top = newTop + 'px';
+                if (isTop && stemEl) {
+                    const st = newTop + labelH;
+                    stemEl.style.top    = st + 'px';
+                    stemEl.style.height = Math.max(0, stemBotY - st) + 'px';
+                }
+            };
+            const onUp = () => {
+                document.removeEventListener('mousemove', onMove);
+                document.removeEventListener('mouseup',   onUp);
+                if (didDrag) entry[offsetKey] = parseFloat(labelEl.style.top) - defaultY;
+            };
+            document.addEventListener('mousemove', onMove);
+            document.addEventListener('mouseup',   onUp);
+
+            // Suppress the tick's click (peek popup) if we actually dragged
+            labelEl.addEventListener('click', ev => {
+                if (didDrag) ev.stopPropagation();
+            }, { once: true });
+        });
     }
 
     // -------------------------------------------------------------------------
@@ -1749,8 +1831,7 @@ const Timeline = (() => {
             lane.querySelectorAll('.tl-tick').forEach(tickEl => {
                 const entry = _findEntryById(tickEl.dataset.id);
                 if (!entry) return;
-                const hasMain = !!(entry.label || entry.recName);
-                const lines   = (hasMain ? 1 : 0) + (entry.pinnedCols?.length || 0);
+                const lines = entry.pinnedCols?.length || 0;
                 if (lines > maxLines) maxLines = lines;
             });
             const h = Math.max(MIN_H, BOT_Y + maxLines * LINE_H + 24);
@@ -1846,8 +1927,7 @@ const Timeline = (() => {
             // Dynamic lane height: grows to fit the most-pinned entry in this track
             const maxLines = trackData.entries.length === 0 ? 0 :
                 Math.max(...trackData.entries.map(e => {
-                    const hasMain = !!(e.label || e.recName);
-                    return (hasMain ? 1 : 0) + (e.pinnedCols?.length || 0);
+                        return e.pinnedCols?.length || 0;
                 }));
             const laneH = Math.max(LANE_H_MIN, BOT_LBL_Y + maxLines * LINE_H_PX + 24);
 
@@ -1888,10 +1968,16 @@ const Timeline = (() => {
                 tick.style.left  = xpx + 'px';
                 tick.style.color = color;
 
+                const topLblDefTop = LBL_TOP_Y;
+                const topLblActTop = Math.min(
+                    topLblDefTop + (entry.topOffsetY || 0),
+                    AXIS_Y - LBL_TOP_H
+                );
+                const stemActTop = topLblActTop + LBL_TOP_H;
                 const stem = document.createElement('div');
                 stem.className    = 'tl-tick__stem';
-                stem.style.top    = STEM_TOP_Y + 'px';
-                stem.style.height = (STEM_BOT_Y - STEM_TOP_Y) + 'px';
+                stem.style.top    = stemActTop + 'px';
+                stem.style.height = Math.max(0, STEM_BOT_Y - stemActTop) + 'px';
 
                 const dot = document.createElement('div');
                 dot.className      = 'tl-tick__dot';
@@ -1908,22 +1994,24 @@ const Timeline = (() => {
                 const topLbl = document.createElement('div');
                 topLbl.className       = 'tl-tick__top';
                 topLbl.title           = `${entry.colName}: ${_fmtVal(entry.colValue)}`;
-                topLbl.style.top       = LBL_TOP_Y + 'px';
+                topLbl.style.top       = topLblActTop + 'px';
                 topLbl.style.height    = LBL_TOP_H + 'px';
                 topLbl.style.left      = lblOff + 'px';
                 topLbl.style.transform = 'none';
                 const colSpan = document.createElement('span');
                 colSpan.className   = 'tl-tick__top-col';
-                colSpan.textContent = entry.colName;
+                colSpan.textContent = entry.label || entry.colName;
                 const valSpan = document.createElement('span');
                 valSpan.className   = 'tl-tick__top-val';
                 valSpan.textContent = _fmtVal(entry.colValue);
                 topLbl.appendChild(colSpan);
                 topLbl.appendChild(valSpan);
 
+                const botLblDefTop = BOT_LBL_Y;
+                const botLblActTop = Math.max(botLblDefTop + (entry.botOffsetY || 0), AXIS_Y);
                 const botLbl = document.createElement('div');
                 botLbl.className       = 'tl-tick__bottom';
-                botLbl.style.top       = BOT_LBL_Y + 'px';
+                botLbl.style.top       = botLblActTop + 'px';
                 botLbl.style.height    = (laneH - BOT_LBL_Y) + 'px';
                 botLbl.style.left      = lblOff + 'px';
                 botLbl.style.transform = 'none';
@@ -1933,6 +2021,17 @@ const Timeline = (() => {
                 tick.appendChild(stem);
                 tick.appendChild(dot);
                 tick.appendChild(botLbl);
+
+                _makeLabelDraggable(topLbl, stem, entry, {
+                    isTop: true, offsetKey: 'topOffsetY',
+                    defaultY: topLblDefTop, axisY: AXIS_Y,
+                    labelH: LBL_TOP_H, stemBotY: STEM_BOT_Y,
+                });
+                _makeLabelDraggable(botLbl, null, entry, {
+                    isTop: false, offsetKey: 'botOffsetY',
+                    defaultY: botLblDefTop, axisY: AXIS_Y,
+                    labelH: 0, stemBotY: 0,
+                });
 
                 tick.addEventListener('click', e => {
                     e.stopPropagation();
