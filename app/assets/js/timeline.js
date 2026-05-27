@@ -281,6 +281,9 @@ const Timeline = (() => {
                 });
                 chkTd.appendChild(chk);
                 tr.appendChild(chkTd);
+
+                keyTd.style.cursor = 'pointer';
+                keyTd.addEventListener('click', () => chk.click());
             }
 
             tr.appendChild(keyTd);
@@ -294,20 +297,33 @@ const Timeline = (() => {
     /** Rebuild the bottom-label content for a tick based on label + pinnedCols. */
     function _refreshBotLabel(botLblEl, entry) {
         if (!entry.pinnedCols) entry.pinnedCols = [];
-        const lines = [];
-        const mainLabel = entry.label || _trunc(entry.recName, 16);
-        if (mainLabel) lines.push(mainLabel);
-        entry.pinnedCols.forEach(col => {
-            const v = entry.rowData[col];
-            lines.push(`${col}: ${_fmtVal(v)}`);
-        });
         botLblEl.innerHTML = '';
-        lines.forEach((line, i) => {
+
+        const mainLabel = entry.label || _trunc(entry.recName, 16);
+        if (mainLabel) {
             const span = document.createElement('span');
-            span.className   = i === 0 ? 'tl-bot-main' : 'tl-bot-extra';
-            span.textContent = line;
+            span.className   = 'tl-bot-main';
+            span.textContent = mainLabel;
             botLblEl.appendChild(span);
-        });
+        }
+
+        if (entry.pinnedCols.length > 0) {
+            const table = document.createElement('table');
+            table.className = 'tl-bot-table';
+            entry.pinnedCols.forEach(col => {
+                const tr    = document.createElement('tr');
+                const keyTd = document.createElement('td');
+                keyTd.className   = 'tl-bot-key';
+                keyTd.textContent = col + ':';
+                const valTd = document.createElement('td');
+                valTd.className   = 'tl-bot-val';
+                valTd.textContent = _fmtVal(entry.rowData[col]);
+                tr.appendChild(keyTd);
+                tr.appendChild(valTd);
+                table.appendChild(tr);
+            });
+            botLblEl.appendChild(table);
+        }
     }
 
     // =========================================================================

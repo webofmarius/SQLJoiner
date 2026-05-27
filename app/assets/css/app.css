@@ -8072,6 +8072,26 @@ body:has(#timeline-panel.is-maximized) #results-panel { z-index: 215; }
 .tl-bot-main  { font-weight: 500; color: inherit; }
 .tl-bot-extra { font-size: 11px; color: inherit; opacity: 0.85; }
 .tl-tick:hover .tl-bot-extra { opacity: 1; }
+.tl-bot-table {
+    border-collapse: collapse;
+    font-size: 11px;
+    white-space: nowrap;
+    text-align: left;
+    align-self: flex-start;
+    opacity: 0.85;
+    margin-top: 1px;
+}
+.tl-tick:hover .tl-bot-table { opacity: 1; }
+.tl-bot-key {
+    color: inherit;
+    opacity: 0.75;
+    padding-right: 6px;
+    vertical-align: top;
+}
+.tl-bot-val {
+    color: inherit;
+    vertical-align: top;
+}
 
 /* Tick floating peek popup */
 .tl-tick-peek {
