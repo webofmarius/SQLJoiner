@@ -31,8 +31,9 @@ const Timeline = (() => {
     // Floating per-entry color picker
     let _colorPickerEl = null;
 
-    // Right-click isolated tick id (null = nothing isolated)
-    let _isolatedTickId = null;
+    // Right-click isolation state (null = nothing isolated)
+    let _isolatedTickId  = null;
+    let _isolatedGroupId = null;
 
     // Multi-track mode (visual view only)
     let _multiTrackMode = false;
@@ -231,6 +232,21 @@ const Timeline = (() => {
             } else {
                 _isolatedTickId = null;
             }
+        } else if (_isolatedGroupId) {
+            const bracket = _visualEl?.querySelector(`.tl-group-bracket[data-group-id="${_isolatedGroupId}"]`);
+            if (bracket) {
+                const trackEl = bracket.closest('.tl-track');
+                if (trackEl) {
+                    trackEl.querySelectorAll('.tl-tick').forEach(t => {
+                        t.style.display = t.dataset.groupId === _isolatedGroupId ? '' : 'none';
+                    });
+                    trackEl.querySelectorAll('.tl-group-bracket').forEach(b => {
+                        b.style.display = b.dataset.groupId === _isolatedGroupId ? '' : 'none';
+                    });
+                }
+            } else {
+                _isolatedGroupId = null;
+            }
         }
     }
 
@@ -415,6 +431,7 @@ const Timeline = (() => {
             const maxPx = Math.max(...pxList);
             const bracket = document.createElement('div');
             bracket.className = 'tl-group-bracket';
+            bracket.dataset.groupId = g.id;
             bracket.style.top         = Y(VIS.bracketTop) + 'px';
             bracket.style.height      = VIS.bracketH + 'px';
             bracket.style.left        = minPx + 'px';
@@ -448,6 +465,14 @@ const Timeline = (() => {
             });
             bracket.appendChild(lbl);
             bracket.appendChild(colorDot);
+            bracket.addEventListener('mousedown', e => {
+                if (e.button === 2) e.stopPropagation();
+            });
+            bracket.addEventListener('contextmenu', e => {
+                e.preventDefault();
+                e.stopPropagation();
+                _toggleGroupIsolation(g.id, track);
+            });
             track.appendChild(bracket);
         });
 
@@ -461,7 +486,8 @@ const Timeline = (() => {
 
             const tick = document.createElement('div');
             tick.className  = 'tl-tick';
-            tick.dataset.id = entry.id;
+            tick.dataset.id      = entry.id;
+            tick.dataset.groupId = entry.groupId || '';
             tick.style.left  = xpx + 'px';
             tick.style.color = color;
 
@@ -887,22 +913,46 @@ const Timeline = (() => {
     }
 
     // -------------------------------------------------------------------------
-    // Tick isolation — right-click hides all other ticks in the same track
+    // Isolation helpers — right-click on a tick or group bracket
     // -------------------------------------------------------------------------
+    function _clearAllIsolation(trackEl) {
+        (trackEl ?? _visualEl)
+            ?.querySelectorAll('.tl-tick, .tl-group-bracket')
+            .forEach(el => { el.style.display = ''; });
+        _isolatedTickId  = null;
+        _isolatedGroupId = null;
+    }
+
     function _toggleTickIsolation(entryId, tickEl) {
         const trackEl = tickEl.closest('.tl-track');
         if (!trackEl) return;
         if (_isolatedTickId === entryId) {
-            trackEl.querySelectorAll('.tl-tick, .tl-group-bracket').forEach(t => { t.style.display = ''; });
-            _isolatedTickId = null;
+            _clearAllIsolation(trackEl);
         } else {
             // Clear any stale isolation across all tracks first
             _visualEl?.querySelectorAll('.tl-tick, .tl-group-bracket').forEach(t => { t.style.display = ''; });
+            _isolatedGroupId = null;
             trackEl.querySelectorAll('.tl-tick').forEach(t => {
                 t.style.display = t === tickEl ? '' : 'none';
             });
             trackEl.querySelectorAll('.tl-group-bracket').forEach(b => { b.style.display = 'none'; });
             _isolatedTickId = entryId;
+        }
+    }
+
+    function _toggleGroupIsolation(groupId, trackEl) {
+        if (_isolatedGroupId === groupId) {
+            _clearAllIsolation(trackEl);
+        } else {
+            _visualEl?.querySelectorAll('.tl-tick, .tl-group-bracket').forEach(el => { el.style.display = ''; });
+            _isolatedTickId = null;
+            trackEl.querySelectorAll('.tl-tick').forEach(t => {
+                t.style.display = t.dataset.groupId === groupId ? '' : 'none';
+            });
+            trackEl.querySelectorAll('.tl-group-bracket').forEach(b => {
+                b.style.display = b.dataset.groupId === groupId ? '' : 'none';
+            });
+            _isolatedGroupId = groupId;
         }
     }
 
@@ -1833,7 +1883,8 @@ const Timeline = (() => {
 
                 const tick = document.createElement('div');
                 tick.className  = 'tl-tick';
-                tick.dataset.id = entry.id;
+                tick.dataset.id      = entry.id;
+                tick.dataset.groupId = entry.groupId || '';
                 tick.style.left  = xpx + 'px';
                 tick.style.color = color;
 
