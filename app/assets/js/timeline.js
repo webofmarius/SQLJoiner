@@ -635,6 +635,7 @@ const Timeline = (() => {
         scroller.appendChild(track);
         _visualEl.appendChild(scroller);
 
+        _addPanHandler(scroller);
         // Close floating peek on outside click
         scroller.addEventListener('click', () => _closeTickPeek());
     }
@@ -1978,6 +1979,7 @@ const Timeline = (() => {
         wrapper.appendChild(labelsCol);
         wrapper.appendChild(scroller);
         _visualEl.appendChild(wrapper);
+        _addPanHandler(scroller);
     }
 
     // -------------------------------------------------------------------------
@@ -2243,6 +2245,41 @@ const Timeline = (() => {
         _panel.style.right     = 'auto';
         _panel.style.bottom    = 'auto';
         _panel.style.transform = 'none';
+    }
+
+    /**
+     * Adds right-click drag panning to a scrollable element.
+     * Mirrors the table-canvas pan behaviour: right-button drag scrolls,
+     * the context menu is suppressed for that interaction.
+     */
+    function _addPanHandler(el) {
+        el.addEventListener('mousedown', e => {
+            if (e.button !== 2) return;
+            e.preventDefault();
+
+            const startX  = e.clientX;
+            const startY  = e.clientY;
+            const scrollX = el.scrollLeft;
+            const scrollY = el.scrollTop;
+
+            el.style.cursor = 'grabbing';
+
+            const onMove = ev => {
+                el.scrollLeft = scrollX - (ev.clientX - startX);
+                el.scrollTop  = scrollY - (ev.clientY - startY);
+            };
+            const onUp = ev => {
+                if (ev.button !== 2) return;
+                el.style.cursor = '';
+                document.removeEventListener('mousemove', onMove);
+                document.removeEventListener('mouseup',   onUp);
+            };
+
+            document.addEventListener('mousemove', onMove);
+            document.addEventListener('mouseup',   onUp);
+            // Suppress the context menu that would fire after mouseup
+            el.addEventListener('contextmenu', ev => ev.preventDefault(), { once: true });
+        });
     }
 
     function _makeDraggable(handle, panel) {
