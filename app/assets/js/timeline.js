@@ -512,8 +512,8 @@ const Timeline = (() => {
             bracket.className = 'tl-group-bracket';
             bracket.style.top         = Y(VIS.bracketTop) + 'px';
             bracket.style.height      = VIS.bracketH + 'px';
-            bracket.style.left        = (minPx - 30) + 'px';
-            bracket.style.width       = (maxPx - minPx + 60) + 'px';
+            bracket.style.left        = minPx + 'px';
+            bracket.style.width       = Math.max(0, maxPx - minPx) + 'px';
             bracket.style.borderColor = g.color;
             const lbl = document.createElement('span');
             lbl.className   = 'tl-group-bracket__label';
