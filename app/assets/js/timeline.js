@@ -436,7 +436,10 @@ const Timeline = (() => {
             const bracket = document.createElement('div');
             bracket.className = 'tl-group-bracket';
             bracket.dataset.groupId = g.id;
-            bracket.style.top         = Y(VIS.bracketTop) + 'px';
+            const defaultBracketY = Y(VIS.bracketTop);
+            const bracketMaxY     = Y(VIS.axisY) - VIS.bracketH;
+            const bracketActY     = Math.max(0, Math.min(bracketMaxY, defaultBracketY + (g.bracketOffsetY || 0)));
+            bracket.style.top         = bracketActY + 'px';
             bracket.style.height      = VIS.bracketH + 'px';
             bracket.style.left        = minPx + 'px';
             bracket.style.width       = Math.max(0, maxPx - minPx) + 'px';
@@ -470,7 +473,27 @@ const Timeline = (() => {
             bracket.appendChild(lbl);
             bracket.appendChild(colorDot);
             bracket.addEventListener('mousedown', e => {
-                if (e.button === 2) e.stopPropagation();
+                if (e.button === 2) { e.stopPropagation(); return; }
+                if (e.button !== 0) return;
+                e.stopPropagation(); // prevent scroller pan
+                let didDrag = false;
+                const startY   = e.clientY;
+                const startTop = parseFloat(bracket.style.top) || defaultBracketY;
+                const onMove = ev => {
+                    ev.preventDefault();
+                    const dy = ev.clientY - startY;
+                    if (!didDrag && Math.abs(dy) > 2) didDrag = true;
+                    if (!didDrag) return;
+                    bracket.style.top = Math.max(0, Math.min(bracketMaxY, startTop + dy)) + 'px';
+                };
+                const onUp = () => {
+                    document.removeEventListener('mousemove', onMove);
+                    document.removeEventListener('mouseup',   onUp);
+                    if (didDrag) g.bracketOffsetY = parseFloat(bracket.style.top) - defaultBracketY;
+                };
+                document.addEventListener('mousemove', onMove);
+                document.addEventListener('mouseup',   onUp);
+                bracket.addEventListener('click', ev => { if (didDrag) ev.stopPropagation(); }, { once: true });
             });
             bracket.addEventListener('contextmenu', e => {
                 e.preventDefault();
