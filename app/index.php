@@ -412,9 +412,6 @@
         <div id="timeline-panel-header">
             <span class="tl-panel-title">Timeline <span id="timeline-count-badge" class="tl-count-badge">0</span></span>
             <span class="tl-header-sep"></span>
-            <button id="btn-timeline-view-list"   class="tl-view-btn is-active" title="List view">≡ List</button>
-            <button id="btn-timeline-view-visual" class="tl-view-btn"           title="Visual timeline">⊶ Visual</button>
-            <span class="tl-header-sep"></span>
             <button id="btn-timeline-add-group" class="tl-btn-sm" title="Create a named group to bracket entries">⊞ Group</button>
             <button id="btn-timeline-clear"     class="tl-btn-sm" title="Clear all timeline entries">⊗ Clear</button>
             <span class="tl-header-sep"></span>
@@ -431,8 +428,7 @@
             <button id="btn-timeline-close"    title="Close timeline panel">✕</button>
         </div>
         <div id="timeline-body">
-            <div id="timeline-list"></div>
-            <div id="timeline-visual" class="hidden"></div>
+            <div id="timeline-visual"></div>
         </div>
     </div>
 

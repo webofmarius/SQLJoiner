@@ -3101,6 +3101,7 @@ body.is-cut-mode * { cursor: crosshair !important; }
 }
 body.is-resizing-results #results-panel {
     transition: none;
+    z-index: 215;
 }
 
 #resizer-results {
@@ -3242,6 +3243,7 @@ body.is-resizing-results #resizer-results {
 #results-panel.is-tall {
     top: var(--topbar-height);
     height: auto;
+    z-index: 215;
 }
 
 #results-panel.is-fullscreen {
@@ -3251,7 +3253,7 @@ body.is-resizing-results #resizer-results {
     bottom: var(--bottombar-height);
     top: var(--topbar-height);
     height: auto;
-    z-index: 150;
+    z-index: 215;
 }
 
 #results-table {
@@ -7549,6 +7551,8 @@ textarea.sql-bd-active.scope-mode-on {
 #timeline-panel.is-maximized .tl-resize-handle { display: none; }
 #timeline-panel.is-maximized #timeline-panel-header,
 #timeline-panel.is-maximized #timeline-panel-header:active { cursor: default; }
+/* Results panel always wins over a maximized timeline */
+body:has(#timeline-panel.is-maximized) #results-panel { z-index: 215; }
 
 /* --- Body --- */
 #timeline-body {

@@ -19,8 +19,7 @@ const Timeline = (() => {
     // Module-level vars
     // -------------------------------------------------------------------------
     let _visible  = false;
-    let _viewMode = 'list';   // 'list' | 'visual'
-    let _panel, _listEl, _visualEl;
+    let _panel, _visualEl;
     let _idSeq = 0;
 
     // Floating peek popup in visual mode
@@ -102,17 +101,12 @@ const Timeline = (() => {
     // -------------------------------------------------------------------------
     function init() {
         _panel   = document.getElementById('timeline-panel');
-        _listEl  = document.getElementById('timeline-list');
         _visualEl= document.getElementById('timeline-visual');
 
         document.getElementById('btn-timeline-toggle')
             ?.addEventListener('click', toggle);
         document.getElementById('btn-timeline-close')
             ?.addEventListener('click', toggle);
-        document.getElementById('btn-timeline-view-list')
-            ?.addEventListener('click', () => _setView('list'));
-        document.getElementById('btn-timeline-view-visual')
-            ?.addEventListener('click', () => _setView('visual'));
         document.getElementById('btn-timeline-screenshot')
             ?.addEventListener('click', _screenshotVisual);
         document.getElementById('btn-timeline-maximize')
@@ -218,146 +212,28 @@ const Timeline = (() => {
     // -------------------------------------------------------------------------
     function _render() {
         _updateCount();
-        if (_viewMode === 'list') {
-            _renderList();
-        } else if (_multiTrackMode) {
+        if (_multiTrackMode) {
             _renderMultiTrack();
         } else {
             _renderVisual();
         }
         // Re-apply isolation after DOM rebuild
-        if (_isolatedTickId && _viewMode !== 'list') {
+        if (_isolatedTickId) {
             const isolated = _visualEl?.querySelector(`.tl-tick[data-id="${_isolatedTickId}"]`);
             if (isolated) {
-                isolated.closest('.tl-track')
-                    ?.querySelectorAll('.tl-tick')
-                    .forEach(t => { t.style.display = t === isolated ? '' : 'none'; });
+                const trackEl = isolated.closest('.tl-track');
+                if (trackEl) {
+                    trackEl.querySelectorAll('.tl-tick').forEach(t => {
+                        t.style.display = t === isolated ? '' : 'none';
+                    });
+                    trackEl.querySelectorAll('.tl-group-bracket').forEach(b => { b.style.display = 'none'; });
+                }
             } else {
                 _isolatedTickId = null;
             }
         }
     }
 
-    // =========================================================================
-    // LIST VIEW
-    // =========================================================================
-    function _renderList() {
-        const st = _st();
-        _listEl.classList.remove('hidden');
-        _visualEl.classList.add('hidden');
-        _listEl.innerHTML = '';
-
-        if (st.entries.length === 0) {
-            _listEl.innerHTML =
-                '<p class="tl-empty">No entries yet.<br>' +
-                'Cmd/Ctrl+click any result cell to pin it here.</p>';
-            return;
-        }
-
-        // Flat chronological list — groups only affect the visual view
-        _sortedEntries().forEach(e => _listEl.appendChild(_buildListEntry(e, st)));
-    }
-
-    function _buildListEntry(entry, st) {
-        const div   = document.createElement('div');
-        div.className  = 'tl-entry';
-        div.dataset.id = entry.id;
-
-        // Color bar — click to open color picker
-        const colorBar = document.createElement('div');
-        colorBar.className = 'tl-entry__color-bar';
-        colorBar.style.background = _entryColor(entry);
-        colorBar.title = 'Click to change color';
-        colorBar.addEventListener('click', e => {
-            e.stopPropagation();
-            _openColorPicker(colorBar, entry, () => {
-                colorBar.style.background = _entryColor(entry);
-            });
-        });
-        div.appendChild(colorBar);
-
-        // Info section
-        const info = document.createElement('div');
-        info.className = 'tl-entry__info';
-        info.innerHTML =
-            `<span class="tl-entry__rec${entry.recId ? ' tl-entry__rec--link' : ''}" title="${_esc(entry.recName)}">${_esc(_trunc(entry.recName, 20))}</span>` +
-            `<span class="tl-entry__kv">${_esc(entry.colName)}: <strong>${_esc(_trunc(_fmtVal(entry.colValue), 28))}</strong></span>`;
-        div.appendChild(info);
-        if (entry.recId) {
-            info.querySelector('.tl-entry__rec').addEventListener('click', e => {
-                e.stopPropagation();
-                Recordings.loadResultsById(entry.recId);
-            });
-        }
-
-        // Label input
-        const labelInput = document.createElement('input');
-        labelInput.className   = 'tl-entry__label';
-        labelInput.type        = 'text';
-        labelInput.placeholder = 'label…';
-        labelInput.value       = entry.label;
-        labelInput.title       = 'Annotation label';
-        labelInput.addEventListener('change', () => { entry.label = labelInput.value; });
-        div.appendChild(labelInput);
-
-        // Actions cluster
-        const actions = document.createElement('div');
-        actions.className = 'tl-entry__actions';
-
-        // Group selector (if groups exist)
-        if (st.groups.length) {
-            const sel = document.createElement('select');
-            sel.className = 'tl-entry__group-sel';
-            sel.title = 'Assign to group';
-            sel.innerHTML =
-                '<option value="">— group —</option>' +
-                st.groups.map(g =>
-                    `<option value="${_esc(g.id)}"${entry.groupId === g.id ? ' selected' : ''}>`+
-                    `${_esc(g.label)}</option>`
-                ).join('');
-            sel.addEventListener('change', () => {
-                entry.groupId = sel.value || null;
-                _render();
-            });
-            actions.appendChild(sel);
-        }
-
-        // Peek button
-        const peekBtn = document.createElement('button');
-        peekBtn.className   = 'tl-entry__peek-btn';
-        peekBtn.title       = 'Toggle full row detail';
-        peekBtn.textContent = '👁';
-        actions.appendChild(peekBtn);
-
-        // Delete button
-        const delBtn = document.createElement('button');
-        delBtn.className   = 'tl-entry__del-btn';
-        delBtn.title       = 'Remove from timeline';
-        delBtn.textContent = '✕';
-        delBtn.addEventListener('click', async () => {
-            if (!await Dialog.confirm('Remove this entry from the timeline?')) return;
-            _removeEntry(entry.id);
-        });
-        actions.appendChild(delBtn);
-
-        div.appendChild(actions);
-
-        // Peek panel (full row)
-        const peekPanel = document.createElement('div');
-        peekPanel.className = 'tl-entry__peek';
-        if (!entry.pinned) peekPanel.classList.add('hidden');
-        _fillPeekPanel(peekPanel, entry);
-        div.appendChild(peekPanel);
-
-        peekBtn.addEventListener('click', () => {
-            entry.pinned = !entry.pinned;
-            peekPanel.classList.toggle('hidden', !entry.pinned);
-            peekBtn.classList.toggle('is-active', entry.pinned);
-        });
-        if (entry.pinned) peekBtn.classList.add('is-active');
-
-        return div;
-    }
 
     /**
      * Fill a peek panel with the full row table.
@@ -456,7 +332,6 @@ const Timeline = (() => {
 
     function _renderVisual() {
         const st = _st();
-        _listEl.classList.add('hidden');
         _visualEl.classList.remove('hidden');
         _visualEl.innerHTML = '';
         _closeTickPeek();
@@ -1002,14 +877,15 @@ const Timeline = (() => {
         const trackEl = tickEl.closest('.tl-track');
         if (!trackEl) return;
         if (_isolatedTickId === entryId) {
-            trackEl.querySelectorAll('.tl-tick').forEach(t => { t.style.display = ''; });
+            trackEl.querySelectorAll('.tl-tick, .tl-group-bracket').forEach(t => { t.style.display = ''; });
             _isolatedTickId = null;
         } else {
             // Clear any stale isolation across all tracks first
-            _visualEl?.querySelectorAll('.tl-tick').forEach(t => { t.style.display = ''; });
+            _visualEl?.querySelectorAll('.tl-tick, .tl-group-bracket').forEach(t => { t.style.display = ''; });
             trackEl.querySelectorAll('.tl-tick').forEach(t => {
                 t.style.display = t === tickEl ? '' : 'none';
             });
+            trackEl.querySelectorAll('.tl-group-bracket').forEach(b => { b.style.display = 'none'; });
             _isolatedTickId = entryId;
         }
     }
@@ -1274,14 +1150,6 @@ const Timeline = (() => {
     // -------------------------------------------------------------------------
     // View toggle
     // -------------------------------------------------------------------------
-    function _setView(mode) {
-        _viewMode = mode;
-        document.getElementById('btn-timeline-view-list')
-            ?.classList.toggle('is-active', mode === 'list');
-        document.getElementById('btn-timeline-view-visual')
-            ?.classList.toggle('is-active', mode === 'visual');
-        _render();
-    }
 
     // -------------------------------------------------------------------------
     // Badge
@@ -1444,11 +1312,7 @@ const Timeline = (() => {
         _multiTrackMode = !_multiTrackMode;
         document.getElementById('btn-timeline-multi')
             ?.classList.toggle('is-active', _multiTrackMode);
-        if (_viewMode !== 'visual') {
-            _setView('visual');
-        } else {
-            _render();
-        }
+        _render();
     }
 
     function _openSavedPopup(btnEl) {
@@ -1466,7 +1330,7 @@ const Timeline = (() => {
 
         function _rerender() {
             _rebuild();
-            if (_multiTrackMode && _viewMode === 'visual') _render();
+            if (_multiTrackMode) _render();
         }
 
         function _buildTimelineRow(stl) {
@@ -1513,7 +1377,7 @@ const Timeline = (() => {
             chk.title     = 'Show as track in multi-track view';
             chk.addEventListener('change', () => {
                 stl.visible = chk.checked;
-                if (_multiTrackMode && _viewMode === 'visual') _render();
+                if (_multiTrackMode) _render();
             });
             row.appendChild(chk);
 
@@ -1560,7 +1424,7 @@ const Timeline = (() => {
                 stl.groups    = JSON.parse(JSON.stringify(cur.groups));
                 stl.timestamp = Date.now();
                 _rebuild();
-                if (_multiTrackMode && _viewMode === 'visual') _render();
+                if (_multiTrackMode) _render();
             });
             row.appendChild(replBtn);
 
@@ -1573,7 +1437,7 @@ const Timeline = (() => {
                 if (!name || !name.trim()) return;
                 stl.name = name.trim();
                 _rebuild();
-                if (_multiTrackMode && _viewMode === 'visual') _render();
+                if (_multiTrackMode) _render();
             });
             row.appendChild(renBtn);
 
@@ -1671,7 +1535,7 @@ const Timeline = (() => {
                 if (!name || !name.trim()) return;
                 grp.name = name.trim();
                 _rebuild();
-                if (_multiTrackMode && _viewMode === 'visual') _render();
+                if (_multiTrackMode) _render();
             });
             hdr.appendChild(renBtn);
 
@@ -1833,7 +1697,6 @@ const Timeline = (() => {
     }
 
     function _renderMultiTrack() {
-        _listEl.classList.add('hidden');
         _visualEl.classList.remove('hidden');
         _visualEl.innerHTML = '';
         _closeTickPeek();
@@ -2044,10 +1907,7 @@ const Timeline = (() => {
      * that html2canvas 1.4.1 cannot parse.
      */
     async function _screenshotVisual() {
-        if (_viewMode !== 'visual') {
-            App.notify?.('Switch to Visual view first.', 'warn');
-            return;
-        }
+
 
         const trackEl = _visualEl?.querySelector('.tl-track');
         if (!trackEl || _st().entries.length === 0) {
