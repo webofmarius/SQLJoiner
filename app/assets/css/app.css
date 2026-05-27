@@ -7765,7 +7765,7 @@ textarea.sql-bd-active.scope-mode-on {
     flex: 1;
     overflow-x: auto;
     overflow-y: hidden;
-    padding: 8px 12px;
+    padding: 20px 12px 8px;
 }
 .tl-track {
     position: relative;
@@ -7785,7 +7785,7 @@ textarea.sql-bd-active.scope-mode-on {
     flex-direction: column;
     border-right: 1px solid var(--border2);
     overflow: hidden;
-    padding-top: 10px;
+    padding-top: 22px;
 }
 .tl-multi-label {
     display: flex;
@@ -7805,7 +7805,7 @@ textarea.sql-bd-active.scope-mode-on {
     flex: 1;
     overflow-x: auto;
     overflow-y: auto;
-    padding-top: 10px;
+    padding-top: 22px;
 }
 .tl-multi-inner {
     display: flex;
@@ -8025,7 +8025,7 @@ textarea.sql-bd-active.scope-mode-on {
     text-align: center;
     font-size: 11px;
     line-height: 1.3;
-    color: var(--text-muted);
+    color: inherit;
     overflow: hidden;
     display: -webkit-box;
     -webkit-line-clamp: 3;
@@ -8041,7 +8041,7 @@ textarea.sql-bd-active.scope-mode-on {
 }
 .tl-tick__top-col {
     font-size: 11px;
-    color: var(--text-muted);
+    color: inherit;
     opacity: 0.7;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -8051,14 +8051,12 @@ textarea.sql-bd-active.scope-mode-on {
 .tl-tick__top-val {
     font-size: 11px;
     font-weight: 600;
-    color: var(--text-muted);
+    color: inherit;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
     max-width: 100%;
 }
-.tl-tick:hover .tl-tick__top-col,
-.tl-tick:hover .tl-tick__top-val { color: var(--text); }
 .tl-tick:hover .tl-tick__top-col { opacity: 1; }
 .tl-tick__bottom {
     display: flex;
@@ -8067,11 +8065,8 @@ textarea.sql-bd-active.scope-mode-on {
     gap: 1px;
     overflow: visible; /* pinned cols may exceed fixed height */
 }
-.tl-bot-main  { font-weight: 500; color: var(--text-muted); }
-.tl-bot-extra { font-size: 11px; color: var(--accent); opacity: 0.85; }
-.tl-tick:hover .tl-tick__top,
-.tl-tick:hover .tl-tick__bottom { color: var(--text); }
-.tl-tick:hover .tl-bot-main  { color: var(--text); }
+.tl-bot-main  { font-weight: 500; color: inherit; }
+.tl-bot-extra { font-size: 11px; color: inherit; opacity: 0.85; }
 .tl-tick:hover .tl-bot-extra { opacity: 1; }
 
 /* Tick floating peek popup */

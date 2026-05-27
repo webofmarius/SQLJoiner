@@ -557,7 +557,8 @@ const Timeline = (() => {
             const tick = document.createElement('div');
             tick.className  = 'tl-tick';
             tick.dataset.id = entry.id;
-            tick.style.left = xpx + 'px';
+            tick.style.left  = xpx + 'px';
+            tick.style.color = color;
 
             // Stem — extends from the bottom edge of the top label down to
             // below the axis.  When the top label is pushed up (topLv > 0) the
@@ -681,12 +682,13 @@ const Timeline = (() => {
                 const c = _entryColor(entry);
                 colorSwatch.style.background = c;
                 hdr.style.borderLeftColor    = c;
-                // Update dot + shadow on the tick in the track
+                // Update dot + shadow + text color on the tick in the track
                 const dotEl = tickEl.querySelector('.tl-tick__dot');
                 if (dotEl) {
                     dotEl.style.background = c;
                     dotEl.style.boxShadow  = `0 0 0 2px ${c}44`;
                 }
+                tickEl.style.color = c;
             });
         });
 
@@ -1766,7 +1768,7 @@ const Timeline = (() => {
     // Adjust multi-track lane heights in-place (without closing the peek popup).
     function _updateMultiLaneHeights() {
         const BOT_Y  = 68;   // must match BOT_LBL_Y in _renderMultiTrack
-        const LINE_H = 13;   // must match LINE_H_PX
+        const LINE_H = 16;   // must match LINE_H_PX
         const MIN_H  = 120;  // must match LANE_H_MIN
         const lanes  = _visualEl.querySelectorAll('.tl-multi-lane');
         const labels = _visualEl.querySelectorAll('.tl-multi-label');
@@ -1779,7 +1781,7 @@ const Timeline = (() => {
                 const lines   = (hasMain ? 1 : 0) + (entry.pinnedCols?.length || 0);
                 if (lines > maxLines) maxLines = lines;
             });
-            const h = Math.max(MIN_H, BOT_Y + maxLines * LINE_H + 16);
+            const h = Math.max(MIN_H, BOT_Y + maxLines * LINE_H + 24);
             lane.style.height = h + 'px';
             if (labels[i]) labels[i].style.height = h + 'px';
             lane.querySelectorAll('.tl-tick__bottom').forEach(b => {
@@ -1848,7 +1850,7 @@ const Timeline = (() => {
         const STEM_TOP_Y  = 34;   // = LBL_TOP_Y + LBL_TOP_H
         const STEM_BOT_Y  = 65;
         const BOT_LBL_Y   = 68;
-        const LINE_H_PX   = 13;   // approx height per pinned-col line
+        const LINE_H_PX   = 16;   // approx height per pinned-col line
         const LABEL_W_PX  = 100;
 
         const wrapper   = document.createElement('div');
@@ -1876,7 +1878,7 @@ const Timeline = (() => {
                     const hasMain = !!(e.label || e.recName);
                     return (hasMain ? 1 : 0) + (e.pinnedCols?.length || 0);
                 }));
-            const laneH = Math.max(LANE_H_MIN, BOT_LBL_Y + maxLines * LINE_H_PX + 16);
+            const laneH = Math.max(LANE_H_MIN, BOT_LBL_Y + maxLines * LINE_H_PX + 24);
 
             // Left label
             const labelEl = document.createElement('div');
@@ -1911,7 +1913,8 @@ const Timeline = (() => {
                 const tick = document.createElement('div');
                 tick.className  = 'tl-tick';
                 tick.dataset.id = entry.id;
-                tick.style.left = xpx + 'px';
+                tick.style.left  = xpx + 'px';
+                tick.style.color = color;
 
                 const stem = document.createElement('div');
                 stem.className    = 'tl-tick__stem';
