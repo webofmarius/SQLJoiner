@@ -8106,7 +8106,8 @@ textarea.sql-bd-active.scope-mode-on {
 }
 .tl-tick-peek__header:active { cursor: grabbing; }
 .tl-tick-peek__header button,
-.tl-tick-peek__header input  { cursor: auto; }
+.tl-tick-peek__header input,
+.tl-tick-peek__header select { cursor: auto; }
 .tl-tick-peek__hdr-main {
     display: flex;
     flex-direction: column;
@@ -8157,6 +8158,18 @@ textarea.sql-bd-active.scope-mode-on {
     outline: none;
 }
 .tl-tick-peek__label:focus { border-color: var(--accent); }
+.tl-tick-peek__group-sel {
+    width: 100%;
+    box-sizing: border-box;
+    font-size: 11px;
+    padding: 2px 4px;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    background: var(--surface);
+    color: var(--text);
+    cursor: pointer;
+}
+.tl-tick-peek__group-sel:focus { border-color: var(--accent); outline: none; }
 .tl-tick-peek__search-wrap {
     position: relative;
     display: flex;

@@ -317,6 +317,7 @@ const App = (() => {
      *   - Alt+2 -> Toggle Results Panel
      *   - Alt+3 -> Toggle Config Panel
      *   - Alt+4 -> Toggle Recordings popup
+     *   - Alt+5 -> Toggle Timeline
      */
     function _toggleMaximizePopup(boxEl) {
         const btn = boxEl.querySelector('.btn-popup-maximize');
@@ -666,6 +667,10 @@ const App = (() => {
                 } else if (e.code === 'Digit4' || e.code === 'Numpad4') {
                     e.preventDefault();
                     if (typeof Recordings !== 'undefined') Recordings.toggle();
+
+                } else if (e.code === 'Digit5' || e.code === 'Numpad5') {
+                    e.preventDefault();
+                    if (typeof Timeline !== 'undefined') Timeline.toggle();
 
                 } else if (e.code === 'KeyF') {
                     e.preventDefault();

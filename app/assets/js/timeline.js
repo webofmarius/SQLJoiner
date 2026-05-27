@@ -768,6 +768,60 @@ const Timeline = (() => {
         hdrMain.className = 'tl-tick-peek__hdr-main';
         hdrMain.appendChild(recSpan);
         hdrMain.appendChild(labelInput);
+
+        // Group selector — only shown when groups exist
+        const peekSt = _st();
+        if (peekSt.groups.length) {
+            const groupSel = document.createElement('select');
+            groupSel.className = 'tl-tick-peek__group-sel';
+            groupSel.title = 'Assign to group';
+            const noneOpt = document.createElement('option');
+            noneOpt.value = '';
+            noneOpt.textContent = '— no group —';
+            groupSel.appendChild(noneOpt);
+            peekSt.groups.forEach(g => {
+                const opt = document.createElement('option');
+                opt.value = g.id;
+                opt.textContent = g.label;
+                if (entry.groupId === g.id) opt.selected = true;
+                groupSel.appendChild(opt);
+            });
+            groupSel.addEventListener('change', () => {
+                entry.groupId = groupSel.value || null;
+
+                // Save current popup position (user may have dragged it)
+                const savedPeekLeft = _tickPeekEl?.style.left || null;
+                const savedPeekTop  = _tickPeekEl?.style.top  || null;
+
+                // Save scroll so the canvas doesn't jump
+                const scrollerEl      = _visualEl.querySelector('.tl-visual-scroller, .tl-multi-scroller');
+                const savedScrollLeft = scrollerEl?.scrollLeft || 0;
+                const savedScrollTop  = scrollerEl?.scrollTop  || 0;
+
+                _render(); // rebuilds canvas, closes peek
+
+                requestAnimationFrame(() => {
+                    // Restore scroll
+                    const newScroller = _visualEl.querySelector('.tl-visual-scroller, .tl-multi-scroller');
+                    if (newScroller) {
+                        newScroller.scrollLeft = savedScrollLeft;
+                        newScroller.scrollTop  = savedScrollTop;
+                    }
+                    // Reopen peek on the same entry
+                    const newTick = _visualEl.querySelector(`.tl-tick[data-id="${entry.id}"]`);
+                    if (!newTick) return;
+                    const xpx2     = parseFloat(newTick.style.left) || 0;
+                    const trackEl2 = newTick.closest('.tl-track');
+                    const trackPx2 = parseFloat(trackEl2?.style.width) || 600;
+                    _showTickPeek(entry, newTick, _entryColor(entry), xpx2, trackPx2, deletable);
+                    // Restore dragged position — _showTickPeek sets a default; override it
+                    if (_tickPeekEl && savedPeekLeft) _tickPeekEl.style.left = savedPeekLeft;
+                    if (_tickPeekEl && savedPeekTop)  _tickPeekEl.style.top  = savedPeekTop;
+                });
+            });
+            hdrMain.appendChild(groupSel);
+        }
+
         hdrMain.appendChild(searchWrap);
 
         hdr.appendChild(colorSwatch);
@@ -865,7 +919,7 @@ const Timeline = (() => {
 
         hdr.addEventListener('mousedown', e => {
             if (e.button !== 0) return;
-            if (e.target.closest('button, input')) return;
+            if (e.target.closest('button, input, select')) return;
             _dragging = true;
             _dragX    = e.clientX;
             _dragY    = e.clientY;
@@ -887,6 +941,15 @@ const Timeline = (() => {
         _tickPeekEl = peek;
         peek.style.visibility = 'hidden';
         trackEl.appendChild(peek);
+
+        // Clamp height so the popup fits within the visible timeline panel.
+        // The popup sits at top:0 inside the track, so its top edge in the
+        // viewport equals the track's top edge.
+        const panelBottom = _panel.getBoundingClientRect().bottom;
+        const peekTop     = peek.getBoundingClientRect().top;
+        const availH      = panelBottom - peekTop - 8;  // 8 px bottom margin
+        if (availH > 80) peek.style.maxHeight = availH + 'px';
+
         // Measure actual rendered width then position
         const peekW = peek.offsetWidth;
         if (onRight) {

@@ -969,6 +969,8 @@
                     <li><kbd>Alt</kbd> + <kbd>1</kbd> <span>Toggle Table Browser</span></li>
                     <li><kbd>Alt</kbd> + <kbd>2</kbd> <span>Toggle Config Panel</span></li>
                     <li><kbd>Alt</kbd> + <kbd>3</kbd> <span>Toggle Results Panel</span></li>
+                    <li><kbd>Alt</kbd> + <kbd>4</kbd> <span>Toggle Recordings popup</span></li>
+                    <li><kbd>Alt</kbd> + <kbd>5</kbd> <span>Toggle Timeline</span></li>
                     <li><kbd>Alt</kbd> + <kbd>F</kbd> <span>Focus canvas table search</span></li>
                     <li><kbd>Alt</kbd> + <kbd>N</kbd> <span>Open Notes</span></li>
                     <li><kbd>Alt</kbd> + <kbd>C</kbd> <span>Open Load CSV dialog</span></li>
