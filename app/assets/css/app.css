@@ -7503,6 +7503,27 @@ textarea.sql-bd-active.scope-mode-on {
     white-space: nowrap;
 }
 .tl-btn-sm:hover { border-color: var(--accent); color: var(--accent); }
+.tl-zoom-btn {
+    font-size: 14px;
+    line-height: 1;
+    width: 22px;
+    padding: 1px 0;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    cursor: pointer;
+    text-align: center;
+    flex-shrink: 0;
+}
+.tl-zoom-btn:hover { border-color: var(--accent); color: var(--accent); }
+.tl-zoom-level {
+    font-size: 11px;
+    color: var(--text-muted);
+    min-width: 32px;
+    text-align: center;
+    user-select: none;
+}
 /* maximize + close inherit the global button style — same look as Calculus */
 #btn-timeline-maximize { margin-left: auto; }
 #btn-timeline-close    { /* no extra overrides needed */ }
@@ -7698,25 +7719,26 @@ textarea.sql-bd-active.scope-mode-on {
 .tl-peek-table {
     border-collapse: collapse;
     font-size: 11px;
-    width: 100%;
 }
 .tl-peek-key {
-    padding: 2px 8px 2px 0;
+    padding: 2px 15px 2px 0;
     color: var(--text-muted);
     white-space: nowrap;
     vertical-align: top;
     font-weight: 500;
-    min-width: 80px;
 }
 .tl-peek-val {
-    padding: 2px 4px;
+    padding: 2px 4px 2px 0;
     color: var(--text);
-    word-break: break-all;
+    white-space: nowrap;
+    max-width: 380px;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 .tl-peek-val.is-null { color: var(--text-muted); font-style: italic; }
 .tl-peek-chk-td {
-    padding: 2px 4px;
-    text-align: right;
+    padding: 2px 6px 2px 0;
+    text-align: left;
     vertical-align: middle;
 }
 .tl-peek-chk { cursor: pointer; accent-color: var(--accent); }
@@ -7759,6 +7781,7 @@ textarea.sql-bd-active.scope-mode-on {
 .tl-multi-label {
     display: flex;
     align-items: center;
+    flex-shrink: 0;
     padding: 0 8px;
     font-size: 11px;
     font-weight: 600;
@@ -7772,7 +7795,7 @@ textarea.sql-bd-active.scope-mode-on {
 .tl-multi-scroller {
     flex: 1;
     overflow-x: auto;
-    overflow-y: hidden;
+    overflow-y: auto;
     padding-top: 10px;
 }
 .tl-multi-inner {
@@ -7930,7 +7953,7 @@ textarea.sql-bd-active.scope-mode-on {
     top: -18px;
     left: 50%;
     transform: translateX(-50%);
-    font-size: 10px;
+    font-size: 11px;
     font-weight: 600;
     white-space: nowrap;
     pointer-events: all;
@@ -7972,7 +7995,7 @@ textarea.sql-bd-active.scope-mode-on {
     left: 50%;
     transform: translateX(-50%);
     text-align: center;
-    font-size: 9px;
+    font-size: 11px;
     line-height: 1.3;
     color: var(--text-muted);
     overflow: hidden;
@@ -7989,7 +8012,7 @@ textarea.sql-bd-active.scope-mode-on {
     gap: 1px;
 }
 .tl-tick__top-col {
-    font-size: 8px;
+    font-size: 11px;
     color: var(--text-muted);
     opacity: 0.7;
     overflow: hidden;
@@ -7998,7 +8021,7 @@ textarea.sql-bd-active.scope-mode-on {
     max-width: 100%;
 }
 .tl-tick__top-val {
-    font-size: 9px;
+    font-size: 11px;
     font-weight: 600;
     color: var(--text-muted);
     overflow: hidden;
@@ -8017,7 +8040,7 @@ textarea.sql-bd-active.scope-mode-on {
     overflow: visible; /* pinned cols may exceed fixed height */
 }
 .tl-bot-main  { font-weight: 500; color: var(--text-muted); }
-.tl-bot-extra { font-size: 8px; color: var(--accent); opacity: 0.85; }
+.tl-bot-extra { font-size: 11px; color: var(--accent); opacity: 0.85; }
 .tl-tick:hover .tl-tick__top,
 .tl-tick:hover .tl-tick__bottom { color: var(--text); }
 .tl-tick:hover .tl-bot-main  { color: var(--text); }
@@ -8028,7 +8051,12 @@ textarea.sql-bd-active.scope-mode-on {
     position: absolute;
     top: 0;
     z-index: 500;
-    width: 280px;
+    width: max-content;
+    min-width: 240px;
+    max-width: 600px;
+    max-height: 70vh;
+    display: flex;
+    flex-direction: column;
     /* Explicit background so the popup is always opaque regardless of parent */
     background-color: var(--surface, #1e2128);
     background: var(--surface, #1e2128);
@@ -8040,15 +8068,25 @@ textarea.sql-bd-active.scope-mode-on {
 }
 .tl-tick-peek__header {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 5px;
     padding: 5px 8px;
     background: var(--surface2);
     border-bottom: 1px solid var(--border);
     border-left: 3px solid;     /* color set inline */
+    cursor: grab;
+}
+.tl-tick-peek__header:active { cursor: grabbing; }
+.tl-tick-peek__header button,
+.tl-tick-peek__header input  { cursor: auto; }
+.tl-tick-peek__hdr-main {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
+    gap: 4px;
 }
 .tl-tick-peek__rec {
-    flex: 1;
     font-weight: 600;
     color: var(--text);
     font-size: 10px;
@@ -8056,14 +8094,22 @@ textarea.sql-bd-active.scope-mode-on {
     overflow: hidden;
     text-overflow: ellipsis;
 }
+.tl-tick-peek__footer {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 8px;
+    border-top: 1px solid var(--border);
+    background: var(--surface2);
+}
 .tl-tick-peek__load-rec {
     flex-shrink: 0;
     background: transparent;
     border: 1px solid var(--border2);
     border-radius: 3px;
     cursor: pointer;
-    font-size: 10px;
-    padding: 1px 6px;
+    font-size: 11px;
+    padding: 3px 10px;
     color: var(--text-muted);
     white-space: nowrap;
 }
@@ -8072,7 +8118,8 @@ textarea.sql-bd-active.scope-mode-on {
     color: var(--text);
 }
 .tl-tick-peek__label {
-    flex: 1.5;
+    width: 100%;
+    box-sizing: border-box;
     font-size: 11px;
     padding: 2px 5px;
     border: 1px solid var(--border);
@@ -8080,9 +8127,28 @@ textarea.sql-bd-active.scope-mode-on {
     background: var(--surface);
     color: var(--text);
     outline: none;
-    min-width: 0;
 }
 .tl-tick-peek__label:focus { border-color: var(--accent); }
+.tl-tick-peek__search-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+    width: 100%;
+}
+.tl-tick-peek__search {
+    flex: 1;
+    width: 100%;
+    box-sizing: border-box;
+    font-size: 11px;
+    padding: 2px 20px 2px 5px;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    background: var(--surface);
+    color: var(--text);
+    outline: none;
+}
+.tl-tick-peek__search:focus { border-color: var(--accent); }
+.tl-tick-peek__search::placeholder { color: var(--text-muted); font-style: italic; }
 .tl-tick-peek__close {
     font-size: 11px;
     padding: 2px 4px;
@@ -8095,23 +8161,27 @@ textarea.sql-bd-active.scope-mode-on {
 }
 .tl-tick-peek__close:hover { background: var(--surface3); color: var(--text); }
 .tl-peek-panel {
-    max-height: 220px;
+    flex: 1;
     overflow-y: auto;
     padding: 4px 8px;
+    min-height: 40px;
 }
 .tl-tick-peek__del {
-    display: block;
-    width: 100%;
-    padding: 5px;
-    border: none;
-    border-top: 1px solid var(--border);
+    margin-left: auto;
+    flex-shrink: 0;
+    padding: 3px 10px;
+    border: 1px solid transparent;
+    border-radius: 3px;
     background: none;
     color: var(--danger, #f87171);
     font-size: 11px;
     cursor: pointer;
-    text-align: left;
+    white-space: nowrap;
 }
-.tl-tick-peek__del:hover { background: rgba(248,113,113,0.08); }
+.tl-tick-peek__del:hover {
+    border-color: var(--danger, #f87171);
+    background: rgba(248,113,113,0.08);
+}
 
 /* ── Group management popup ─────────────────────────────────────────────── */
 .tl-group-popup {

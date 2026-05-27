@@ -35,8 +35,13 @@ const Timeline = (() => {
     // Multi-track mode (visual view only)
     let _multiTrackMode = false;
 
+    // Zoom level for visual / multi-track canvas (1.0 = 100%)
+    let _zoomLevel = 1.0;
+    const _ZOOM_STEPS = [0.25, 0.33, 0.5, 0.67, 0.75, 0.9, 1.0, 1.1, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0, 4.0, 5.0, 8.0];
+
     // Saved timelines popup
-    let _savedPopup = null;
+    let _savedPopup             = null;
+    let _savedPopupOutsideClick = null;
     const _ENTRY_PALETTE = [
         '#f87171','#fb923c','#fbbf24','#a3e635',
         '#34d399','#22d3ee','#60a5fa','#818cf8',
@@ -125,6 +130,10 @@ const Timeline = (() => {
         });
         document.getElementById('btn-timeline-multi')
             ?.addEventListener('click', _toggleMultiTrack);
+        document.getElementById('btn-timeline-zoom-out')
+            ?.addEventListener('click', () => _stepZoom(-1));
+        document.getElementById('btn-timeline-zoom-in')
+            ?.addEventListener('click', () => _stepZoom(+1));
 
         _makeDraggable(document.getElementById('timeline-panel-header'), _panel);
         _makeResizable(_panel);
@@ -175,6 +184,21 @@ const Timeline = (() => {
             `Timeline ← ${entry.recName} · ${colName}: ${short}`,
             'info'
         );
+    }
+
+    // -------------------------------------------------------------------------
+    // -------------------------------------------------------------------------
+    // Zoom
+    // -------------------------------------------------------------------------
+    function _stepZoom(dir) {
+        const cur = _ZOOM_STEPS.indexOf(
+            _ZOOM_STEPS.reduce((prev, z) => Math.abs(z - _zoomLevel) < Math.abs(prev - _zoomLevel) ? z : prev)
+        );
+        const next = Math.max(0, Math.min(_ZOOM_STEPS.length - 1, cur + dir));
+        _zoomLevel = _ZOOM_STEPS[next];
+        const lbl = document.getElementById('tl-zoom-level');
+        if (lbl) lbl.textContent = Math.round(_zoomLevel * 100) + '%';
+        if (_visible) _render();
     }
 
     // -------------------------------------------------------------------------
@@ -344,9 +368,6 @@ const Timeline = (() => {
             valTd.className   = 'tl-peek-val' + (isNull ? ' is-null' : '');
             valTd.textContent = _fmtVal(v);
 
-            tr.appendChild(keyTd);
-            tr.appendChild(valTd);
-
             // Checkbox column — only shown in visual peek popup (botLblEl provided)
             if (botLblEl) {
                 const chkTd = document.createElement('td');
@@ -371,6 +392,9 @@ const Timeline = (() => {
                 chkTd.appendChild(chk);
                 tr.appendChild(chkTd);
             }
+
+            tr.appendChild(keyTd);
+            tr.appendChild(valTd);
 
             table.appendChild(tr);
         });
@@ -432,7 +456,7 @@ const Timeline = (() => {
 
         const sorted  = _sortedEntries();
         const n       = sorted.length;
-        const trackPx = Math.max(600, n * VIS.tickMinPx + 100);
+        const trackPx = Math.max(600, n * VIS.tickMinPx + 100) * _zoomLevel;
 
         // Horizontal layout helpers
         const pad  = VIS.padPct;
@@ -619,18 +643,10 @@ const Timeline = (() => {
         peek.addEventListener('click',     e => e.stopPropagation());
         peek.addEventListener('mousedown', e => e.stopPropagation());
 
-        // Position popup with track-relative coordinates.
-        // Width is fixed at 280px (see CSS); leave 14px gap from the tick centre.
-        const PEEK_W  = 280;
+        // Position is finalised after appending so we can measure the actual
+        // rendered width (which is now content-driven, not fixed).
         const onRight = xpx < trackPx * 0.65;
-        peek.style.top  = '0px';
-        if (onRight) {
-            peek.style.left  = (xpx + 14) + 'px';
-            peek.style.right = 'auto';
-        } else {
-            peek.style.left  = (xpx - PEEK_W - 14) + 'px';
-            peek.style.right = 'auto';
-        }
+        peek.style.top = '0px';
 
         // Always resolve current color (may have been changed since render)
         const resolvedColor = _entryColor(entry);
@@ -672,60 +688,75 @@ const Timeline = (() => {
             entry.label = labelInput.value;
             if (botLbl) _refreshBotLabel(botLbl, entry);
         });
+        labelInput.addEventListener('keydown', e => {
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                e.stopPropagation();
+                labelInput.blur();
+            }
+        });
 
         const closeBtn = document.createElement('button');
         closeBtn.className   = 'tl-tick-peek__close';
         closeBtn.textContent = '✕';
         closeBtn.addEventListener('click', () => _closeTickPeek());
 
-        hdr.appendChild(colorSwatch);
-        hdr.appendChild(recSpan);
-        if (entry.recId) {
-            const loadRecBtn = document.createElement('button');
-            loadRecBtn.className   = 'tl-tick-peek__load-rec';
-            loadRecBtn.textContent = 'Results';
-            loadRecBtn.title       = 'Load this recording\'s results';
-            loadRecBtn.addEventListener('click', () => {
-                Recordings.loadResultsById(entry.recId);
-                requestAnimationFrame(() => {
-                    const tbody = document.querySelector('#results-table tbody');
-                    const thead = document.querySelector('#results-table thead');
-                    if (!tbody || !thead) return;
+        const searchWrap = document.createElement('div');
+        searchWrap.className = 'tl-tick-peek__search-wrap';
 
-                    // Build bare-column-name → th-index map
-                    const colIdxMap = {};
-                    Array.from(thead.querySelectorAll('th')).forEach((th, i) => {
-                        const key  = th.dataset.colKey || '';
-                        const bare = key.includes('.') ? key.split('.')[1] : key;
-                        if (bare) colIdxMap[bare] = i;
-                        if (key)  colIdxMap[key]  = i;
-                    });
+        const searchInput = document.createElement('input');
+        searchInput.type        = 'text';
+        searchInput.className   = 'tl-tick-peek__search';
+        searchInput.placeholder = 'filter columns…';
+        searchInput.setAttribute('autocomplete', 'off');
 
-                    // Find first row whose cell values all match entry.rowData
-                    const rdEntries = Object.entries(entry.rowData || {});
-                    let matchTr = null;
-                    for (const tr of tbody.querySelectorAll('tr')) {
-                        const tds = tr.querySelectorAll('td');
-                        let ok = rdEntries.length > 0;
-                        for (const [col, val] of rdEntries) {
-                            const bare = col.includes('.') ? col.split('.')[1] : col;
-                            const idx  = colIdxMap[col] ?? colIdxMap[bare];
-                            if (idx == null) continue;
-                            const cell = tds[idx];
-                            if (!cell) { ok = false; break; }
-                            const raw = cell.dataset.raw ?? cell.textContent ?? null;
-                            if (String(raw) !== String(val == null ? '' : val)) { ok = false; break; }
-                        }
-                        if (ok) { matchTr = tr; break; }
-                    }
+        const searchClearBtn = document.createElement('button');
+        searchClearBtn.type          = 'button';
+        searchClearBtn.className     = 'col-search-clear';
+        searchClearBtn.textContent   = '✕';
+        searchClearBtn.title         = 'Clear filter';
+        searchClearBtn.style.display = 'none';
 
-                    if (matchTr) matchTr.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    Results.focusColumn(entry.colName);
-                });
+        const _applyColFilter = () => {
+            const term = searchInput.value.toLowerCase();
+            panel.querySelectorAll('tr').forEach(tr => {
+                const keyCell = tr.querySelector('.tl-peek-key');
+                const match   = !term || (keyCell?.textContent.toLowerCase().includes(term));
+                tr.style.display = match ? '' : 'none';
             });
-            hdr.appendChild(loadRecBtn);
-        }
-        hdr.appendChild(labelInput);
+        };
+
+        searchClearBtn.addEventListener('click', () => {
+            searchInput.value            = '';
+            searchClearBtn.style.display = 'none';
+            _applyColFilter();
+            searchInput.focus();
+        });
+        searchInput.addEventListener('keydown', e => {
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                e.stopPropagation();
+                searchInput.value            = '';
+                searchClearBtn.style.display = 'none';
+                _applyColFilter();
+            }
+        });
+        searchInput.addEventListener('input', () => {
+            _applyColFilter();
+            searchClearBtn.style.display = searchInput.value ? '' : 'none';
+        });
+
+        searchWrap.appendChild(searchInput);
+        searchWrap.appendChild(searchClearBtn);
+
+        const hdrMain = document.createElement('div');
+        hdrMain.className = 'tl-tick-peek__hdr-main';
+        hdrMain.appendChild(recSpan);
+        hdrMain.appendChild(labelInput);
+        hdrMain.appendChild(searchWrap);
+
+        hdr.appendChild(colorSwatch);
+        hdr.appendChild(hdrMain);
         hdr.appendChild(closeBtn);
         peek.appendChild(hdr);
 
@@ -734,25 +765,131 @@ const Timeline = (() => {
         _fillPeekPanel(panel, entry, botLbl); // pass botLbl so checkboxes can update it
         peek.appendChild(panel);
 
-        // Delete button (hidden for read-only saved-timeline tracks)
-        if (deletable) {
-            const delBtn = document.createElement('button');
-            delBtn.className   = 'tl-tick-peek__del';
-            delBtn.textContent = '✕ Remove from timeline';
-            delBtn.addEventListener('click', async () => {
-                if (!await Dialog.confirm('Remove this entry from the timeline?')) return;
-                _closeTickPeek();
-                _removeEntry(entry.id);
-            });
-            peek.appendChild(delBtn);
+        // Bottom bar — Results (if recording) + Delete (if deletable)
+        const hasFooterItems = entry.recId || deletable;
+        if (hasFooterItems) {
+            const footer = document.createElement('div');
+            footer.className = 'tl-tick-peek__footer';
+
+            if (entry.recId) {
+                const loadRecBtn = document.createElement('button');
+                loadRecBtn.className   = 'tl-tick-peek__load-rec';
+                loadRecBtn.textContent = 'Results';
+                loadRecBtn.title       = 'Load this recording\'s results';
+                loadRecBtn.addEventListener('click', () => {
+                    Recordings.loadResultsById(entry.recId);
+                    requestAnimationFrame(() => {
+                        const tbody = document.querySelector('#results-table tbody');
+                        const thead = document.querySelector('#results-table thead');
+                        if (!tbody || !thead) return;
+
+                        // Build bare-column-name → th-index map
+                        const colIdxMap = {};
+                        Array.from(thead.querySelectorAll('th')).forEach((th, i) => {
+                            const key  = th.dataset.colKey || '';
+                            const bare = key.includes('.') ? key.split('.')[1] : key;
+                            if (bare) colIdxMap[bare] = i;
+                            if (key)  colIdxMap[key]  = i;
+                        });
+
+                        // Find first row whose cell values all match entry.rowData
+                        const rdEntries = Object.entries(entry.rowData || {});
+                        let matchTr = null;
+                        for (const tr of tbody.querySelectorAll('tr')) {
+                            const tds = tr.querySelectorAll('td');
+                            let ok = rdEntries.length > 0;
+                            for (const [col, val] of rdEntries) {
+                                const bare = col.includes('.') ? col.split('.')[1] : col;
+                                const idx  = colIdxMap[col] ?? colIdxMap[bare];
+                                if (idx == null) continue;
+                                const cell = tds[idx];
+                                if (!cell) { ok = false; break; }
+                                const raw = cell.dataset.raw ?? cell.textContent ?? null;
+                                if (String(raw) !== String(val == null ? '' : val)) { ok = false; break; }
+                            }
+                            if (ok) { matchTr = tr; break; }
+                        }
+
+                        if (matchTr) matchTr.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        Results.focusColumn(entry.colName);
+                    });
+                });
+                footer.appendChild(loadRecBtn);
+            }
+
+            if (deletable) {
+                const delBtn = document.createElement('button');
+                delBtn.className   = 'tl-tick-peek__del';
+                delBtn.textContent = '🗑 Delete';
+                delBtn.addEventListener('click', async () => {
+                    if (!await Dialog.confirm('Remove this entry from the timeline?')) return;
+                    _closeTickPeek();
+                    _removeEntry(entry.id);
+                });
+                footer.appendChild(delBtn);
+            }
+
+            peek.appendChild(footer);
         }
 
+        // ── Drag to reposition ──────────────────────────────────────────────
+        let _dragging = false, _dragX = 0, _dragY = 0, _origL = 0, _origT = 0;
+
+        const _onDragMove = e => {
+            if (!_dragging) return;
+            peek.style.left = (_origL + e.clientX - _dragX) + 'px';
+            peek.style.top  = (_origT + e.clientY - _dragY) + 'px';
+        };
+        const _onDragUp = () => {
+            if (!_dragging) return;
+            _dragging = false;
+            hdr.style.cursor = 'grab';
+            document.removeEventListener('mousemove', _onDragMove);
+            document.removeEventListener('mouseup',   _onDragUp);
+        };
+
+        hdr.addEventListener('mousedown', e => {
+            if (e.button !== 0) return;
+            if (e.target.closest('button, input')) return;
+            _dragging = true;
+            _dragX    = e.clientX;
+            _dragY    = e.clientY;
+            _origL    = parseInt(peek.style.left) || 0;
+            _origT    = parseInt(peek.style.top)  || 0;
+            hdr.style.cursor = 'grabbing';
+            e.preventDefault();
+            e.stopPropagation();
+            document.addEventListener('mousemove', _onDragMove);
+            document.addEventListener('mouseup',   _onDragUp);
+        });
+
+        peek._dragCleanup = () => {
+            document.removeEventListener('mousemove', _onDragMove);
+            document.removeEventListener('mouseup',   _onDragUp);
+        };
+        // ────────────────────────────────────────────────────────────────────
+
         _tickPeekEl = peek;
+        peek.style.visibility = 'hidden';
         trackEl.appendChild(peek);
+        // Measure actual rendered width then position
+        const peekW = peek.offsetWidth;
+        if (onRight) {
+            peek.style.left  = (xpx + 14) + 'px';
+            peek.style.right = 'auto';
+        } else {
+            peek.style.left  = (xpx - peekW - 14) + 'px';
+            peek.style.right = 'auto';
+        }
+        peek.style.visibility = '';
     }
 
     function _closeTickPeek() {
-        if (_tickPeekEl) { _tickPeekEl.remove(); _tickPeekEl = null; }
+        if (_tickPeekEl) {
+            _tickPeekEl._dragCleanup?.();
+            _tickPeekEl.remove();
+            _tickPeekEl = null;
+        }
     }
 
     // -------------------------------------------------------------------------
@@ -1151,15 +1288,25 @@ const Timeline = (() => {
         const def  = `Timeline ${new Date().toLocaleDateString()}`;
         const name = await Dialog.prompt('Save timeline as:', def);
         if (!name || !name.trim()) return;
-        _savedTimelines().push({
-            id:        _newStlId(),
-            name:      name.trim(),
-            timestamp: Date.now(),
-            visible:   true,
-            entries:   JSON.parse(JSON.stringify(st.entries)),
-            groups:    JSON.parse(JSON.stringify(st.groups)),
-        });
+        const trimmed  = name.trim();
+        const existing = _savedTimelines().find(s => s.name === trimmed);
+        if (existing) {
+            if (!await Dialog.confirm('A timeline named "' + trimmed + '" already exists. Overwrite it?')) return;
+            existing.entries   = JSON.parse(JSON.stringify(st.entries));
+            existing.groups    = JSON.parse(JSON.stringify(st.groups));
+            existing.timestamp = Date.now();
+        } else {
+            _savedTimelines().push({
+                id:        _newStlId(),
+                name:      trimmed,
+                timestamp: Date.now(),
+                visible:   true,
+                entries:   JSON.parse(JSON.stringify(st.entries)),
+                groups:    JSON.parse(JSON.stringify(st.groups)),
+            });
+        }
         _updateSavedCount();
+        if (_visible) _render();
         App.notify?.('Timeline saved.', 'success');
     }
 
@@ -1404,10 +1551,18 @@ const Timeline = (() => {
             delBtn.title       = 'Delete group (timelines will be ungrouped)';
             delBtn.addEventListener('click', async e => {
                 e.stopPropagation();
-                if (!await Dialog.confirm('Delete group "' + grp.name + '"?\nSaved timelines will be ungrouped.')) return;
-                stls.forEach(s => { if (s.groupId === grp.id) delete s.groupId; });
+                const memberCount = stls.filter(s => s.groupId === grp.id).length;
+                const msg = memberCount
+                    ? 'Delete group "' + grp.name + '" and its ' + memberCount + ' timeline(s)?'
+                    : 'Delete empty group "' + grp.name + '"?';
+                if (!await Dialog.confirm(msg)) return;
+                // Remove all member timelines
+                for (let i = stls.length - 1; i >= 0; i--) {
+                    if (stls[i].groupId === grp.id) stls.splice(i, 1);
+                }
                 const gi = grps.findIndex(g => g.id === grp.id);
                 if (gi !== -1) grps.splice(gi, 1);
+                _updateSavedCount();
                 _rerender();
             });
             hdr.appendChild(delBtn);
@@ -1489,11 +1644,22 @@ const Timeline = (() => {
         pop.style.left = (br.left   + window.scrollX)     + 'px';
         _savedPopup = pop;
 
+        _savedPopupOutsideClick = e => {
+            if (!_savedPopup) return;
+            if (_savedPopup.contains(e.target)) return;
+            // Ignore clicks that originated inside the Dialog modal
+            if (document.getElementById('dialog-overlay')?.contains(e.target)) return;
+            _closeSavedPopup();
+        };
         setTimeout(() => {
-            document.addEventListener('click', _closeSavedPopup, { once: true });
+            document.addEventListener('click', _savedPopupOutsideClick);
         }, 0);
     }
     function _closeSavedPopup() {
+        if (_savedPopupOutsideClick) {
+            document.removeEventListener('click', _savedPopupOutsideClick);
+            _savedPopupOutsideClick = null;
+        }
         if (_savedPopup) { _savedPopup.remove(); _savedPopup = null; }
     }
 
@@ -1578,7 +1744,7 @@ const Timeline = (() => {
         const globalRange = globalMax - globalMin || 1;
 
         const maxN    = Math.max(1, ...tracks.map(t => t.entries.length));
-        const trackPx = Math.max(700, maxN * 90 + 100);
+        const trackPx = Math.max(700, maxN * 90 + 100) * _zoomLevel;
 
         const PAD    = 0.05;
         const pxOf   = pos => (PAD + pos * (1 - 2 * PAD)) * trackPx;
@@ -1607,6 +1773,11 @@ const Timeline = (() => {
 
         const scroller = document.createElement('div');
         scroller.className = 'tl-multi-scroller';
+
+        // Keep the labels column vertically in sync with the lane scroller
+        scroller.addEventListener('scroll', () => {
+            labelsCol.scrollTop = scroller.scrollTop;
+        });
 
         const inner = document.createElement('div');
         inner.className   = 'tl-multi-inner';

@@ -422,6 +422,10 @@
             <button id="btn-timeline-saved" class="tl-btn-sm" title="Saved timelines">📂 Saved <span id="tl-saved-count"></span></button>
             <button id="btn-timeline-multi" class="tl-view-btn" title="Multi-track: show saved timelines as parallel lanes on a shared axis">⧉ Multi</button>
             <span class="tl-header-sep"></span>
+            <button id="btn-timeline-zoom-out" class="tl-zoom-btn" title="Zoom out">−</button>
+            <span id="tl-zoom-level" class="tl-zoom-level">100%</span>
+            <button id="btn-timeline-zoom-in"  class="tl-zoom-btn" title="Zoom in">+</button>
+            <span class="tl-header-sep"></span>
             <button id="btn-timeline-screenshot" title="Copy visual timeline as image to clipboard">📸</button>
             <button id="btn-timeline-maximize" title="Maximize">⤢</button>
             <button id="btn-timeline-close"    title="Close timeline panel">✕</button>
