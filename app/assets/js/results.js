@@ -2345,7 +2345,11 @@ const Results = (() => {
                         e.preventDefault();
                         e.stopPropagation();
                         const rowObj = {};
-                        cols.forEach((c, i) => { rowObj[c] = row[i] ?? null; });
+                        const colAliasMap = {};
+                        cols.forEach((c, i) => {
+                            rowObj[c] = row[i] ?? null;
+                            if (colTables[i]) colAliasMap[c] = `${colTables[i]}.${c}`;
+                        });
                         const recId  = Recordings?.getCurrentRecId?.() ?? null;
                         const rec    = recId
                             ? (State.recordings || []).find(r => r.id === recId)
@@ -2359,7 +2363,8 @@ const Results = (() => {
                             rec?.color  || null,
                             rowObj,
                             col,
-                            row[colIdx] ?? null
+                            row[colIdx] ?? null,
+                            colAliasMap
                         );
                         return;
                     }

@@ -157,7 +157,7 @@ const Timeline = (() => {
     // -------------------------------------------------------------------------
     // Public: add an entry (called from results.js on Cmd/Ctrl+click)
     // -------------------------------------------------------------------------
-    function addEntry(recId, recName, recColor, rowData, colName, colValue) {
+    function addEntry(recId, recName, recColor, rowData, colName, colValue, colAliases) {
         const st = _st();
         const entry = {
             id:         _newId(),
@@ -167,6 +167,7 @@ const Timeline = (() => {
             rowData:    rowData  || {},
             colName:    colName  || '',
             colValue:   colValue ?? null,
+            colAliases: colAliases || {}, // { bareCol: 'alias.bareCol' } for display only
             label:      '',
             color:      null, // custom dot/bar color (null = use recColor / autoColor)
             groupId:    null,
@@ -274,13 +275,14 @@ const Timeline = (() => {
         if (!entry.pinnedCols) entry.pinnedCols = []; // migrate old entries
         const table = document.createElement('table');
         table.className = 'tl-peek-table';
+        const _aliases = entry.colAliases || {};
         Object.entries(entry.rowData).forEach(([k, v]) => {
             const tr = document.createElement('tr');
             const isNull = v === null || v === undefined;
 
             const keyTd = document.createElement('td');
             keyTd.className   = 'tl-peek-key';
-            keyTd.textContent = k;
+            keyTd.textContent = _aliases[k] || k;
 
             const valTd = document.createElement('td');
             valTd.className   = 'tl-peek-val' + (isNull ? ' is-null' : '');
@@ -330,11 +332,12 @@ const Timeline = (() => {
         if (entry.pinnedCols.length > 0) {
             const table = document.createElement('table');
             table.className = 'tl-bot-table';
+            const _ba = entry.colAliases || {};
             entry.pinnedCols.forEach(col => {
                 const tr    = document.createElement('tr');
                 const keyTd = document.createElement('td');
                 keyTd.className   = 'tl-bot-key';
-                keyTd.textContent = col + ':';
+                keyTd.textContent = (_ba[col] || col) + ':';
                 const valTd = document.createElement('td');
                 valTd.className   = 'tl-bot-val';
                 valTd.textContent = _fmtVal(entry.rowData[col]);
@@ -343,6 +346,9 @@ const Timeline = (() => {
                 table.appendChild(tr);
             });
             botLblEl.appendChild(table);
+            botLblEl.style.pointerEvents = '';   // restore events when content present
+        } else {
+            botLblEl.style.pointerEvents = 'none'; // invisible empty div — don't capture hover
         }
     }
 
@@ -515,8 +521,9 @@ const Timeline = (() => {
             tick.className  = 'tl-tick';
             tick.dataset.id      = entry.id;
             tick.dataset.groupId = entry.groupId || '';
-            tick.style.left  = xpx + 'px';
-            tick.style.color = color;
+            tick.style.left    = xpx + 'px';
+            tick.style.color   = color;
+            tick.style.zIndex  = i + 1; // later (higher-index) ticks sit on top so their labels win hit-tests
 
             // Top label position — collision stagger + any saved drag offset,
             // clamped so the label bottom never crosses the axis.
