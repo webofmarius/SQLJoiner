@@ -527,7 +527,22 @@ const Timeline = (() => {
                 g.label = name.trim();
                 _render();
             });
+
+            const colorDot = document.createElement('button');
+            colorDot.className = 'tl-group-bracket__color-dot';
+            colorDot.style.background = g.color;
+            colorDot.title = 'Change group color';
+            colorDot.addEventListener('click', e => {
+                e.stopPropagation();
+                _openColorPicker(colorDot, g, () => {
+                    const c = g.color;
+                    colorDot.style.background = c;
+                    lbl.style.color           = c;
+                    bracket.style.borderColor = c;
+                });
+            });
             bracket.appendChild(lbl);
+            bracket.appendChild(colorDot);
             track.appendChild(bracket);
         });
 
@@ -1032,10 +1047,18 @@ const Timeline = (() => {
                     const row = document.createElement('div');
                     row.className = 'tl-group-popup__row';
 
-                    // Color chip
-                    const chip = document.createElement('span');
+                    // Color chip — click to change group color
+                    const chip = document.createElement('button');
                     chip.className = 'tl-group-popup__chip';
                     chip.style.background = g.color;
+                    chip.title = 'Change group color';
+                    chip.addEventListener('click', e => {
+                        e.stopPropagation();
+                        _openColorPicker(chip, g, () => {
+                            chip.style.background = g.color;
+                            _render();
+                        }, { keepGroupPopup: true });
+                    });
                     row.appendChild(chip);
 
                     // Name
@@ -1194,9 +1217,9 @@ const Timeline = (() => {
      * Calls `onChanged()` whenever the entry color is updated so the caller
      * can refresh the relevant DOM element(s) without a full re-render.
      */
-    function _openColorPicker(anchorEl, entry, onChanged) {
+    function _openColorPicker(anchorEl, entry, onChanged, options = {}) {
         _closeColorPicker();
-        _closeGroupPopup();
+        if (!options.keepGroupPopup) _closeGroupPopup();
 
         const pop = document.createElement('div');
         pop.className = 'tl-color-picker';
@@ -1214,7 +1237,7 @@ const Timeline = (() => {
             if (entry.color === hex) sw.classList.add('is-active');
             sw.addEventListener('click', () => {
                 entry.color = hex;
-                _closeColorPicker();
+                if (!options.keepOpen) _closeColorPicker();
                 onChanged();
             });
             grid.appendChild(sw);
@@ -1236,7 +1259,7 @@ const Timeline = (() => {
         });
         customInput.addEventListener('change', () => {
             entry.color = customInput.value;
-            _closeColorPicker();
+            if (!options.keepOpen) _closeColorPicker();
             onChanged();
         });
 
@@ -1246,7 +1269,7 @@ const Timeline = (() => {
         resetBtn.title       = 'Reset to recording color';
         resetBtn.addEventListener('click', () => {
             entry.color = null;
-            _closeColorPicker();
+            if (!options.keepOpen) _closeColorPicker();
             onChanged();
         });
 
