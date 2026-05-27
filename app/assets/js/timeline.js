@@ -32,6 +32,9 @@ const Timeline = (() => {
     // Floating per-entry color picker
     let _colorPickerEl = null;
 
+    // Right-click isolated tick id (null = nothing isolated)
+    let _isolatedTickId = null;
+
     // Multi-track mode (visual view only)
     let _multiTrackMode = false;
 
@@ -221,6 +224,17 @@ const Timeline = (() => {
             _renderMultiTrack();
         } else {
             _renderVisual();
+        }
+        // Re-apply isolation after DOM rebuild
+        if (_isolatedTickId && _viewMode !== 'list') {
+            const isolated = _visualEl?.querySelector(`.tl-tick[data-id="${_isolatedTickId}"]`);
+            if (isolated) {
+                isolated.closest('.tl-track')
+                    ?.querySelectorAll('.tl-tick')
+                    .forEach(t => { t.style.display = t === isolated ? '' : 'none'; });
+            } else {
+                _isolatedTickId = null;
+            }
         }
     }
 
@@ -628,6 +642,14 @@ const Timeline = (() => {
                 e.stopPropagation();
                 _showTickPeek(entry, tick, color, xpx, trackPx);
             });
+            tick.addEventListener('mousedown', e => {
+                if (e.button === 2) e.stopPropagation();
+            });
+            tick.addEventListener('contextmenu', e => {
+                e.preventDefault();
+                e.stopPropagation();
+                _toggleTickIsolation(entry.id, tick);
+            });
 
             track.appendChild(tick);
         });
@@ -970,6 +992,25 @@ const Timeline = (() => {
             _tickPeekEl._dragCleanup?.();
             _tickPeekEl.remove();
             _tickPeekEl = null;
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Tick isolation — right-click hides all other ticks in the same track
+    // -------------------------------------------------------------------------
+    function _toggleTickIsolation(entryId, tickEl) {
+        const trackEl = tickEl.closest('.tl-track');
+        if (!trackEl) return;
+        if (_isolatedTickId === entryId) {
+            trackEl.querySelectorAll('.tl-tick').forEach(t => { t.style.display = ''; });
+            _isolatedTickId = null;
+        } else {
+            // Clear any stale isolation across all tracks first
+            _visualEl?.querySelectorAll('.tl-tick').forEach(t => { t.style.display = ''; });
+            trackEl.querySelectorAll('.tl-tick').forEach(t => {
+                t.style.display = t === tickEl ? '' : 'none';
+            });
+            _isolatedTickId = entryId;
         }
     }
 
@@ -1966,6 +2007,14 @@ const Timeline = (() => {
                 tick.addEventListener('click', e => {
                     e.stopPropagation();
                     _showTickPeek(entry, tick, color, xpx, trackPx, trackData.isCurrent);
+                });
+                tick.addEventListener('mousedown', e => {
+                    if (e.button === 2) e.stopPropagation();
+                });
+                tick.addEventListener('contextmenu', e => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    _toggleTickIsolation(entry.id, tick);
                 });
 
                 lane.appendChild(tick);
