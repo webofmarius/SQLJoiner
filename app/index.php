@@ -414,10 +414,10 @@
             <span class="tl-panel-title">Timeline <span id="timeline-count-badge" class="tl-count-badge">0</span></span>
             <span class="tl-header-sep"></span>
             <button id="btn-timeline-add-group" class="tl-btn-sm" title="Create a named group to bracket entries">⊞ Group</button>
-            <button id="btn-timeline-clear"     class="tl-btn-sm" title="Clear all timeline entries">⊗ Clear</button>
+            <button id="btn-timeline-clear"     class="tl-btn-sm" title="New timeline — unlinks the current saved timeline">+ New</button>
             <span class="tl-header-sep"></span>
             <button id="btn-timeline-save"  class="tl-btn-sm" title="Save current timeline with a name">💾 Save</button>
-            <button id="btn-timeline-saved" class="tl-btn-sm" title="Saved timelines">📂 Saved <span id="tl-saved-count"></span></button>
+            <button id="btn-timeline-saved" class="tl-btn-sm" title="Saved timelines">📂 Timelines <span id="tl-saved-count"></span></button>
             <button id="btn-timeline-multi" class="tl-view-btn" title="Multi-track: show saved timelines as parallel lanes on a shared axis">⧉ Multi</button>
             <span class="tl-header-sep"></span>
             <button id="btn-timeline-zoom-out" class="tl-zoom-btn" title="Zoom out">−</button>
@@ -425,6 +425,7 @@
             <button id="btn-timeline-zoom-in"  class="tl-zoom-btn" title="Zoom in">+</button>
             <span class="tl-header-sep"></span>
             <button id="btn-timeline-screenshot" title="Copy visual timeline as image to clipboard">📸</button>
+            <span id="tl-active-name" class="tl-active-name"></span>
             <button id="btn-timeline-maximize" title="Maximize">⤢</button>
             <button id="btn-timeline-close"    title="Close timeline panel">✕</button>
         </div>

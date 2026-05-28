@@ -45,6 +45,7 @@ const Timeline = (() => {
     // Saved timelines popup
     let _savedPopup             = null;
     let _savedPopupOutsideClick = null;
+    let _activeStlId            = null; // id of the currently loaded/active saved timeline
     const _ENTRY_PALETTE = [
         '#f87171','#fb923c','#fbbf24','#a3e635',
         '#34d399','#22d3ee','#60a5fa','#818cf8',
@@ -118,11 +119,15 @@ const Timeline = (() => {
             _toggleGroupPopup(_groupBtn);
         });
         document.getElementById('btn-timeline-clear')
-            ?.addEventListener('click', _clearAll);
+            ?.addEventListener('click', _startNew);
         document.getElementById('btn-timeline-save')
             ?.addEventListener('click', _saveCurrentTimeline);
         const _savedBtn = document.getElementById('btn-timeline-saved');
         _savedBtn?.addEventListener('click', e => {
+            e.stopPropagation();
+            _savedPopup ? _closeSavedPopup() : _openSavedPopup(_savedBtn);
+        });
+        document.getElementById('tl-active-name')?.addEventListener('click', e => {
             e.stopPropagation();
             _savedPopup ? _closeSavedPopup() : _openSavedPopup(_savedBtn);
         });
@@ -1475,12 +1480,50 @@ const Timeline = (() => {
         if (el) el.textContent = n > 0 ? String(n) : '';
     }
 
+    function _updateActiveDisplay() {
+        const span = document.getElementById('tl-active-name');
+        if (!span) return;
+        if (_activeStlId) {
+            const stl = _savedTimelines().find(s => s.id === _activeStlId);
+            if (stl) { span.textContent = stl.name; return; }
+            _activeStlId = null; // stale — was deleted
+        }
+        span.textContent = '';
+    }
+
+    async function _startNew() {
+        const st = _st();
+        if (st.entries.length) {
+            if (!await Dialog.confirm(`Remove all ${st.entries.length} timeline entries and start a new timeline?`)) return;
+        }
+        _activeStlId = null;
+        st.entries = [];
+        st.groups  = [];
+        _updateActiveDisplay();
+        _render();
+    }
+
     async function _saveCurrentTimeline() {
         const st = _st();
         if (!st.entries.length) {
             App.notify?.('Nothing to save — timeline is empty.', 'warn');
             return;
         }
+        if (_activeStlId) {
+            // Overwrite the currently selected saved timeline (no prompt)
+            const stl = _savedTimelines().find(s => s.id === _activeStlId);
+            if (stl) {
+                stl.entries   = JSON.parse(JSON.stringify(st.entries));
+                stl.groups    = JSON.parse(JSON.stringify(st.groups));
+                stl.timestamp = Date.now();
+                _updateSavedCount();
+                if (_visible) _render();
+                App.notify?.(`Timeline "${stl.name}" saved.`, 'success');
+                return;
+            }
+            _activeStlId = null; // stale id — fall through to create new
+        }
+        // No active timeline — prompt for a name then save as new
         const def  = `Timeline ${new Date().toLocaleDateString()}`;
         const name = await Dialog.prompt('Save timeline as:', def);
         if (!name || !name.trim()) return;
@@ -1491,17 +1534,21 @@ const Timeline = (() => {
             existing.entries   = JSON.parse(JSON.stringify(st.entries));
             existing.groups    = JSON.parse(JSON.stringify(st.groups));
             existing.timestamp = Date.now();
+            _activeStlId = existing.id;
         } else {
-            _savedTimelines().push({
+            const newStl = {
                 id:        _newStlId(),
                 name:      trimmed,
                 timestamp: Date.now(),
                 visible:   true,
                 entries:   JSON.parse(JSON.stringify(st.entries)),
                 groups:    JSON.parse(JSON.stringify(st.groups)),
-            });
+            };
+            _savedTimelines().push(newStl);
+            _activeStlId = newStl.id;
         }
         _updateSavedCount();
+        _updateActiveDisplay();
         if (_visible) _render();
         App.notify?.('Timeline saved.', 'success');
     }
@@ -1583,48 +1630,26 @@ const Timeline = (() => {
             nameSpan.className   = 'tl-saved-popup__name';
             nameSpan.textContent = stl.name;
             nameSpan.title       = new Date(stl.timestamp).toLocaleString();
-            row.appendChild(nameSpan);
-
-            const cnt = document.createElement('span');
-            cnt.className   = 'tl-saved-popup__count';
-            cnt.textContent = stl.entries.length + ' pts';
-            row.appendChild(cnt);
-
-            const loadBtn = document.createElement('button');
-            loadBtn.className   = 'tl-saved-popup__load';
-            loadBtn.textContent = 'Load';
-            loadBtn.title       = 'Replace current timeline entries with this snapshot';
-            loadBtn.addEventListener('click', async () => {
+            nameSpan.addEventListener('click', async () => {
                 const cur = _st();
                 if (cur.entries.length) {
                     if (!await Dialog.confirm(
                         'Replace the ' + cur.entries.length + ' current entries with "' + stl.name + '"?'
                     )) return;
                 }
-                cur.entries = JSON.parse(JSON.stringify(stl.entries));
-                cur.groups  = JSON.parse(JSON.stringify(stl.groups));
+                cur.entries  = JSON.parse(JSON.stringify(stl.entries));
+                cur.groups   = JSON.parse(JSON.stringify(stl.groups));
+                _activeStlId = stl.id;
+                _updateActiveDisplay();
+                _closeSavedPopup();
                 _render();
             });
-            row.appendChild(loadBtn);
+            row.appendChild(nameSpan);
 
-            const replBtn = document.createElement('button');
-            replBtn.className   = 'tl-saved-popup__repl';
-            replBtn.textContent = '⇤ Replace';
-            replBtn.title       = 'Overwrite this snapshot with the current timeline';
-            replBtn.addEventListener('click', async () => {
-                const cur = _st();
-                if (!cur.entries.length) {
-                    App.notify?.('Current timeline is empty — nothing to save.', 'warn');
-                    return;
-                }
-                if (!await Dialog.confirm('Overwrite "' + stl.name + '" with the current timeline?')) return;
-                stl.entries   = JSON.parse(JSON.stringify(cur.entries));
-                stl.groups    = JSON.parse(JSON.stringify(cur.groups));
-                stl.timestamp = Date.now();
-                _rebuild();
-                if (_multiTrackMode) _render();
-            });
-            row.appendChild(replBtn);
+            const cnt = document.createElement('span');
+            cnt.className   = 'tl-saved-popup__count';
+            cnt.textContent = stl.entries.length + ' pts';
+            row.appendChild(cnt);
 
             const renBtn = document.createElement('button');
             renBtn.className   = 'tl-saved-popup__ren';
@@ -1635,6 +1660,7 @@ const Timeline = (() => {
                 if (!name || !name.trim()) return;
                 stl.name = name.trim();
                 _rebuild();
+                _updateActiveDisplay();
                 if (_multiTrackMode) _render();
             });
             row.appendChild(renBtn);
@@ -1647,6 +1673,7 @@ const Timeline = (() => {
                 if (!await Dialog.confirm('Delete saved timeline "' + stl.name + '"?')) return;
                 const i = stls.indexOf(stl);
                 if (i !== -1) stls.splice(i, 1);
+                if (_activeStlId === stl.id) { _activeStlId = null; _updateActiveDisplay(); }
                 _updateSavedCount();
                 _rerender();
             });

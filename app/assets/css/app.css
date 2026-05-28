@@ -7532,11 +7532,19 @@ textarea.sql-bd-active.scope-mode-on {
     border-color: transparent;
     color: var(--text-muted);
 }
-#btn-timeline-clear:hover {
-    color: #f87171;
-    border-color: #f87171;
-    background: rgba(248,113,113,0.1);
+.tl-active-name {
+    font-size: 11px;
+    color: var(--accent);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 180px;
+    display: inline-block;
+    vertical-align: middle;
+    margin-left: 4px;
+    cursor: pointer;
 }
+.tl-active-name:hover { text-decoration: underline; }
 .tl-zoom-btn {
     font-size: 14px;
     line-height: 1;
@@ -7792,7 +7800,7 @@ body:has(#timeline-panel.is-maximized) #results-panel { z-index: 215; }
     flex: 1;
     overflow-x: auto;
     overflow-y: auto;
-    padding: 20px 12px 8px;
+    padding: 48px 12px 8px;
 }
 .tl-track {
     position: relative;
@@ -7941,15 +7949,15 @@ body:has(#timeline-panel.is-maximized) #results-panel { z-index: 215; }
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    cursor: pointer;
 }
+.tl-saved-popup__name:hover { color: var(--accent); }
 .tl-saved-popup__count {
     font-size: 10px;
     color: var(--text-muted);
     white-space: nowrap;
     flex-shrink: 0;
 }
-.tl-saved-popup__load,
-.tl-saved-popup__repl,
 .tl-saved-popup__ren,
 .tl-saved-popup__del {
     background: transparent;
@@ -7961,8 +7969,6 @@ body:has(#timeline-panel.is-maximized) #results-panel { z-index: 215; }
     color: var(--text-muted);
     flex-shrink: 0;
 }
-.tl-saved-popup__load:hover { background: var(--surface3); color: var(--text); }
-.tl-saved-popup__repl:hover { background: rgba(251,191,36,0.10); color: #fbbf24; }
 .tl-saved-popup__ren:hover  { background: var(--surface3); color: var(--text); }
 .tl-saved-popup__del:hover  { background: rgba(248,113,113,0.12); color: #f87171; }
 
