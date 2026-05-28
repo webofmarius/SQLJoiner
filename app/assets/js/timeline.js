@@ -133,6 +133,8 @@ const Timeline = (() => {
         });
         document.getElementById('btn-timeline-multi')
             ?.addEventListener('click', _toggleMultiTrack);
+        document.getElementById('btn-timeline-last-point')
+            ?.addEventListener('click', _toggleLastPoint);
         document.getElementById('btn-timeline-zoom-out')
             ?.addEventListener('click', () => _stepZoom(-1));
         document.getElementById('btn-timeline-zoom-in')
@@ -1001,6 +1003,7 @@ const Timeline = (() => {
             .forEach(el => { el.style.display = ''; });
         _isolatedTickId  = null;
         _isolatedGroupId = null;
+        _updateLastPointBtn();
     }
 
     function _toggleTickIsolation(entryId, tickEl) {
@@ -1017,6 +1020,7 @@ const Timeline = (() => {
             });
             trackEl.querySelectorAll('.tl-group-bracket').forEach(b => { b.style.display = 'none'; });
             _isolatedTickId = entryId;
+            _updateLastPointBtn();
         }
     }
 
@@ -1034,6 +1038,28 @@ const Timeline = (() => {
             });
             _isolatedGroupId = groupId;
         }
+    }
+
+    function _updateLastPointBtn() {
+        const btn = document.getElementById('btn-timeline-last-point');
+        if (!btn) return;
+        const st   = _st();
+        const last = st.entries.length ? st.entries[st.entries.length - 1] : null;
+        btn.classList.toggle('is-active', !!last && _isolatedTickId === last.id);
+    }
+
+    function _toggleLastPoint() {
+        const st = _st();
+        if (!st.entries.length) return;
+        const lastEntry = st.entries[st.entries.length - 1];
+        if (_isolatedTickId === lastEntry.id) {
+            _clearAllIsolation();
+            return;
+        }
+        const tickEl = _visualEl?.querySelector(`.tl-tick[data-id="${lastEntry.id}"]`);
+        if (!tickEl) return;
+        _toggleTickIsolation(lastEntry.id, tickEl);
+        _scrollToEntry(lastEntry.id);
     }
 
     // -------------------------------------------------------------------------

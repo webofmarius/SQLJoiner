@@ -420,6 +420,8 @@
             <button id="btn-timeline-saved" class="tl-btn-sm" title="Saved timelines">📂 Timelines <span id="tl-saved-count"></span></button>
             <button id="btn-timeline-multi" class="tl-view-btn" title="Multi-track: show saved timelines as parallel lanes on a shared axis">⧉ Multi</button>
             <span class="tl-header-sep"></span>
+            <button id="btn-timeline-last-point" class="tl-btn-sm" title="Scroll to and isolate the last added point (click again to clear)">Last point</button>
+            <span class="tl-header-sep"></span>
             <button id="btn-timeline-zoom-out" class="tl-zoom-btn" title="Zoom out">−</button>
             <span id="tl-zoom-level" class="tl-zoom-level">100%</span>
             <button id="btn-timeline-zoom-in"  class="tl-zoom-btn" title="Zoom in">+</button>
