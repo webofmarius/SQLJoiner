@@ -311,6 +311,7 @@
                 <button id="btn-diff-snapshot" title="Snapshot current result for compare comparison" disabled>⊙ Diff Snapshot</button>
                 <button id="btn-diff-exit" class="hidden is-active" title="Exit compare mode">✕ Exit Diff</button>
                 <button id="btn-explain-graph" class="hidden" title="Toggle EXPLAIN graph view">⎇ Explain Graph</button>
+                <input id="chk-search-sql-mode" type="checkbox"  title="SQL operator mode: type expressions like > 5, = 'John', IS NULL">
                 <button id="btn-search-cols" title="Toggle column search inputs">⌕ Search</button>
                 <button id="btn-save-view-state" class="hidden" title="Save current visual state (Compare, Duplicates, colors, Dim, filters) to this recording">📌 Save</button>
             </div>

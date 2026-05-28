@@ -72,7 +72,8 @@ const Results = (() => {
     let _calcHighlightActiveIds = new Set();
 
     // Inline column filter inputs
-    let _colFilters = {}; // colIdx (number) → filter text
+    let _colFilters     = {}; // colIdx (number) → filter text
+    let _colFilterSqlMode = false; // true = SQL operator mode (> 5, = 'x', IS NULL…)
 
     // True when the current result came from a CSV file (drives Excel-style header letters)
     let _lastResultIsCsv = false;
@@ -277,6 +278,16 @@ const Results = (() => {
                 });
                 _applyColFilter();
             }
+        });
+
+        document.getElementById('chk-search-sql-mode')?.addEventListener('change', e => {
+            _colFilterSqlMode = e.target.checked;
+            const panel = document.getElementById('results-panel');
+            panel?.classList.toggle('sql-filter-mode', _colFilterSqlMode);
+            document.querySelectorAll('#results-table .th-filter-input').forEach(inp => {
+                inp.placeholder = _colFilterSqlMode ? '> val' : 'search…';
+            });
+            _applyColFilter();
         });
 
         // ---- Dataset compare modal ----
@@ -1313,6 +1324,57 @@ const Results = (() => {
         return new RegExp('^' + escaped.replace(/%/g, '.*') + '$', 'i');
     }
 
+    // Parse a SQL operator expression typed by the user, e.g. "> 5", "= 'John'", "IS NULL".
+    // Returns { op, val } or null if the expression has no recognisable operator.
+    function _parseSqlExpr(expr) {
+        const s = expr.trim();
+        if (!s) return null;
+        if (/^is\s+null$/i.test(s))     return { op: 'IS NULL' };
+        if (/^is\s+not\s+null$/i.test(s)) return { op: 'IS NOT NULL' };
+        const likeM = s.match(/^like\s+(.+)/i);
+        if (likeM) {
+            const likeVal = likeM[1].trim();
+            // Require a quoted string ('…' / "…") or a %-wildcard pattern; bare words are invalid SQL
+            const quoted = /^'.*'$/.test(likeVal) || /^".*"$/.test(likeVal);
+            const hasWildcard = likeVal.includes('%');
+            if (!quoted && !hasWildcard) return null;
+            return { op: 'LIKE', val: quoted ? likeVal.slice(1, -1) : likeVal };
+        }
+        const m = s.match(/^(>=|<=|!=|<>|=|>|<)(.+)/);
+        if (!m) return null;
+        let val = m[2].trim();
+        if (/^'.*'$/.test(val) || /^".*"$/.test(val)) val = val.slice(1, -1);
+        return { op: m[1], val };
+    }
+
+    function _matchSqlExpr(cellVal, expr) {
+        const parsed = _parseSqlExpr(expr);
+        if (!parsed) return false; // invalid/unrecognised expression → hide row
+        const { op, val } = parsed;
+        const cell = String(cellVal ?? '');
+        if (op === 'IS NULL')     return cell === '' || /^null$/i.test(cell);
+        if (op === 'IS NOT NULL') return cell !== '' && !/^null$/i.test(cell);
+        if (op === 'LIKE')        return _likeToRegex(val).test(cell);
+        const numCell    = parseFloat(cell);
+        const numVal     = parseFloat(val);
+        const valNumeric  = !isNaN(numVal);
+        const cellNumeric = !isNaN(numCell) && cell.trim() !== '';
+        // Numeric operator on a non-numeric cell → no match
+        if (valNumeric && !cellNumeric) return false;
+        const numeric = valNumeric && cellNumeric;
+        const a = cell.toLowerCase(), b = (val ?? '').toLowerCase();
+        switch (op) {
+            case '=':  return numeric ? numCell === numVal : a === b;
+            case '!=':
+            case '<>': return numeric ? numCell !== numVal : a !== b;
+            case '>':  return numeric ? numCell > numVal  : a > b;
+            case '<':  return numeric ? numCell < numVal  : a < b;
+            case '>=': return numeric ? numCell >= numVal : a >= b;
+            case '<=': return numeric ? numCell <= numVal : a <= b;
+        }
+        return true;
+    }
+
     function _applyColFilter() {
         const tbody = document.querySelector('#results-table tbody');
         if (!tbody) return;
@@ -1330,7 +1392,9 @@ const Results = (() => {
             const passes = entries.every(([idx, text]) => {
                 const cell = tds[+idx];
                 const val  = cell?.dataset.raw ?? cell?.textContent ?? '';
-                return _likeToRegex(text).test(val);
+                return _colFilterSqlMode
+                    ? _matchSqlExpr(val, text)
+                    : val.toLowerCase().includes(text.toLowerCase());
             });
             if (!passes) tr.classList.add('row-col-filter-hidden');
         });
@@ -2132,7 +2196,7 @@ const Results = (() => {
 
             const filterInput = document.createElement('input');
             filterInput.type = 'text';
-            filterInput.placeholder = '%like%';
+            filterInput.placeholder = _colFilterSqlMode ? '> val' : 'search…';
             filterInput.className = 'th-filter-input';
 
             const filterClear = document.createElement('button');

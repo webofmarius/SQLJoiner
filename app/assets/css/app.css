@@ -3443,6 +3443,29 @@ body.is-resizing-results #resizer-results {
 .th-filter-clear:hover { background: var(--accent); color: var(--bg); }
 tr.row-col-filter-hidden { display: none !important; }
 
+/* SQL operator mode badge on each column filter input */
+#results-panel.sql-filter-mode .th-filter-wrap::before {
+    content: 'SQL';
+    position: absolute;
+    top: 0;
+    left: 10px; /* compensate for th-filter-wrap's -10px left margin */
+    background: var(--accent);
+    color: var(--bg);
+    font-size: 7px;
+    font-weight: 700;
+    padding: 0 3px;
+    line-height: 1.5;
+    pointer-events: none;
+    border-radius: 0 0 3px 0;
+    letter-spacing: 0.5px;
+    z-index: 2;
+}
+#results-panel.sql-filter-mode .th-filter-input {
+    padding-left: 26px;
+    border-top-color: var(--accent);
+}
+#results-panel.sql-filter-mode .th-filter-input::placeholder { font-style: italic; }
+
 /* Column sort button in result table headers */
 .th-sort-btn {
     display: block;
