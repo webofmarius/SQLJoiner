@@ -2346,9 +2346,20 @@ const Results = (() => {
                         e.stopPropagation();
                         const rowObj = {};
                         const colAliasMap = {};
+                        const colOrderArr = [];
+                        const seenKeys = new Set();
                         cols.forEach((c, i) => {
-                            rowObj[c] = row[i] ?? null;
-                            if (colTables[i]) colAliasMap[c] = `${colTables[i]}.${c}`;
+                            // Deduplicate keys so duplicate column names don't overwrite each other
+                            let key = c;
+                            if (seenKeys.has(key)) {
+                                let n = 2;
+                                while (seenKeys.has(`${c}_${n}`)) n++;
+                                key = `${c}_${n}`;
+                            }
+                            seenKeys.add(key);
+                            rowObj[key] = row[i] ?? null;
+                            if (colTables[i]) colAliasMap[key] = `${colTables[i]}.${c}`;
+                            colOrderArr.push(key);
                         });
                         const recId  = Recordings?.getCurrentRecId?.() ?? null;
                         const rec    = recId
@@ -2364,7 +2375,8 @@ const Results = (() => {
                             rowObj,
                             col,
                             row[colIdx] ?? null,
-                            colAliasMap
+                            colAliasMap,
+                            colOrderArr
                         );
                         return;
                     }

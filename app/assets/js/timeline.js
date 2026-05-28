@@ -154,10 +154,20 @@ const Timeline = (() => {
         }
     }
 
+    // Center the scroller on a tick by entry id (tick.style.left is its center x).
+    function _scrollToEntry(entryId) {
+        const scroller = _visualEl?.querySelector('.tl-visual-scroller, .tl-multi-scroller');
+        if (!scroller) return;
+        const tick = _visualEl.querySelector(`.tl-tick[data-id="${entryId}"]`);
+        if (!tick) return;
+        const xpx = parseFloat(tick.style.left) || 0;
+        scroller.scrollLeft = xpx - scroller.clientWidth / 2;
+    }
+
     // -------------------------------------------------------------------------
     // Public: add an entry (called from results.js on Cmd/Ctrl+click)
     // -------------------------------------------------------------------------
-    function addEntry(recId, recName, recColor, rowData, colName, colValue, colAliases) {
+    function addEntry(recId, recName, recColor, rowData, colName, colValue, colAliases, colOrder) {
         const st = _st();
         const entry = {
             id:         _newId(),
@@ -165,6 +175,7 @@ const Timeline = (() => {
             recName:    recName  || 'Live result',
             recColor:   recColor || null,
             rowData:    rowData  || {},
+            colOrder:   Array.isArray(colOrder) ? [...colOrder] : null, // ordered key list for display
             colName:    colName  || '',
             colValue:   colValue ?? null,
             colAliases: colAliases || {}, // { bareCol: 'alias.bareCol' } for display only
@@ -176,7 +187,10 @@ const Timeline = (() => {
             addedAt:    Date.now(),
         };
         st.entries.push(entry);
-        if (_visible) _render();
+        if (_visible) {
+            _render();
+            _scrollToEntry(entry.id);
+        }
         const preview = _fmtVal(colValue);
         const short   = preview.length > 30 ? preview.slice(0, 30) + '…' : preview;
         App.notify?.(
@@ -276,7 +290,13 @@ const Timeline = (() => {
         const table = document.createElement('table');
         table.className = 'tl-peek-table';
         const _aliases = entry.colAliases || {};
-        Object.entries(entry.rowData).forEach(([k, v]) => {
+        // Use stored colOrder when available (preserves results-table column order and
+        // handles duplicate column names). Fall back to Object.entries for old entries.
+        const colKeys = (entry.colOrder && entry.colOrder.length)
+            ? entry.colOrder
+            : Object.keys(entry.rowData);
+        colKeys.forEach(k => {
+            const v = entry.rowData[k];
             const tr = document.createElement('tr');
             const isNull = v === null || v === undefined;
 
