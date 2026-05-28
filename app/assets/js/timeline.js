@@ -65,6 +65,11 @@ const Timeline = (() => {
     const _recColorMap = {};
     let   _autoColorIdx = 0;
 
+    // Chain preview entries (managed by Chain module via setPreviewEntries)
+    let _chainPreviewEntries = [];
+    // Axis bounds cache set by _renderVisual so _renderChainPreview can share the same scale
+    let _chainAxisCache = null; // { min, max, range, trackPx, pad }
+
     // -------------------------------------------------------------------------
     // State helpers
     // -------------------------------------------------------------------------
@@ -174,7 +179,7 @@ const Timeline = (() => {
     // -------------------------------------------------------------------------
     // Public: add an entry (called from results.js on Cmd/Ctrl+click)
     // -------------------------------------------------------------------------
-    function addEntry(recId, recName, recColor, rowData, colName, colValue, colAliases, colOrder) {
+    function addEntry(recId, recName, recColor, rowData, colName, colValue, colAliases, colOrder, colThemes, colBgColors, options = {}) {
         const st = _st();
         const entry = {
             id:         _newId(),
@@ -183,10 +188,12 @@ const Timeline = (() => {
             recColor:   recColor || null,
             rowData:    rowData  || {},
             colOrder:   Array.isArray(colOrder) ? [...colOrder] : null, // ordered key list for display
+            colThemes:  colThemes   && Object.keys(colThemes).length   ? { ...colThemes }   : null, // col-key → CSS class
+            colBgColors:colBgColors && Object.keys(colBgColors).length ? { ...colBgColors } : null, // col-key → { bg, text }
             colName:    colName  || '',
             colValue:   colValue ?? null,
             colAliases: colAliases || {}, // { bareCol: 'alias.bareCol' } for display only
-            label:      '',
+            label:      options.label || '',
             color:      null, // custom dot/bar color (null = use recColor / autoColor)
             groupId:    null,
             pinned:     false,
@@ -282,6 +289,7 @@ const Timeline = (() => {
                 _isolatedGroupId = null;
             }
         }
+        _renderChainPreview();
     }
 
 
@@ -314,6 +322,21 @@ const Timeline = (() => {
             const valTd = document.createElement('td');
             valTd.className   = 'tl-peek-val' + (isNull ? ' is-null' : '');
             valTd.textContent = _fmtVal(v);
+
+            // Table-alias background color: live results header takes priority, stored snapshot as fallback
+            const _colKey = _aliases[k] || k;
+            const _liveTh = document.querySelector(`#results-table thead th[data-col-key="${_colKey}"]`);
+            const _colBg  = _liveTh?.style.backgroundColor
+                ? { bg: _liveTh.style.backgroundColor, text: _liveTh.style.color || '' }
+                : (entry.colBgColors?.[k] || null);
+            if (_colBg) {
+                keyTd.style.background = _colBg.bg;
+                keyTd.style.color      = _colBg.text;
+                valTd.style.background = _colBg.bg;
+                valTd.style.color      = _colBg.text;
+            }
+            // Right-click / cmd+right-click theme class (overrides via !important)
+            if (entry.colThemes?.[k]) tr.classList.add(entry.colThemes[k]);
 
             // Checkbox column — only shown in visual peek popup (botLblEl provided)
             if (botLblEl) {
@@ -409,17 +432,52 @@ const Timeline = (() => {
             _visualEl.innerHTML =
                 '<p class="tl-empty">No entries yet.<br>' +
                 'Cmd/Ctrl+click any result cell to pin it here.</p>';
+            // Still compute axis cache for preview-only scenario
+            if (_chainPreviewEntries.length > 0) {
+                const pv  = _chainPreviewEntries.map(e => _parseTime(e.colValue)).filter(v => v !== null);
+                const axMin  = pv.length >= 2 ? Math.min(...pv) : null;
+                const axMax  = pv.length >= 2 ? Math.max(...pv) : null;
+                const axRange = (axMin !== null && axMax !== axMin) ? axMax - axMin : null;
+                const trackPx = Math.max(600, _chainPreviewEntries.length * VIS.tickMinPx + 100) * _zoomLevel;
+                _chainAxisCache = { min: axMin, max: axMax, range: axRange, trackPx, pad: VIS.padPct };
+            }
             return;
         }
 
         const sorted  = _sortedEntries();
         const n       = sorted.length;
-        const trackPx = Math.max(600, n * VIS.tickMinPx + 100) * _zoomLevel;
 
-        // Horizontal layout helpers
-        const pad  = VIS.padPct;
-        const pxOf = pos => (pad + pos * (1 - 2 * pad)) * trackPx;
-        const positions = _computePositions(sorted);
+        // Compute shared axis bounds including any chain preview entries so that
+        // both tracks use the same horizontal scale.
+        const pad     = VIS.padPct;
+        let positions, axMin = null, axMax = null, axRange = null;
+        if (_chainPreviewEntries.length > 0) {
+            const allNumVals = [...sorted, ..._chainPreviewEntries]
+                .map(e => _parseTime(e.colValue)).filter(v => v !== null);
+            if (allNumVals.length >= 2) {
+                axMin  = Math.min(...allNumVals);
+                axMax  = Math.max(...allNumVals);
+                axRange = axMax !== axMin ? axMax - axMin : null;
+            }
+            if (axRange !== null) {
+                positions = sorted.map(e => {
+                    const t = _parseTime(e.colValue);
+                    return t !== null ? (t - axMin) / axRange : 0.5;
+                });
+            } else {
+                positions = _computePositions(sorted);
+            }
+        } else {
+            positions = _computePositions(sorted);
+        }
+
+        const nTotal  = n + _chainPreviewEntries.length;
+        const trackPx = Math.max(600, Math.max(n, nTotal) * VIS.tickMinPx + 100) * _zoomLevel;
+        const pxOf    = pos => (pad + pos * (1 - 2 * pad)) * trackPx;
+
+        // Cache for _renderChainPreview (called after this function from _render)
+        _chainAxisCache = { min: axMin, max: axMax, range: axRange, trackPx, pad };
+
         const xPxArr    = sorted.map((_, i) => pxOf(positions[i]));
 
         // ── Label collision avoidance ────────────────────────────────────────
@@ -865,18 +923,27 @@ const Timeline = (() => {
             footer.className = 'tl-tick-peek__footer';
 
             if (entry.recId) {
+                const filterChkId = 'tl-peek-filter-' + entry.id;
+                const filterChk   = document.createElement('input');
+                filterChk.type      = 'checkbox';
+                filterChk.id        = filterChkId;
+                filterChk.className = 'tl-tick-peek__filter-chk';
+                filterChk.checked   = true;
+                filterChk.title     = 'Show all rows (uncheck to show only this row)';
+
                 const loadRecBtn = document.createElement('button');
                 loadRecBtn.className   = 'tl-tick-peek__load-rec';
                 loadRecBtn.textContent = 'Results';
                 loadRecBtn.title       = 'Load this recording\'s results';
                 loadRecBtn.addEventListener('click', () => {
+                    const filterMode = !filterChk.checked;
                     Recordings.loadResultsById(entry.recId);
                     requestAnimationFrame(() => {
                         const tbody = document.querySelector('#results-table tbody');
                         const thead = document.querySelector('#results-table thead');
                         if (!tbody || !thead) return;
 
-                        // Build bare-column-name → th-index map
+                        // Build col-key/bare → th-index map (index aligns with td index in body rows)
                         const colIdxMap = {};
                         Array.from(thead.querySelectorAll('th')).forEach((th, i) => {
                             const key  = th.dataset.colKey || '';
@@ -885,28 +952,81 @@ const Timeline = (() => {
                             if (key)  colIdxMap[key]  = i;
                         });
 
-                        // Find first row whose cell values all match entry.rowData
-                        const rdEntries = Object.entries(entry.rowData || {});
                         let matchTr = null;
-                        for (const tr of tbody.querySelectorAll('tr')) {
-                            const tds = tr.querySelectorAll('td');
-                            let ok = rdEntries.length > 0;
-                            for (const [col, val] of rdEntries) {
-                                const bare = col.includes('.') ? col.split('.')[1] : col;
-                                const idx  = colIdxMap[col] ?? colIdxMap[bare];
-                                if (idx == null) continue;
-                                const cell = tds[idx];
-                                if (!cell) { ok = false; break; }
-                                const raw = cell.dataset.raw ?? cell.textContent ?? null;
-                                if (String(raw) !== String(val == null ? '' : val)) { ok = false; break; }
+
+                        // PRIMARY: match by the entry's single pivot column + value (fast, reliable)
+                        const pivotKey  = (entry.colAliases?.[entry.colName]) || entry.colName;
+                        const pivotBare = pivotKey.includes('.') ? pivotKey.split('.')[1] : pivotKey;
+                        const pivotIdx  = colIdxMap[pivotKey] ?? colIdxMap[pivotBare];
+                        if (pivotIdx != null && entry.colValue != null) {
+                            const want = String(entry.colValue);
+                            for (const tr of tbody.querySelectorAll('tr')) {
+                                const cell = tr.querySelectorAll('td')[pivotIdx];
+                                if (cell && (cell.dataset.raw ?? cell.textContent ?? '') === want) {
+                                    matchTr = tr; break;
+                                }
                             }
-                            if (ok) { matchTr = tr; break; }
                         }
 
-                        if (matchTr) matchTr.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        // FALLBACK: full rowData comparison (handles entries without colAliases)
+                        if (!matchTr) {
+                            const rdEntries = Object.entries(entry.rowData || {});
+                            for (const tr of tbody.querySelectorAll('tr')) {
+                                const tds = tr.querySelectorAll('td');
+                                let ok = rdEntries.length > 0;
+                                for (const [col, val] of rdEntries) {
+                                    const bare = col.includes('.') ? col.split('.')[1] : col;
+                                    const idx  = colIdxMap[col] ?? colIdxMap[bare];
+                                    if (idx == null) continue;
+                                    const cell = tds[idx];
+                                    if (!cell) { ok = false; break; }
+                                    if (val === null) {
+                                        if (!cell.classList.contains('is-null')) { ok = false; break; }
+                                    } else {
+                                        const raw = cell.dataset.raw ?? cell.textContent ?? null;
+                                        if (String(raw) !== String(val)) { ok = false; break; }
+                                    }
+                                }
+                                if (ok) { matchTr = tr; break; }
+                            }
+                        }
+
+                        if (filterMode && matchTr) {
+                            // Hide every other row and highlight the match
+                            tbody.querySelectorAll('tr').forEach(tr => {
+                                tr.style.display = tr === matchTr ? '' : 'none';
+                            });
+                            matchTr.classList.add('tl-filtered-row');
+
+                            // Dismissible banner above the table
+                            document.getElementById('tl-row-filter-banner')?.remove();
+                            const wrapper = document.getElementById('results-table-wrapper');
+                            if (wrapper) {
+                                const banner   = document.createElement('div');
+                                banner.id        = 'tl-row-filter-banner';
+                                banner.className = 'tl-row-filter-banner';
+                                const msg = document.createElement('span');
+                                msg.textContent = 'Filtered — showing 1 row';
+                                const clearBtn = document.createElement('button');
+                                clearBtn.className   = 'tl-row-filter-banner__clear';
+                                clearBtn.textContent = 'Show all';
+                                clearBtn.addEventListener('click', () => {
+                                    tbody.querySelectorAll('tr').forEach(tr => { tr.style.display = ''; });
+                                    matchTr.classList.remove('tl-filtered-row');
+                                    banner.remove();
+                                });
+                                banner.appendChild(msg);
+                                banner.appendChild(clearBtn);
+                                wrapper.parentElement.insertBefore(banner, wrapper);
+                            }
+                        } else {
+                            if (matchTr) matchTr.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        }
                         Results.focusColumn(entry.colName);
                     });
                 });
+
+                footer.appendChild(filterChk);
                 footer.appendChild(loadRecBtn);
             }
 
@@ -2549,5 +2669,134 @@ const Timeline = (() => {
     }
 
     // -------------------------------------------------------------------------
-    return { init, toggle, addEntry, refresh };
+    // Chain preview support
+    // -------------------------------------------------------------------------
+
+    /** Called by Chain module to set/clear the preview entries and re-render. */
+    function setPreviewEntries(entries) {
+        _chainPreviewEntries = Array.isArray(entries) ? entries.slice() : [];
+        if (_visible) _render();
+    }
+
+    /**
+     * Renders the chain preview track into #timeline-preview-wrap.
+     * Uses _chainAxisCache (set by _renderVisual) for shared axis scale.
+     * Called at the end of _render() so it always reflects the latest state.
+     */
+    function _renderChainPreview() {
+        const wrap = document.getElementById('timeline-preview-wrap');
+        if (!wrap) return;
+
+        if (_chainPreviewEntries.length === 0) {
+            wrap.innerHTML = '';
+            wrap.classList.add('hidden');
+            return;
+        }
+
+        wrap.classList.remove('hidden');
+        wrap.innerHTML = '';
+
+        const cache   = _chainAxisCache || {};
+        const trackPx = cache.trackPx || 600;
+        const pad     = cache.pad     || VIS.padPct;
+        const axMin   = cache.min;
+        const axRange = cache.range;
+
+        const pxOf = pos => (pad + pos * (1 - 2 * pad)) * trackPx;
+        const gPos = v => {
+            if (axRange === null || axRange === undefined) return 0.5;
+            const t = _parseTime(v);
+            return t !== null ? (t - axMin) / axRange : 0.5;
+        };
+
+        // Sort preview entries by time
+        const sorted = [..._chainPreviewEntries].sort((a, b) => {
+            const ta = _parseTime(a.colValue), tb = _parseTime(b.colValue);
+            if (ta === null && tb === null) return 0;
+            if (ta === null) return 1; if (tb === null) return -1;
+            return ta - tb;
+        });
+
+        const PROX_LABEL = { pivot: 'pivot', before: 'before', same: 'same', after: 'after' };
+        const TRACK_H = 80;
+        const AXIS_Y  = 44;
+        const DOT_R   = 5;
+
+        const scroller = document.createElement('div');
+        scroller.className = 'tl-preview-scroller';
+
+        const track = document.createElement('div');
+        track.className   = 'tl-preview-track';
+        track.style.width  = trackPx + 'px';
+        track.style.height = TRACK_H + 'px';
+
+        // Axis line
+        const axis = document.createElement('div');
+        axis.className = 'tl-preview-axis';
+        axis.style.top = AXIS_Y + 'px';
+        track.appendChild(axis);
+
+        sorted.forEach(entry => {
+            const xpx   = pxOf(gPos(entry.colValue));
+            const color = entry.color || '#888';
+            const ptype = entry.proxType || 'same';
+            const plabel = PROX_LABEL[ptype] || ptype;
+
+            const tick = document.createElement('div');
+            tick.className  = 'tl-preview-tick';
+            tick.style.left = xpx + 'px';
+            tick.title      = `[${plabel}] ${entry.recName} — ${entry.colName}: ${_fmtVal(entry.colValue)}\nClick to remove`;
+
+            // Stem
+            const stem = document.createElement('div');
+            stem.className  = 'tl-preview-stem';
+            stem.style.top  = (AXIS_Y - DOT_R - 18) + 'px';
+            stem.style.height = (18 + DOT_R) + 'px';
+            stem.style.background = color;
+            tick.appendChild(stem);
+
+            // Dot
+            const dot = document.createElement('div');
+            dot.className        = 'tl-preview-dot';
+            dot.style.background = color;
+            dot.style.boxShadow  = `0 0 0 2px ${color}44`;
+            dot.style.top        = (AXIS_Y - DOT_R) + 'px';
+            tick.appendChild(dot);
+
+            // Prox-type badge above stem
+            const badge = document.createElement('span');
+            badge.className      = 'tl-preview-badge';
+            badge.textContent    = plabel;
+            badge.style.background = color;
+            badge.style.top      = (AXIS_Y - DOT_R - 18 - 16) + 'px';
+            tick.appendChild(badge);
+
+            // Value label below axis (user label overrides value)
+            const lbl = document.createElement('span');
+            lbl.className   = 'tl-preview-lbl';
+            lbl.style.top   = (AXIS_Y + DOT_R + 4) + 'px';
+            lbl.textContent = entry.label || _trunc(_fmtVal(entry.colValue), 14);
+            tick.appendChild(lbl);
+
+            // Click to remove this preview entry
+            tick.addEventListener('click', () => {
+                if (typeof Chain !== 'undefined') Chain.removePreviewEntry(entry.id);
+            });
+
+            track.appendChild(tick);
+        });
+
+        scroller.appendChild(track);
+        wrap.appendChild(scroller);
+
+        // Sync scroll with main timeline scroller
+        const mainScroller = document.querySelector('#timeline-visual .tl-visual-scroller');
+        if (mainScroller) {
+            mainScroller.onscroll = () => { scroller.scrollLeft = mainScroller.scrollLeft; };
+            scroller.onscroll    = () => { mainScroller.scrollLeft = scroller.scrollLeft; };
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    return { init, toggle, addEntry, refresh, setPreviewEntries, openColorPicker: _openColorPicker };
 })();

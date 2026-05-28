@@ -831,6 +831,18 @@ const Recordings = (() => {
         renameBtn.addEventListener('click', e => { e.stopPropagation(); _startGroupRename(group, nameEl, hdr); });
         hdr.appendChild(renameBtn);
 
+        // Chain timeline button
+        const chainBtn     = document.createElement('button');
+        chainBtn.className = 'rec-group-btn rec-group-chain-btn';
+        chainBtn.title     = 'Chain Timeline — map date columns and pivot across recordings';
+        chainBtn.textContent = '⛓';
+        if (typeof Chain !== 'undefined' && Chain.isActive(group.id)) chainBtn.classList.add('is-active');
+        chainBtn.addEventListener('click', async e => {
+            e.stopPropagation();
+            if (typeof Chain !== 'undefined') await Chain.toggle(group.id);
+        });
+        hdr.appendChild(chainBtn);
+
         // Delete button
         const delBtn     = document.createElement('button');
         delBtn.className = 'rec-group-btn rec-group-btn--del';
@@ -1058,6 +1070,7 @@ const Recordings = (() => {
         });
         if (rec.viewState) Results.applyViewState?.(rec.viewState);
         setCurrentRec(rec.id);
+        if (typeof Chain !== 'undefined') Chain.applyHighlight();
     }
 
     // -------------------------------------------------------------------------

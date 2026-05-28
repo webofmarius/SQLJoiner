@@ -433,9 +433,32 @@
         </div>
         <div id="timeline-body">
             <div id="timeline-visual"></div>
+            <div id="timeline-chain-controls" class="hidden">
+                <span class="tl-chain-ctrl-label">Chain preview</span>
+                <button id="chain-confirm-btn" class="tl-chain-btn tl-chain-btn--ok">✓ Confirm</button>
+                <button id="chain-discard-btn" class="tl-chain-btn tl-chain-btn--discard">✕ Discard</button>
+                <span class="tl-chain-hint">Click a preview entry to remove it</span>
+            </div>
+            <div id="timeline-preview-wrap" class="hidden"></div>
         </div>
     </div>
 
+
+    <!-- ==================== CHAIN MAPPING MODAL ==================== -->
+    <div id="modal-chain-mapping" class="chain-modal hidden">
+        <div class="chain-modal-box">
+            <div class="chain-modal-header">
+                <span>Chain — <span class="chain-mapping-title-name"></span></span>
+                <button class="chain-mapping-cancel" title="Close">✕</button>
+            </div>
+            <p class="chain-modal-hint">Select one date column per recording to use as the time pivot axis.</p>
+            <div class="chain-mapping-body"></div>
+            <div class="chain-modal-footer">
+                <button class="chain-mapping-ok">Save mapping</button>
+                <button class="chain-mapping-cancel">Cancel</button>
+            </div>
+        </div>
+    </div>
 
     <div id="calculus-toolbox" class="hidden">
         <div id="calculus-toolbox-header">
@@ -1134,6 +1157,7 @@
     <script src="assets/js/minimap.js"></script>
     <script src="assets/js/recordings.js"></script>
     <script src="assets/js/timeline.js"></script>
+    <script src="assets/js/chain.js"></script>
 
     <!-- ==================== TABLE SEARCH MODAL ==================== -->
     <div id="modal-table-search" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modal-table-search-title">

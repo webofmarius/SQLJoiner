@@ -287,6 +287,7 @@ const App = (() => {
         if (typeof Minimap     !== 'undefined') Minimap.init();
         if (typeof Recordings  !== 'undefined') Recordings.init();
         if (typeof Timeline    !== 'undefined') Timeline.init();
+        if (typeof Chain       !== 'undefined') Chain.init();
 
         // Capture the initial clean-slate baseline so dirty checks work from the start.
         // Use setTimeout so any non-awaited async init work (e.g. _activateProfile)

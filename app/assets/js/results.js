@@ -2404,6 +2404,11 @@ const Results = (() => {
 
                 // Left-click: eval mode / bind mode intercept, then compare / duplicates / normal select
                 td.addEventListener('click', e => {
+                    // Chain mode intercept — plain click on a mapped date column
+                    if (typeof Chain !== 'undefined' && Chain.isActive()) {
+                        const recId = Recordings?.getCurrentRecId?.() ?? null;
+                        if (recId && Chain.onCellClick(recId, colIdx, row, cols, colTables)) return;
+                    }
                     // Cmd/Ctrl+left-click: pin cell row to Timeline
                     if ((e.metaKey || e.ctrlKey) && typeof Timeline !== 'undefined') {
                         e.preventDefault();
@@ -2425,6 +2430,24 @@ const Results = (() => {
                             if (colTables[i]) colAliasMap[key] = `${colTables[i]}.${c}`;
                             colOrderArr.push(key);
                         });
+                        // Capture per-column highlight themes so the peek panel can mirror them
+                        const colThemeMap = {};
+                        colOrderArr.forEach((key, i) => {
+                            if (_colThemes[i]) colThemeMap[key] = _colThemes[i];
+                            else if (_cmdColHighlights.has(i)) colThemeMap[key] = 'col-cmd-highlight';
+                        });
+                        // Capture table-alias background colors (applied as inline styles on th)
+                        // nth-child: +2 because col 0 → th:nth-child(2) (1st child is row-number col)
+                        const colBgMap = {};
+                        const thead = document.querySelector('#results-table thead');
+                        if (thead) {
+                            colOrderArr.forEach((key, i) => {
+                                const th = thead.querySelector(`th:nth-child(${i + 2})`);
+                                if (th?.style.backgroundColor) {
+                                    colBgMap[key] = { bg: th.style.backgroundColor, text: th.style.color || '' };
+                                }
+                            });
+                        }
                         const recId  = Recordings?.getCurrentRecId?.() ?? null;
                         const rec    = recId
                             ? (State.recordings || []).find(r => r.id === recId)
@@ -2440,7 +2463,9 @@ const Results = (() => {
                             col,
                             row[colIdx] ?? null,
                             colAliasMap,
-                            colOrderArr
+                            colOrderArr,
+                            colThemeMap,
+                            colBgMap
                         );
                         return;
                     }
