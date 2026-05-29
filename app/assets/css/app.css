@@ -8509,6 +8509,18 @@ body:has(#timeline-panel.is-maximized) #results-panel { z-index: 215; }
     transition: opacity 0.15s;
 }
 
+/* Dim non-active-group recordings & groups while in chain "select pivot" mode */
+#recordings-list.chain-pivot-focus .rec-entry:not(.chain-group-active),
+#recordings-list.chain-pivot-focus .rec-group-header:not(.chain-group-active) {
+    opacity: 0.3;
+    transition: opacity 0.15s;
+    pointer-events: none;
+}
+#recordings-list.chain-pivot-focus .rec-entry.chain-group-active,
+#recordings-list.chain-pivot-focus .rec-group-header.chain-group-active {
+    transition: opacity 0.15s;
+}
+
 /* ==========================================================================
    Chain Timeline — Column Mapping Modal
    ========================================================================== */

@@ -441,12 +441,27 @@ const Chain = (() => {
     // Highlight mapped column in results table after Results.render()
     // -------------------------------------------------------------------------
     function applyHighlight() {
+        // --- Reset results table ---
         document.querySelectorAll('.chain-col-highlight').forEach(el => el.classList.remove('chain-col-highlight'));
         const tbl = document.getElementById('results-table');
         if (tbl) tbl.classList.remove('chain-pivot-focus');
 
+        // --- Reset recordings list ---
+        const recList = document.getElementById('recordings-list');
+        document.querySelectorAll('.chain-group-active').forEach(el => el.classList.remove('chain-group-active'));
+        if (recList) recList.classList.remove('chain-pivot-focus');
+
         if (!_activeGroupId) return;
 
+        // --- Dim recordings list: mark active group elements, dim everything else ---
+        if (recList) {
+            recList.classList.add('chain-pivot-focus');
+            recList.querySelectorAll(
+                `.rec-entry[data-group-id="${_activeGroupId}"], .rec-group-header[data-group-id="${_activeGroupId}"]`
+            ).forEach(el => el.classList.add('chain-group-active'));
+        }
+
+        // --- Results table: highlight mapped pivot column ---
         const recId = typeof Recordings !== 'undefined' ? Recordings.getCurrentRecId?.() : null;
         if (!recId) return;
 
