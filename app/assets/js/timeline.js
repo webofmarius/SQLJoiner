@@ -1896,6 +1896,19 @@ const Timeline = (() => {
         App.notify?.('Timeline downloaded as file.', 'info');
     }
 
+    function _downloadText(text, name) {
+        const blob = new Blob([text], { type: 'text/markdown' });
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        a.href     = url;
+        a.download = (name || 'ai-knowledge').replace(/[/\\?%*:|"<>]/g, '_') + '.md';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        App.notify?.('AI Knowledge downloaded as file.', 'info');
+    }
+
     function _openSavedPopup(btnEl) {
         _closeSavedPopup();
         const stls = _savedTimelines();
@@ -2051,6 +2064,150 @@ const Timeline = (() => {
                 }
             });
             row.appendChild(expBtn);
+
+            const aiBtn = document.createElement('button');
+            aiBtn.className   = 'tl-saved-popup__ai';
+            aiBtn.textContent = '⬡ AI';
+            aiBtn.title       = 'Copy AI Knowledge (data points + queries + CREATE statements) to clipboard';
+            aiBtn.addEventListener('click', async () => {
+                aiBtn.disabled    = true;
+                aiBtn.textContent = '…';
+                try {
+                    // ── 1. Sort entries by colValue ASC ─────────────────────
+                    const sortedEntries = [...stl.entries].sort((a, b) => {
+                        const ta = a.colValue != null ? new Date(a.colValue).getTime() : NaN;
+                        const tb = b.colValue != null ? new Date(b.colValue).getTime() : NaN;
+                        if (isNaN(ta) && isNaN(tb)) return 0;
+                        if (isNaN(ta)) return 1;
+                        if (isNaN(tb)) return -1;
+                        return ta - tb;
+                    });
+
+                    // ── 2. Collect unique recordings referenced by the entries ─
+                    const recMap = new Map(); // recId → recording object
+                    sortedEntries.forEach(e => {
+                        if (e.recId && !recMap.has(e.recId)) {
+                            const rec = (State.recordings || []).find(r => r.id === e.recId);
+                            if (rec) recMap.set(e.recId, rec);
+                        }
+                    });
+
+                    // ── 3. Collect unique tables across all those recordings ──
+                    // Key: "database\0name" to deduplicate across recordings
+                    const tableMap = new Map();
+                    recMap.forEach(rec => {
+                        (rec.island?.tables || []).forEach(t => {
+                            if (t.isSubquery) return;
+                            const key = `${t.database || ''}\0${t.name}`;
+                            if (!tableMap.has(key)) tableMap.set(key, t);
+                        });
+                    });
+
+                    // ── 4. Fetch CREATE statements ───────────────────────────
+                    const ddlMap = new Map(); // same key → ddl string
+                    const profileId = State.activeProfileId;
+                    if (profileId && typeof API !== 'undefined') {
+                        await Promise.all([...tableMap.entries()].map(async ([key, t]) => {
+                            try {
+                                const res = await API.schema.createStatement(profileId, t.name, t.database ?? '');
+                                ddlMap.set(key, res.ddl ?? '');
+                            } catch (_) {
+                                ddlMap.set(key, `-- Could not fetch CREATE statement for ${t.name}`);
+                            }
+                        }));
+                    }
+
+                    // ── 5. Build Markdown document ───────────────────────────
+                    const lines = [];
+
+                    lines.push(`# Timeline AI Knowledge`);
+                    lines.push(`**Timeline:** ${stl.name || 'Untitled'}`);
+                    lines.push(`**Exported:** ${new Date().toISOString()}`);
+                    lines.push('');
+
+                    // — Data Points (same JSON as the Export button) —
+                    const dpSeen = {};
+                    const dpOut  = {};
+                    sortedEntries.forEach(e => {
+                        const base = e.colValue != null ? String(e.colValue) : '(unknown)';
+                        let key = base;
+                        if (dpSeen[base] !== undefined) {
+                            dpSeen[base]++;
+                            key = base + '__' + dpSeen[base];
+                        } else {
+                            dpSeen[base] = 1;
+                        }
+                        const columns = {};
+                        (e.pinnedCols || []).forEach(col => {
+                            const aliasKey = e.colAliases?.[col] || col;
+                            columns[aliasKey] = e.rowData?.[col] ?? null;
+                        });
+                        dpOut[key] = { label: e.label || '', columns };
+                    });
+
+                    lines.push('---');
+                    lines.push('');
+                    lines.push('## Data Points (chronological)');
+                    lines.push('');
+                    lines.push('```json');
+                    lines.push(JSON.stringify(dpOut, null, 2));
+                    lines.push('```');
+                    lines.push('');
+
+                    // — Queries —
+                    lines.push('---');
+                    lines.push('');
+                    lines.push('## Queries');
+                    lines.push('');
+                    if (recMap.size === 0) {
+                        lines.push('*(no recordings associated with this timeline)*');
+                        lines.push('');
+                    } else {
+                        recMap.forEach(rec => {
+                            const recLabel = rec.name || new Date(rec.timestamp).toLocaleString();
+                            lines.push(`### ${recLabel}`);
+                            lines.push('```sql');
+                            lines.push((rec.sql || '').trim() || '-- (no query stored)');
+                            lines.push('```');
+                            lines.push('');
+                        });
+                    }
+
+                    // — Table Schemas —
+                    lines.push('---');
+                    lines.push('');
+                    lines.push('## Table Schemas');
+                    lines.push('');
+                    if (tableMap.size === 0) {
+                        lines.push('*(no tables found)*');
+                        lines.push('');
+                    } else {
+                        tableMap.forEach((t, key) => {
+                            const tLabel = t.database ? `${t.database}.${t.name}` : t.name;
+                            lines.push(`### ${tLabel}`);
+                            lines.push('```sql');
+                            lines.push((ddlMap.get(key) || '-- (not available)').trim());
+                            lines.push('```');
+                            lines.push('');
+                        });
+                    }
+
+                    const md = lines.join('\n');
+                    if (navigator.clipboard?.writeText) {
+                        navigator.clipboard.writeText(md)
+                            .then(() => App.notify?.('AI Knowledge copied to clipboard.', 'success'))
+                            .catch(() => _downloadText(md, stl.name + '-ai-knowledge'));
+                    } else {
+                        _downloadText(md, stl.name + '-ai-knowledge');
+                    }
+                } catch (err) {
+                    App.notify?.('AI Knowledge export failed: ' + err.message, 'error');
+                } finally {
+                    aiBtn.disabled    = false;
+                    aiBtn.textContent = '⬡ AI';
+                }
+            });
+            row.appendChild(aiBtn);
 
             const dupBtn = document.createElement('button');
             dupBtn.className   = 'tl-saved-popup__dup';
