@@ -1756,7 +1756,9 @@ const Timeline = (() => {
 
         function _buildTimelineRow(stl) {
             const row = document.createElement('div');
-            row.className = 'tl-saved-popup__row' + (stl.groupId ? ' tl-saved-popup__row--in-group' : '');
+            row.className = 'tl-saved-popup__row'
+                + (stl.groupId           ? ' tl-saved-popup__row--in-group' : '')
+                + (stl.id === _activeStlId ? ' is-loaded'                     : '');
             row.draggable = true;
             row.dataset.stlId = stl.id;
 
@@ -1840,6 +1842,23 @@ const Timeline = (() => {
                 if (_multiTrackMode) _render();
             });
             row.appendChild(renBtn);
+
+            const dupBtn = document.createElement('button');
+            dupBtn.className   = 'tl-saved-popup__dup';
+            dupBtn.textContent = '⧉';
+            dupBtn.title       = 'Duplicate saved timeline';
+            dupBtn.addEventListener('click', () => {
+                const copy = JSON.parse(JSON.stringify(stl));
+                copy.id        = _newStlId();
+                copy.name      = stl.name + ' (copy)';
+                copy.timestamp = Date.now();
+                delete copy.groupId; // place at root level, outside any group
+                const insertAt = stls.indexOf(stl) + 1;
+                stls.splice(insertAt, 0, copy);
+                _updateSavedCount();
+                _rerender();
+            });
+            row.appendChild(dupBtn);
 
             const delBtn = document.createElement('button');
             delBtn.className   = 'tl-saved-popup__del';

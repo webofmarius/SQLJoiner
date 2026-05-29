@@ -7949,6 +7949,13 @@ body:has(#timeline-panel.is-maximized) #results-panel { z-index: 215; }
     padding: 5px 10px;
 }
 .tl-saved-popup__row:hover { background: var(--surface2); }
+.tl-saved-popup__row.is-loaded {
+    border-color: var(--accent, #4a9eff);
+    background: color-mix(in srgb, var(--accent, #4a9eff) 22%, var(--surface2));
+}
+.tl-saved-popup__row.is-loaded:hover {
+    background: color-mix(in srgb, var(--accent, #4a9eff) 30%, var(--surface2));
+}
 .tl-saved-popup__vis { flex-shrink: 0; cursor: pointer; }
 .tl-saved-popup__name {
     flex: 1;
@@ -7967,6 +7974,7 @@ body:has(#timeline-panel.is-maximized) #results-panel { z-index: 215; }
     flex-shrink: 0;
 }
 .tl-saved-popup__ren,
+.tl-saved-popup__dup,
 .tl-saved-popup__del {
     background: transparent;
     border: none;
@@ -7978,6 +7986,7 @@ body:has(#timeline-panel.is-maximized) #results-panel { z-index: 215; }
     flex-shrink: 0;
 }
 .tl-saved-popup__ren:hover  { background: var(--surface3); color: var(--text); }
+.tl-saved-popup__dup:hover  { background: var(--surface3); color: var(--text); }
 .tl-saved-popup__del:hover  { background: rgba(248,113,113,0.12); color: #f87171; }
 
 /* Axis line */
