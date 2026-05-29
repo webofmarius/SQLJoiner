@@ -179,8 +179,26 @@ const Timeline = (() => {
     // -------------------------------------------------------------------------
     // Public: add an entry (called from results.js on Cmd/Ctrl+click)
     // -------------------------------------------------------------------------
+    function _rowDataEqual(a, b) {
+        const ka = Object.keys(a || {}), kb = Object.keys(b || {});
+        if (ka.length !== kb.length) return false;
+        return ka.every(k => String(a[k] ?? '') === String(b[k] ?? ''));
+    }
+
     function addEntry(recId, recName, recColor, rowData, colName, colValue, colAliases, colOrder, colThemes, colBgColors, options = {}) {
         const st = _st();
+
+        // Duplicate check: same recording + same column + same row data = same point
+        const duplicate = st.entries.find(e =>
+            e.recId   === (recId   ?? null) &&
+            e.colName === (colName || '')   &&
+            _rowDataEqual(e.rowData, rowData)
+        );
+        if (duplicate) {
+            App.notify?.(`Already on timeline: ${recName || 'Live result'} · ${colName}`, 'warn');
+            return;
+        }
+
         const entry = {
             id:         _newId(),
             recId:      recId    ?? null,
