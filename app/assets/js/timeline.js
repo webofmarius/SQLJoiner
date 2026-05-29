@@ -1736,6 +1736,22 @@ const Timeline = (() => {
         _render();
     }
 
+    // -------------------------------------------------------------------------
+    // Timeline export helpers
+    // -------------------------------------------------------------------------
+    function _downloadJson(json, name) {
+        const blob = new Blob([json], { type: 'application/json' });
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        a.href     = url;
+        a.download = (name || 'timeline').replace(/[/\\?%*:|"<>]/g, '_') + '.json';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        App.notify?.('Timeline downloaded as file.', 'info');
+    }
+
     function _openSavedPopup(btnEl) {
         _closeSavedPopup();
         const stls = _savedTimelines();
@@ -1842,6 +1858,47 @@ const Timeline = (() => {
                 if (_multiTrackMode) _render();
             });
             row.appendChild(renBtn);
+
+            const expBtn = document.createElement('button');
+            expBtn.className   = 'tl-saved-popup__exp';
+            expBtn.textContent = 'Export';
+            expBtn.title       = 'Copy timeline to clipboard as JSON (fallback: download file)';
+            expBtn.addEventListener('click', () => {
+                // Format: datetime as key → { label, columns: { alias.col: value, … } }
+                // Duplicate datetimes get __2, __3 … suffix to keep keys unique.
+                // columns contains only the pinned columns with their actual row values.
+                const seen = {};
+                const out  = {};
+                stl.entries.forEach(e => {
+                    const base = e.colValue != null ? String(e.colValue) : '(unknown)';
+                    let key = base;
+                    if (seen[base] !== undefined) {
+                        seen[base]++;
+                        key = base + '__' + seen[base];
+                    } else {
+                        seen[base] = 1;
+                    }
+                    // Build columns map for pinned cols: alias.col → raw value
+                    const columns = {};
+                    (e.pinnedCols || []).forEach(col => {
+                        const aliasKey = e.colAliases?.[col] || col;
+                        columns[aliasKey] = e.rowData?.[col] ?? null;
+                    });
+                    out[key] = {
+                        label:   e.label || '',
+                        columns,
+                    };
+                });
+                const json = JSON.stringify(out, null, 2);
+                if (navigator.clipboard?.writeText) {
+                    navigator.clipboard.writeText(json)
+                        .then(() => App.notify?.('Timeline copied to clipboard.', 'success'))
+                        .catch(() => _downloadJson(json, stl.name));
+                } else {
+                    _downloadJson(json, stl.name);
+                }
+            });
+            row.appendChild(expBtn);
 
             const dupBtn = document.createElement('button');
             dupBtn.className   = 'tl-saved-popup__dup';

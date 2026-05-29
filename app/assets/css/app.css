@@ -7974,6 +7974,7 @@ body:has(#timeline-panel.is-maximized) #results-panel { z-index: 215; }
     flex-shrink: 0;
 }
 .tl-saved-popup__ren,
+.tl-saved-popup__exp,
 .tl-saved-popup__dup,
 .tl-saved-popup__del {
     background: transparent;
@@ -7986,6 +7987,7 @@ body:has(#timeline-panel.is-maximized) #results-panel { z-index: 215; }
     flex-shrink: 0;
 }
 .tl-saved-popup__ren:hover  { background: var(--surface3); color: var(--text); }
+.tl-saved-popup__exp:hover  { background: var(--surface3); color: var(--text); }
 .tl-saved-popup__dup:hover  { background: var(--surface3); color: var(--text); }
 .tl-saved-popup__del:hover  { background: rgba(248,113,113,0.12); color: #f87171; }
 
