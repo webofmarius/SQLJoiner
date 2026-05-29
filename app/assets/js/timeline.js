@@ -409,15 +409,12 @@ const Timeline = (() => {
                 keys.forEach(k => {
                     const v      = entry.rowData[k];
                     const tr     = document.createElement('tr');
+                    tr.dataset.searchKey = _aliases[k] || k; // full aliased key for search
                     const isNull = v === null || v === undefined;
 
                     const keyTd = document.createElement('td');
                     keyTd.className   = 'tl-peek-key';
-                    // Strip alias prefix when shown under a group header
-                    const bareLabel = (_aliases[k] || k).includes('.')
-                        ? (_aliases[k] || k).split('.').slice(1).join('.')
-                        : (_aliases[k] || k);
-                    keyTd.textContent = bareLabel;
+                    keyTd.textContent = _aliases[k] || k;
 
                     const valTd = document.createElement('td');
                     valTd.className   = 'tl-peek-val' + (isNull ? ' is-null' : '');
@@ -470,6 +467,7 @@ const Timeline = (() => {
                 keys.forEach(k => {
                     const v      = entry.rowData[k];
                     const tr     = document.createElement('tr');
+                    tr.dataset.searchKey = _aliases[k] || k; // full aliased key for search
                     const isNull = v === null || v === undefined;
 
                     const keyTd = document.createElement('td');
@@ -979,8 +977,12 @@ const Timeline = (() => {
         const _applyColFilter = () => {
             const term = searchInput.value.toLowerCase();
             panel.querySelectorAll('tr').forEach(tr => {
-                const keyCell = tr.querySelector('.tl-peek-key');
-                const match   = !term || (keyCell?.textContent.toLowerCase().includes(term));
+                if (tr.classList.contains('tl-peek-group-header')) return; // always keep group headers visible
+                const keyCell  = tr.querySelector('.tl-peek-key');
+                const fullKey  = tr.dataset.searchKey || '';
+                const match    = !term
+                    || keyCell?.textContent.toLowerCase().includes(term)
+                    || fullKey.toLowerCase().includes(term);
                 tr.style.display = match ? '' : 'none';
             });
         };
@@ -1090,7 +1092,7 @@ const Timeline = (() => {
                 filterChk.type      = 'checkbox';
                 filterChk.id        = filterChkId;
                 filterChk.className = 'tl-tick-peek__filter-chk';
-                filterChk.checked   = true;
+                filterChk.checked   = false;
                 filterChk.title     = 'Show all rows (uncheck to show only this row)';
 
                 const loadRecBtn = document.createElement('button');
