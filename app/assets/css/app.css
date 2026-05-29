@@ -8155,6 +8155,14 @@ body:has(#timeline-panel.is-maximized) #results-panel { z-index: 215; }
 .tl-tick:has(.tl-tick__top:hover) .tl-tick__top-col,
 .tl-tick:has(.tl-tick__dot:hover) .tl-tick__top-col,
 .tl-tick:has(.tl-tick__bottom:hover) .tl-tick__top-col { opacity: 1; }
+
+/* Bold + italic on the whole tick when hovering the dot, stem, or either label */
+.tl-tick:has(.tl-tick__dot:hover),
+.tl-tick:has(.tl-tick__stem:hover),
+.tl-tick:has(.tl-tick__top:hover),
+.tl-tick:has(.tl-tick__bottom:hover) {
+    font-weight: 700;
+}
 .tl-tick__bottom {
     display: flex;
     flex-direction: column;
