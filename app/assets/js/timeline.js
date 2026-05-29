@@ -1168,15 +1168,16 @@ const Timeline = (() => {
                 b.style.display = b.dataset.groupId === groupId ? '' : 'none';
             });
             _isolatedGroupId = groupId;
+            _updateLastPointBtn();
         }
     }
 
     function _updateLastPointBtn() {
         const btn = document.getElementById('btn-timeline-last-point');
         if (!btn) return;
-        const st   = _st();
-        const last = st.entries.length ? st.entries[st.entries.length - 1] : null;
-        btn.classList.toggle('is-active', !!last && _isolatedTickId === last.id);
+        // Active whenever any tick (or group) is isolated — right-click on any point
+        // or clicking the button itself both enter isolation mode.
+        btn.classList.toggle('is-active', _isolatedTickId !== null || _isolatedGroupId !== null);
     }
 
     function _toggleLastPoint() {

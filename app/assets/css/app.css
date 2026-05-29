@@ -7528,6 +7528,7 @@ textarea.sql-bd-active.scope-mode-on {
     white-space: nowrap;
 }
 .tl-btn-sm:hover { border-color: var(--accent); color: var(--accent); }
+.tl-btn-sm.is-active { border-color: var(--accent); color: var(--accent); background: rgba(74,158,255,0.12); }
 #btn-timeline-clear {
     border-color: transparent;
     color: var(--text-muted);
