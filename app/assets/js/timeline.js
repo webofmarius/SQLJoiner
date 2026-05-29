@@ -348,9 +348,12 @@ const Timeline = (() => {
                 ? { bg: _liveTh.style.backgroundColor, text: _liveTh.style.color || '' }
                 : (entry.colBgColors?.[k] || null);
             if (_colBg) {
-                keyTd.style.background = _colBg.bg;
+                const _dimBg = _colBg.bg.startsWith('#')
+                    ? _colBg.bg + '40'  // hex → add 25% alpha
+                    : _colBg.bg.replace(/^rgb\((.+)\)$/, 'rgba($1, 0.25)');
+                keyTd.style.background = _dimBg;
                 keyTd.style.color      = _colBg.text;
-                valTd.style.background = _colBg.bg;
+                valTd.style.background = _dimBg;
                 valTd.style.color      = _colBg.text;
             }
             // Right-click / cmd+right-click theme class (overrides via !important)

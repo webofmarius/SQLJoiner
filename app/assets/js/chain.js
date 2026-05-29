@@ -418,7 +418,7 @@ const Chain = (() => {
         if (!_hasPreview) return;
         _previewEntries.forEach(e => {
             if (typeof Timeline !== 'undefined') {
-                Timeline.addEntry(e.recId, e.recName, e.color, e.rowData, e.colName, e.colValue, e.colAliases, e.colOrder, null, null, { label: e.label || '' });
+                Timeline.addEntry(e.recId, e.recName, e.color, e.rowData, e.colName, e.colValue, e.colAliases, e.colOrder, null, _buildColBgColors(e.colOrder, e.colAliases), { label: e.label || '' });
             }
         });
         _clearPreviewSilent();
@@ -536,6 +536,33 @@ const Chain = (() => {
             out.push(key);
         });
         return out;
+    }
+
+    function _readableTextColor(hex) {
+        const r = parseInt(hex.slice(1, 3), 16) / 255;
+        const g = parseInt(hex.slice(3, 5), 16) / 255;
+        const b = parseInt(hex.slice(5, 7), 16) / 255;
+        const lin = c => c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+        const L = 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+        return L > 0.179 ? '#1a1a1a' : '#ffffff';
+    }
+
+    // Build colBgColors from stored colAliases + State.tables so peek panel
+    // mirrors the same header colors as a manual Cmd+click entry would capture.
+    function _buildColBgColors(colOrder, colAliases) {
+        const map = {};
+        const tables = State.tables || [];
+        (colOrder || []).forEach(key => {
+            const aliasedKey = colAliases?.[key];
+            if (!aliasedKey) return;
+            const alias = aliasedKey.includes('.') ? aliasedKey.split('.')[0] : '';
+            if (!alias) return;
+            const tbl = tables.find(t => (t.alias || '') === alias || t.name === alias);
+            if (tbl?.color) {
+                map[key] = { bg: tbl.color, text: _readableTextColor(tbl.color) };
+            }
+        });
+        return Object.keys(map).length ? map : null;
     }
 
     // -------------------------------------------------------------------------
