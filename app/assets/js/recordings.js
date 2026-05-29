@@ -551,6 +551,9 @@ const Recordings = (() => {
         if (selAllEl) {
             selAllEl.checked = allVisibleChks.length > 0 && allVisibleChks.every(c => c.checked);
         }
+
+        // Re-apply chain-mode dim/active classes — the DOM rebuild stripped them
+        if (typeof Chain !== 'undefined') Chain.applyHighlight();
     }
 
     // -------------------------------------------------------------------------
