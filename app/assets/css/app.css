@@ -7795,6 +7795,39 @@ body:has(#timeline-panel.is-maximized) #results-panel { z-index: 215; }
 }
 .tl-peek-chk { cursor: pointer; accent-color: var(--accent); }
 
+/* Per-alias group headers inside the peek panel */
+.tl-peek-group-header td {
+    padding: 5px 6px 4px 6px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    border-radius: 3px;
+    user-select: none;
+}
+.tl-peek-group-hd {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+}
+.tl-peek-group-hd span { flex: 1; }
+.tl-peek-group-toggle {
+    flex-shrink: 0;
+    background: rgba(255,255,255,0.18);
+    border: 1px solid rgba(255,255,255,0.35);
+    border-radius: 3px;
+    color: inherit;
+    cursor: pointer;
+    font-size: 0.72rem;
+    font-weight: 700;
+    line-height: 1;
+    padding: 1px 5px;
+    transition: background 0.12s;
+}
+.tl-peek-group-toggle:hover { background: rgba(255,255,255,0.32); }
+.tl-peek-group-toggle--partial { opacity: 0.75; }
+
 /* ---- Visual timeline view ---- */
 #timeline-visual {
     flex: 1;

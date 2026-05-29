@@ -328,70 +328,211 @@ const Timeline = (() => {
         const colKeys = (entry.colOrder && entry.colOrder.length)
             ? entry.colOrder
             : Object.keys(entry.rowData);
+
+        // Group columns by table alias (part before '.' in the aliased key).
+        // Preserves first-appearance order. '' = no alias.
+        const groups = new Map(); // alias → [k, ...]
         colKeys.forEach(k => {
-            const v = entry.rowData[k];
-            const tr = document.createElement('tr');
-            const isNull = v === null || v === undefined;
+            const aliased = _aliases[k] || '';
+            const alias   = aliased.includes('.') ? aliased.split('.')[0] : '';
+            if (!groups.has(alias)) groups.set(alias, []);
+            groups.get(alias).push(k);
+        });
+        // Show per-alias group headers only in the visual peek (botLblEl present)
+        // and only when at least one column actually has a table alias.
+        const showGroupHeaders = botLblEl && [...groups.keys()].some(a => a !== '');
 
-            const keyTd = document.createElement('td');
-            keyTd.className   = 'tl-peek-key';
-            keyTd.textContent = _aliases[k] || k;
+        groups.forEach((keys, alias) => {
+            // ── Group header row ─────────────────────────────────────────────
+            if (showGroupHeaders && alias) {
+                // Resolve color from the first column in this group
+                const firstKey  = keys[0];
+                const _fColKey  = _aliases[firstKey] || firstKey;
+                const _fLiveTh  = document.querySelector(`#results-table thead th[data-col-key="${_fColKey}"]`);
+                const _groupBg  = _fLiveTh?.style.backgroundColor
+                    ? { bg: _fLiveTh.style.backgroundColor, text: _fLiveTh.style.color || '' }
+                    : (entry.colBgColors?.[firstKey] || null);
 
-            const valTd = document.createElement('td');
-            valTd.className   = 'tl-peek-val' + (isNull ? ' is-null' : '');
-            valTd.textContent = _fmtVal(v);
+                const headerTr = document.createElement('tr');
+                headerTr.className = 'tl-peek-group-header';
 
-            // Table-alias background color: live results header takes priority, stored snapshot as fallback
-            const _colKey = _aliases[k] || k;
-            const _liveTh = document.querySelector(`#results-table thead th[data-col-key="${_colKey}"]`);
-            const _colBg  = _liveTh?.style.backgroundColor
-                ? { bg: _liveTh.style.backgroundColor, text: _liveTh.style.color || '' }
-                : (entry.colBgColors?.[k] || null);
-            if (_colBg) {
-                const _dimBg = _colBg.bg.startsWith('#')
-                    ? _colBg.bg + '40'  // hex → add 25% alpha
-                    : _colBg.bg.replace(/^rgb\((.+)\)$/, 'rgba($1, 0.25)');
-                keyTd.style.background = _dimBg;
-                keyTd.style.color      = _colBg.text;
-                valTd.style.background = _dimBg;
-                valTd.style.color      = _colBg.text;
-            }
-            // Right-click / cmd+right-click theme class (overrides via !important)
-            if (entry.colThemes?.[k]) tr.classList.add(entry.colThemes[k]);
+                const headerTd = document.createElement('td');
+                headerTd.colSpan  = 3; // chk + key + val
+                headerTd.className = 'tl-peek-group-hd';
 
-            // Checkbox column — only shown in visual peek popup (botLblEl provided)
-            if (botLblEl) {
-                const chkTd = document.createElement('td');
-                chkTd.className = 'tl-peek-chk-td';
-                const chk = document.createElement('input');
-                chk.type    = 'checkbox';
-                chk.className = 'tl-peek-chk';
-                chk.title   = 'Show this column under the tick label';
-                chk.checked = entry.pinnedCols.includes(k);
-                chk.addEventListener('change', e => {
+                const aliasSpan = document.createElement('span');
+                aliasSpan.textContent = alias;
+
+                if (_groupBg) {
+                    headerTd.style.background = _groupBg.bg;
+                    headerTd.style.color      = _groupBg.text;
+                }
+
+                // Toggle button: check-all / uncheck-all for this group
+                const toggleBtn = document.createElement('button');
+                toggleBtn.type      = 'button';
+                toggleBtn.className = 'tl-peek-group-toggle';
+
+                // Holds refs to all checkbox inputs in this group (populated below)
+                const groupChks = [];
+
+                const _syncToggle = () => {
+                    const checkedCount = keys.filter(k => entry.pinnedCols.includes(k)).length;
+                    const allChecked   = checkedCount === keys.length;
+                    const noneChecked  = checkedCount === 0;
+                    toggleBtn.textContent = allChecked ? '✓' : '✕';
+                    toggleBtn.title       = allChecked ? 'Uncheck all' : 'Check all';
+                    toggleBtn.classList.toggle('tl-peek-group-toggle--partial', !allChecked && !noneChecked);
+                };
+                _syncToggle();
+
+                toggleBtn.addEventListener('click', e => {
                     e.stopPropagation();
-                    if (chk.checked) {
-                        if (!entry.pinnedCols.includes(k)) entry.pinnedCols.push(k);
+                    const allChecked = keys.every(k => entry.pinnedCols.includes(k));
+                    if (allChecked) {
+                        entry.pinnedCols = entry.pinnedCols.filter(c => !keys.includes(c));
                     } else {
-                        entry.pinnedCols = entry.pinnedCols.filter(c => c !== k);
+                        keys.forEach(k => { if (!entry.pinnedCols.includes(k)) entry.pinnedCols.push(k); });
                     }
+                    groupChks.forEach(chk => { chk.checked = entry.pinnedCols.includes(chk._colKey); });
+                    _syncToggle();
                     _refreshBotLabel(botLblEl, entry);
-                    // In multi-track mode adjust lane heights in-place so the peek
-                    // popup is not closed by a full re-render.
                     if (_multiTrackMode) _updateMultiLaneHeights();
                 });
-                chkTd.appendChild(chk);
-                tr.appendChild(chkTd);
 
-                keyTd.style.cursor = 'pointer';
-                keyTd.addEventListener('click', () => chk.click());
+                headerTd.appendChild(aliasSpan);
+                headerTd.appendChild(toggleBtn);
+                headerTr.appendChild(headerTd);
+                table.appendChild(headerTr);
+
+                // ── Column rows for this group ────────────────────────────────
+                keys.forEach(k => {
+                    const v      = entry.rowData[k];
+                    const tr     = document.createElement('tr');
+                    const isNull = v === null || v === undefined;
+
+                    const keyTd = document.createElement('td');
+                    keyTd.className   = 'tl-peek-key';
+                    // Strip alias prefix when shown under a group header
+                    const bareLabel = (_aliases[k] || k).includes('.')
+                        ? (_aliases[k] || k).split('.').slice(1).join('.')
+                        : (_aliases[k] || k);
+                    keyTd.textContent = bareLabel;
+
+                    const valTd = document.createElement('td');
+                    valTd.className   = 'tl-peek-val' + (isNull ? ' is-null' : '');
+                    valTd.textContent = _fmtVal(v);
+
+                    if (_groupBg) {
+                        const _dimBg = _groupBg.bg.startsWith('#')
+                            ? _groupBg.bg + '40'
+                            : _groupBg.bg.replace(/^rgb\((.+)\)$/, 'rgba($1, 0.25)');
+                        keyTd.style.background = _dimBg;
+                        keyTd.style.color      = _groupBg.text;
+                        valTd.style.background = _dimBg;
+                        valTd.style.color      = _groupBg.text;
+                    }
+                    if (entry.colThemes?.[k]) tr.classList.add(entry.colThemes[k]);
+
+                    const chkTd = document.createElement('td');
+                    chkTd.className = 'tl-peek-chk-td';
+                    const chk = document.createElement('input');
+                    chk.type      = 'checkbox';
+                    chk.className = 'tl-peek-chk';
+                    chk.title     = 'Show this column under the tick label';
+                    chk.checked   = entry.pinnedCols.includes(k);
+                    chk._colKey   = k; // for group toggle sync
+                    groupChks.push(chk);
+                    chk.addEventListener('change', e => {
+                        e.stopPropagation();
+                        if (chk.checked) {
+                            if (!entry.pinnedCols.includes(k)) entry.pinnedCols.push(k);
+                        } else {
+                            entry.pinnedCols = entry.pinnedCols.filter(c => c !== k);
+                        }
+                        _syncToggle();
+                        _refreshBotLabel(botLblEl, entry);
+                        if (_multiTrackMode) _updateMultiLaneHeights();
+                    });
+                    chkTd.appendChild(chk);
+                    tr.appendChild(chkTd);
+
+                    keyTd.style.cursor = 'pointer';
+                    keyTd.addEventListener('click', () => chk.click());
+
+                    tr.appendChild(keyTd);
+                    tr.appendChild(valTd);
+                    table.appendChild(tr);
+                });
+
+            } else {
+                // ── No-alias columns (or group headers disabled) ──────────────
+                keys.forEach(k => {
+                    const v      = entry.rowData[k];
+                    const tr     = document.createElement('tr');
+                    const isNull = v === null || v === undefined;
+
+                    const keyTd = document.createElement('td');
+                    keyTd.className   = 'tl-peek-key';
+                    keyTd.textContent = _aliases[k] || k;
+
+                    const valTd = document.createElement('td');
+                    valTd.className   = 'tl-peek-val' + (isNull ? ' is-null' : '');
+                    valTd.textContent = _fmtVal(v);
+
+                    // Table-alias background color: live results header takes priority, stored snapshot as fallback
+                    const _colKey = _aliases[k] || k;
+                    const _liveTh = document.querySelector(`#results-table thead th[data-col-key="${_colKey}"]`);
+                    const _colBg  = _liveTh?.style.backgroundColor
+                        ? { bg: _liveTh.style.backgroundColor, text: _liveTh.style.color || '' }
+                        : (entry.colBgColors?.[k] || null);
+                    if (_colBg) {
+                        const _dimBg = _colBg.bg.startsWith('#')
+                            ? _colBg.bg + '40'  // hex → add 25% alpha
+                            : _colBg.bg.replace(/^rgb\((.+)\)$/, 'rgba($1, 0.25)');
+                        keyTd.style.background = _dimBg;
+                        keyTd.style.color      = _colBg.text;
+                        valTd.style.background = _dimBg;
+                        valTd.style.color      = _colBg.text;
+                    }
+                    // Right-click / cmd+right-click theme class (overrides via !important)
+                    if (entry.colThemes?.[k]) tr.classList.add(entry.colThemes[k]);
+
+                    // Checkbox column — only shown in visual peek popup (botLblEl provided)
+                    if (botLblEl) {
+                        const chkTd = document.createElement('td');
+                        chkTd.className = 'tl-peek-chk-td';
+                        const chk = document.createElement('input');
+                        chk.type    = 'checkbox';
+                        chk.className = 'tl-peek-chk';
+                        chk.title   = 'Show this column under the tick label';
+                        chk.checked = entry.pinnedCols.includes(k);
+                        chk.addEventListener('change', e => {
+                            e.stopPropagation();
+                            if (chk.checked) {
+                                if (!entry.pinnedCols.includes(k)) entry.pinnedCols.push(k);
+                            } else {
+                                entry.pinnedCols = entry.pinnedCols.filter(c => c !== k);
+                            }
+                            _refreshBotLabel(botLblEl, entry);
+                            // In multi-track mode adjust lane heights in-place so the peek
+                            // popup is not closed by a full re-render.
+                            if (_multiTrackMode) _updateMultiLaneHeights();
+                        });
+                        chkTd.appendChild(chk);
+                        tr.appendChild(chkTd);
+
+                        keyTd.style.cursor = 'pointer';
+                        keyTd.addEventListener('click', () => chk.click());
+                    }
+
+                    tr.appendChild(keyTd);
+                    tr.appendChild(valTd);
+                    table.appendChild(tr);
+                });
             }
-
-            tr.appendChild(keyTd);
-            tr.appendChild(valTd);
-
-            table.appendChild(tr);
         });
+
         el.appendChild(table);
     }
 
