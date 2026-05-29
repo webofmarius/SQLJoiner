@@ -90,7 +90,11 @@ const Chain = (() => {
         body.innerHTML = '';
 
         recs.forEach(rec => {
-            const mapping   = cfg.mappings[rec.id] || {};
+            // Ensure a mapping entry exists with a concrete color so it is always
+            // written to cfg even when the user never touches the color picker.
+            if (!cfg.mappings[rec.id]) cfg.mappings[rec.id] = {};
+            if (!cfg.mappings[rec.id].color) cfg.mappings[rec.id].color = PROX_COLORS.same;
+            const mapping   = cfg.mappings[rec.id];
             const cols      = rec.results.cols        || [];
             const colTables = rec.results.col_tables  || [];
 
@@ -265,12 +269,12 @@ const Chain = (() => {
         const ok = await openColumnMapping(groupId);
         if (!ok) return;
 
-        // Validate: all recs have a mapped column
+        // Validate: at least 2 recordings have a mapped column (pivot + at least one other)
         const cfg     = _cfg(groupId);
         const recs    = _groupRecs(groupId);
-        const missing = recs.filter(r => !cfg.mappings[r.id] || cfg.mappings[r.id].colIdx === undefined);
-        if (missing.length > 0) {
-            App.notify?.('Map a date column for all recordings (' + missing.length + ' unmapped).', 'warn');
+        const mapped  = recs.filter(r => cfg.mappings[r.id]?.colIdx !== undefined);
+        if (mapped.length < 2) {
+            App.notify?.('Map a date column for at least 2 recordings.', 'warn');
             return;
         }
 
@@ -313,7 +317,7 @@ const Chain = (() => {
 
         // Build pivot entry
         const recName    = recObj.name || new Date(recObj.timestamp).toLocaleString();
-        const pivotColor = cfg.mappings[recId]?.color || PROX_COLORS.pivot;
+        const pivotColor = cfg.mappings[recId]?.color || PROX_COLORS.same;
         const pivotEntry = _makeEntry(
             recId, recName, pivotColor,
             _buildRowData(cols, row), cols[colIdx] || '', row[colIdx] ?? null,
@@ -364,7 +368,7 @@ const Chain = (() => {
             } else {
                 if (beforeRow) {
                     const e = _makeEntry(
-                        rec.id, oName, PROX_COLORS.before,
+                        rec.id, oName, oColor,
                         _buildRowData(oCols, beforeRow), oCols[oi] || '', beforeRow[oi] ?? null,
                         _buildColAliases(oCols, oCT), _buildColOrder(oCols), 'before'
                     );
@@ -373,7 +377,7 @@ const Chain = (() => {
                 }
                 if (afterRow) {
                     const e = _makeEntry(
-                        rec.id, oName, PROX_COLORS.after,
+                        rec.id, oName, oColor,
                         _buildRowData(oCols, afterRow), oCols[oi] || '', afterRow[oi] ?? null,
                         _buildColAliases(oCols, oCT), _buildColOrder(oCols), 'after'
                     );

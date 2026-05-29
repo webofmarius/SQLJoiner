@@ -2123,12 +2123,28 @@ const Canvas = (() => {
             });
         }
 
-        // Results table columns — matches th by bare name or full colKey; no canvas highlighting
+        // Results table columns — matches th by bare name, full colKey, or visible header label
+        // (e.g. "i.created_at" typed by the user matches the alias-prefixed display label even
+        // when dataset.colKey falls back to the bare name during recording replays)
         if (filter === 'results-col') {
             document.querySelectorAll('#results-table thead th[data-col-key]').forEach(th => {
                 const raw    = (th.dataset.raw    || '').toLowerCase();
                 const colKey = (th.dataset.colKey || '').toLowerCase();
-                if (raw.includes(q) || colKey.includes(q))
+                // Extract the visible label the user sees (mirrors _thGetLabel in results.js)
+                const em    = th.querySelector('em');
+                let label   = '';
+                if (em) {
+                    label = em.textContent.trim().toLowerCase();
+                } else {
+                    for (let i = th.childNodes.length - 1; i >= 0; i--) {
+                        const node = th.childNodes[i];
+                        if (node.nodeType === Node.TEXT_NODE && node.textContent.trim()) {
+                            label = node.textContent.trim().toLowerCase();
+                            break;
+                        }
+                    }
+                }
+                if (raw.includes(q) || colKey.includes(q) || label.includes(q))
                     groups.push({ tableIds: [], colKey: th.dataset.colKey });
             });
         }
