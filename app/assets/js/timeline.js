@@ -2013,7 +2013,15 @@ const Timeline = (() => {
                 // columns contains only the pinned columns with their actual row values.
                 const seen = {};
                 const out  = {};
-                stl.entries.forEach(e => {
+                const sortedEntries = [...stl.entries].sort((a, b) => {
+                    const ta = a.colValue != null ? new Date(a.colValue).getTime() : NaN;
+                    const tb = b.colValue != null ? new Date(b.colValue).getTime() : NaN;
+                    if (isNaN(ta) && isNaN(tb)) return 0;
+                    if (isNaN(ta)) return 1;
+                    if (isNaN(tb)) return -1;
+                    return ta - tb;
+                });
+                sortedEntries.forEach(e => {
                     const base = e.colValue != null ? String(e.colValue) : '(unknown)';
                     let key = base;
                     if (seen[base] !== undefined) {
