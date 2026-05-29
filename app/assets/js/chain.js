@@ -442,6 +442,9 @@ const Chain = (() => {
     // -------------------------------------------------------------------------
     function applyHighlight() {
         document.querySelectorAll('.chain-col-highlight').forEach(el => el.classList.remove('chain-col-highlight'));
+        const tbl = document.getElementById('results-table');
+        if (tbl) tbl.classList.remove('chain-pivot-focus');
+
         if (!_activeGroupId) return;
 
         const recId = typeof Recordings !== 'undefined' ? Recordings.getCurrentRecId?.() : null;
@@ -457,6 +460,9 @@ const Chain = (() => {
         const nth = mapping.colIdx + 2;
         document.querySelectorAll('#results-table th:nth-child(' + nth + '), #results-table td:nth-child(' + nth + ')')
             .forEach(el => el.classList.add('chain-col-highlight'));
+
+        // Dim all non-pivot columns so the pivot column stands out
+        if (tbl) tbl.classList.add('chain-pivot-focus');
     }
 
     // -------------------------------------------------------------------------

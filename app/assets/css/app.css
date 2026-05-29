@@ -8498,6 +8498,17 @@ body:has(#timeline-panel.is-maximized) #results-panel { z-index: 215; }
     background: rgba(245,158,11,0.22) !important;
 }
 
+/* Dim non-pivot columns while in chain "select pivot" mode */
+#results-table.chain-pivot-focus td:not(.chain-col-highlight),
+#results-table.chain-pivot-focus th:not(.chain-col-highlight) {
+    opacity: 0.3;
+    transition: opacity 0.15s;
+}
+#results-table.chain-pivot-focus td.chain-col-highlight,
+#results-table.chain-pivot-focus th.chain-col-highlight {
+    transition: opacity 0.15s;
+}
+
 /* ==========================================================================
    Chain Timeline — Column Mapping Modal
    ========================================================================== */
