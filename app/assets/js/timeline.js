@@ -943,21 +943,31 @@ const Timeline = (() => {
                         const thead = document.querySelector('#results-table thead');
                         if (!tbody || !thead) return;
 
-                        // Build col-key/bare → th-index map (index aligns with td index in body rows)
+                        // Build two lookup maps from the rendered header:
+                        //   colIdxMap: colKey (alias.col) → th index  (regular entries use this)
+                        //   rawIdxMap: th.dataset.raw (bare DB name) → th index, FIRST occurrence wins
+                        //     (chain entries store entry.colName as the raw DB name; first-wins
+                        //      matches how _buildRowData deduplicates duplicate column names)
                         const colIdxMap = {};
+                        const rawIdxMap = {};
                         Array.from(thead.querySelectorAll('th')).forEach((th, i) => {
-                            const key  = th.dataset.colKey || '';
-                            const bare = key.includes('.') ? key.split('.')[1] : key;
-                            if (bare) colIdxMap[bare] = i;
-                            if (key)  colIdxMap[key]  = i;
+                            const key = th.dataset.colKey || '';
+                            const raw = th.dataset.raw  || '';
+                            if (key) colIdxMap[key] = i;
+                            if (raw && rawIdxMap[raw] === undefined) rawIdxMap[raw] = i;
                         });
 
                         let matchTr = null;
 
-                        // PRIMARY: match by the entry's single pivot column + value (fast, reliable)
-                        const pivotKey  = (entry.colAliases?.[entry.colName]) || entry.colName;
-                        const pivotBare = pivotKey.includes('.') ? pivotKey.split('.')[1] : pivotKey;
-                        const pivotIdx  = colIdxMap[pivotKey] ?? colIdxMap[pivotBare];
+                        // PRIMARY: match by the entry's pivot column raw name + value.
+                        // rawIdxMap uses th.dataset.raw (bare DB column name, first-wins) so it
+                        // works for both chain entries (colName = raw DB name) and regular entries.
+                        const pivotRaw = entry.colName.includes('.')
+                            ? entry.colName.split('.').pop() : entry.colName;
+                        const pivotAliasKey = entry.colAliases?.[entry.colName] || entry.colName;
+                        const pivotIdx = rawIdxMap[pivotRaw]
+                            ?? colIdxMap[pivotAliasKey]
+                            ?? colIdxMap[pivotRaw];
                         if (pivotIdx != null && entry.colValue != null) {
                             const want = String(entry.colValue);
                             for (const tr of tbody.querySelectorAll('tr')) {
@@ -968,7 +978,8 @@ const Timeline = (() => {
                             }
                         }
 
-                        // FALLBACK: full rowData comparison (handles entries without colAliases)
+                        // FALLBACK: full rowData comparison.
+                        // Uses rawIdxMap (first-wins) so duplicate column names resolve correctly.
                         if (!matchTr) {
                             const rdEntries = Object.entries(entry.rowData || {});
                             for (const tr of tbody.querySelectorAll('tr')) {
@@ -976,7 +987,7 @@ const Timeline = (() => {
                                 let ok = rdEntries.length > 0;
                                 for (const [col, val] of rdEntries) {
                                     const bare = col.includes('.') ? col.split('.')[1] : col;
-                                    const idx  = colIdxMap[col] ?? colIdxMap[bare];
+                                    const idx  = rawIdxMap[bare] ?? colIdxMap[col] ?? colIdxMap[bare];
                                     if (idx == null) continue;
                                     const cell = tds[idx];
                                     if (!cell) { ok = false; break; }
