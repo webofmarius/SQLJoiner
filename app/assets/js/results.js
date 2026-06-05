@@ -3847,25 +3847,41 @@ const Results = (() => {
     function _parseSqlJoins(sql) {
         const joins = [];
         if (!sql) return joins;
-        // Match: [INNER|LEFT|RIGHT|CROSS|FULL] [OUTER] JOIN db.table [AS] alias ON condition
-        const re = /\b((?:(?:INNER|LEFT|RIGHT|CROSS|FULL|NATURAL)\s+)?(?:OUTER\s+)?JOIN)\s+(`[^`]+`|[\w$]+)(?:\.(`[^`]+`|[\w$]+))?\s*(?:AS\s+)?(`[^`]+`|[\w$]+)?\s+ON\s+([\s\S]+?)(?=\b(?:INNER|LEFT|RIGHT|CROSS|FULL|NATURAL|WHERE|GROUP\s+BY|ORDER\s+BY|HAVING|LIMIT|UNION|;)\b|$)/gi;
+
+        // Step 1: find each JOIN keyword position (no complex lookahead needed)
+        const JOIN_KW   = /\b((?:(?:INNER|LEFT|RIGHT|CROSS|FULL|NATURAL)\s+)?(?:OUTER\s+)?JOIN)\b/gi;
+        // Step 2: after JOIN, parse: [db.]table [AS] alias ON (anchored to start of remaining text)
+        const TABLE_ON  = /^[ \t]+(`[^`]+`|[\w$]+)(?:\.(`[^`]+`|[\w$]+))?[ \t]+(?:AS[ \t]+)?(`[^`]+`|[\w$]+)?[ \t]+ON[ \t]+/i;
+        // Step 3: ON clause ends at the next JOIN/WHERE/GROUP/ORDER/HAVING/LIMIT/UNION keyword
+        const STOP_KW   = /\b(?:INNER|LEFT|RIGHT|CROSS|FULL|NATURAL|WHERE|GROUP|ORDER|HAVING|LIMIT|UNION)\b/i;
+        // Alias.column references inside ON clause
+        const COL_REF   = /\b([\w$]+)\s*\.\s*[\w$]+/g;
+
         let m;
-        while ((m = re.exec(sql)) !== null) {
-            const type   = m[1].replace(/\s+/g, ' ').trim().toUpperCase();
-            const part1  = m[2].replace(/`/g, '');
-            const part2  = m[3]?.replace(/`/g, '') ?? null;
+        while ((m = JOIN_KW.exec(sql)) !== null) {
+            const type     = m[1].replace(/\s+/g, ' ').trim().toUpperCase();
+            const afterKw  = sql.slice(m.index + m[0].length);
+            const tm       = TABLE_ON.exec(afterKw);
+            if (!tm) continue;
+
+            const part1  = tm[1].replace(/`/g, '');
+            const part2  = tm[2]?.replace(/`/g, '') ?? null;
             const db     = part2 ? part1 : null;
             const table  = part2 ? part2 : part1;
-            const alias  = (m[4]?.replace(/`/g, '') || table);
-            const onText = m[5].trim();
-            // Collect all alias references in the ON clause (alias.column pattern)
+            const alias  = (tm[3]?.replace(/`/g, '') || table).toLowerCase();
+
+            const afterOn = afterKw.slice(tm[0].length);
+            const stop    = STOP_KW.exec(afterOn);
+            const onText  = (stop ? afterOn.slice(0, stop.index) : afterOn).trim();
+
             const aliasRefs = new Set();
-            const colRefRe  = /\b([\w$]+)\s*\.\s*[\w$]+/g;
+            COL_REF.lastIndex = 0;
             let cr;
-            while ((cr = colRefRe.exec(onText)) !== null) aliasRefs.add(cr[1].toLowerCase());
+            while ((cr = COL_REF.exec(onText)) !== null) aliasRefs.add(cr[1].toLowerCase());
+
             const dbTable  = db ? `${db}.${table}` : table;
-            const fullText = `${type} ${dbTable}${alias.toLowerCase() !== table.toLowerCase() ? ' ' + alias : ''} ON ${onText}`;
-            joins.push({ type, db, table, alias: alias.toLowerCase(), onText, fullText, aliasRefs });
+            const fullText = `${type} ${dbTable}${alias !== table.toLowerCase() ? ' ' + alias : ''} ON ${onText}`;
+            joins.push({ type, db, table, alias, onText, fullText, aliasRefs });
         }
         return joins;
     }
@@ -3982,6 +3998,7 @@ const Results = (() => {
                 el.style.background = JOIN_BG[ji % JOIN_BG.length];
                 if (typeof _highlightSQL === 'function') {
                     el.innerHTML = _highlightSQL(j.fullText, null);
+                    if (j.aliasRefs.size) {
                     // Tag alias.col patterns for coloring/sizing
                     const aliasRe = new RegExp(
                         `\\b(${[...j.aliasRefs].map(a => a.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})\\b`, 'g'
@@ -3997,8 +4014,10 @@ const Results = (() => {
                         if (!aliasRe.test(text)) return;
                         aliasRe.lastIndex = 0;
                         const frag = document.createDocumentFragment();
-                        let last = 0, m2;
+                        let last = 0, m2, prevIdx = -1;
                         while ((m2 = aliasRe.exec(text)) !== null) {
+                            if (m2.index === prevIdx) break; // zero-length match guard
+                            prevIdx = m2.index;
                             if (last < m2.index) frag.appendChild(document.createTextNode(text.slice(last, m2.index)));
                             const s = document.createElement('span');
                             s.dataset.lineageAlias = m2[1];
@@ -4009,6 +4028,7 @@ const Results = (() => {
                         if (last < text.length) frag.appendChild(document.createTextNode(text.slice(last)));
                         textNode.replaceWith(frag);
                     });
+                    } // end aliasRefs.size guard
                     el.querySelectorAll('[data-lineage-alias]').forEach(span => {
                         const isOwn = span.dataset.lineageAlias.toLowerCase() === ownSqlAlias.toLowerCase();
                         const color = isOwn ? 'rgb(255, 179, 0)' : 'rgb(255 252 246 / 0.8)';
