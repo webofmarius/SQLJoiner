@@ -5032,6 +5032,16 @@ th.calc-nop { opacity: 0.1; font-weight: bold; }
     overflow: hidden;
     text-overflow: ellipsis;
 }
+.explain-node-dbtable {
+    font-size: 10px;
+    font-style: italic;
+    color: var(--text-muted);
+    margin-bottom: 5px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    opacity: 0.75;
+}
 .explain-node-badge {
     display: inline-block;
     font-size: 10px;

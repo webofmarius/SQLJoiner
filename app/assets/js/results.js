@@ -3815,6 +3815,220 @@ const Results = (() => {
         });
     }
 
+    function _showExplainNodePopup(anchorEl, tbl) {
+        _ensureLineagePopup();
+
+        const tables = State.tables || [];
+        const joins  = (State.joins  || []).filter(j => j.enabled !== false);
+
+        _lineagePopup.innerHTML = '';
+
+        // Header
+        const hdr = document.createElement('div');
+        hdr.className = 'lineage-popup-hdr';
+        const caption = document.createElement('div');
+        caption.className   = 'lineage-popup-caption';
+        caption.textContent = 'Table Details';
+        const closeBtn = document.createElement('button');
+        closeBtn.className   = 'lineage-popup-close';
+        closeBtn.textContent = '✕';
+        closeBtn.addEventListener('click', _closeLineagePopup);
+        hdr.appendChild(caption);
+        hdr.appendChild(closeBtn);
+        _lineagePopup.appendChild(hdr);
+
+        const body = document.createElement('div');
+        body.className = 'lineage-popup-body';
+        _lineagePopup.appendChild(body);
+        _lineagePopup.classList.remove('hidden');
+
+        // Position relative to the explain node element
+        const rect = anchorEl.getBoundingClientRect();
+        const pw   = _lineagePopup.offsetWidth  || 320;
+        const ph   = _lineagePopup.offsetHeight || 200;
+        const vw   = window.innerWidth;
+        const vh   = window.innerHeight;
+        let left   = rect.left;
+        let top    = rect.bottom + 6;
+        if (left + pw > vw - 8) left = vw - pw - 8;
+        if (top  + ph > vh - 8) top  = rect.top - ph - 6;
+        _lineagePopup.style.left = left + 'px';
+        _lineagePopup.style.top  = top  + 'px';
+
+        const _focusTable = (tblId) => {
+            if (typeof Canvas !== 'undefined') Canvas.scrollToTableIdTop(tblId);
+            const card = document.querySelector(`.table-card[data-table-id="${tblId}"]`);
+            if (card) {
+                card.classList.remove('explain-card-pulse');
+                void card.offsetWidth;
+                card.classList.add('explain-card-pulse');
+                card.addEventListener('animationend', () => card.classList.remove('explain-card-pulse'), { once: true });
+            }
+        };
+
+        // Source section
+        const srcOrigin = tbl.database ? `${tbl.database}.${tbl.name}` : tbl.name;
+        const tableRow  = _lineageRow('Table', srcOrigin);
+        const tableVal  = tableRow.querySelector('.lineage-val');
+        tableVal.classList.add('lineage-val--link');
+        tableVal.title = 'Click to focus on canvas';
+        tableVal.addEventListener('click', () => _focusTable(tbl.id));
+        if (tbl.alias && tbl.alias !== tbl.name) {
+            const aliasRow = _lineageRow('Alias', tbl.alias);
+            _lineageSection(body, 'Source', [tableRow, aliasRow]);
+        } else {
+            _lineageSection(body, 'Source', [tableRow]);
+        }
+
+        // JOINs involving this table — same rich rendering as column lineage popup
+        const relatedJoins = joins.filter(j => j.fromTableId === tbl.id || j.toTableId === tbl.id);
+        if (!relatedJoins.length) {
+            _lineageSection(body, 'JOINs', [_lineageNote('Driving table — no JOINs connect here')]);
+        } else {
+            const colorMap   = typeof _getTableColorMap === 'function' ? _getTableColorMap() : null;
+            const aliasToTbl = new Map(tables.filter(t => t.alias).map(t => [t.alias, t]));
+            const JOIN_BG    = [
+                'rgba(30,60,100,0.35)', 'rgba(60,30,80,0.35)', 'rgba(20,70,50,0.35)',
+                'rgba(80,50,20,0.35)',  'rgba(20,50,80,0.35)', 'rgba(70,20,40,0.35)',
+            ];
+            const thisAlias = tbl.alias || tbl.name;
+
+            const joinEls = relatedJoins.map((j, ji) => {
+                const isFrom     = j.fromTableId === tbl.id;
+                const otherId    = isFrom ? j.toTableId : j.fromTableId;
+                const otherTbl   = tables.find(t => t.id === otherId);
+                const otherAlias = otherTbl?.alias || otherTbl?.name || otherId;
+
+                const fromAlias = isFrom ? thisAlias  : otherAlias;
+                const fromCol   = isFrom ? j.fromCol  : j.toCol;
+                const toAlias   = isFrom ? otherAlias : thisAlias;
+                const toCol     = isFrom ? j.toCol    : j.fromCol;
+
+                const lines = [`${j.type || 'JOIN'} ${otherAlias} ON ${fromAlias}.${fromCol} = ${toAlias}.${toCol}`];
+                (j.extraConditions || []).forEach(ec => {
+                    const ef = isFrom ? ec.fromCol : ec.toCol;
+                    const et = isFrom ? ec.toCol   : ec.fromCol;
+                    lines.push(`  AND ${fromAlias}.${ef} = ${toAlias}.${et}`);
+                });
+                const joinText = lines.join('\n');
+
+                const el = document.createElement('pre');
+                el.className = 'lineage-code';
+                el.style.background = JOIN_BG[ji % JOIN_BG.length];
+
+                if (typeof _highlightSQL === 'function') {
+                    el.innerHTML = _highlightSQL(joinText, colorMap);
+                    const isAliasSpan = n => n?.nodeType === 1 && aliasToTbl.has(n.textContent.trim()) && n.tagName === 'SPAN';
+                    const isDotText   = n => n?.nodeType === 3 && n.textContent === '.';
+                    const isColref    = n => n?.nodeType === 1 && n.classList?.contains('sql-hl-colref');
+
+                    const childArr = Array.from(el.childNodes);
+                    let ci = 0;
+                    while (ci < childArr.length) {
+                        const node  = childArr[ci];
+                        const next1 = childArr[ci + 1];
+                        const next2 = childArr[ci + 2];
+                        if (isAliasSpan(node) && isDotText(next1) && isColref(next2)) {
+                            const alias = node.textContent.trim();
+                            const wrapper = document.createElement('span');
+                            wrapper.dataset.lineageAlias = alias;
+                            el.insertBefore(wrapper, node);
+                            wrapper.appendChild(node);
+                            wrapper.appendChild(next1);
+                            wrapper.appendChild(next2);
+                            ci += 3;
+                        } else {
+                            if (isAliasSpan(node)) node.dataset.lineageAlias = node.textContent.trim();
+                            ci++;
+                        }
+                    }
+
+                    const aliasKeys = [...aliasToTbl.keys()];
+                    if (aliasKeys.length) {
+                        const aliasRe = new RegExp(
+                            `\\b(${aliasKeys.map(a => a.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})\\b`, 'g'
+                        );
+                        const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+                        const textNodes = [];
+                        let tn;
+                        while ((tn = walker.nextNode())) textNodes.push(tn);
+                        textNodes.forEach(textNode => {
+                            if (textNode.parentElement?.closest('[data-lineage-alias]')) return;
+                            const text = textNode.textContent;
+                            aliasRe.lastIndex = 0;
+                            if (!aliasRe.test(text)) return;
+                            aliasRe.lastIndex = 0;
+                            const frag = document.createDocumentFragment();
+                            let last = 0, m;
+                            while ((m = aliasRe.exec(text)) !== null) {
+                                if (last < m.index) frag.appendChild(document.createTextNode(text.slice(last, m.index)));
+                                const s = document.createElement('span');
+                                s.dataset.lineageAlias = m[1];
+                                s.textContent = m[1];
+                                frag.appendChild(s);
+                                last = m.index + m[0].length;
+                            }
+                            if (last < text.length) frag.appendChild(document.createTextNode(text.slice(last)));
+                            textNode.replaceWith(frag);
+                        });
+                    }
+
+                    el.querySelectorAll('[data-lineage-alias]').forEach(span => {
+                        const alias = span.dataset.lineageAlias;
+                        const t2    = aliasToTbl.get(alias);
+                        if (!t2) return;
+                        span.classList.add('lineage-alias-link');
+                        span.title = `Click to show ${alias} on canvas`;
+                        span.addEventListener('click', e => {
+                            e.stopPropagation();
+                            if (typeof Canvas !== 'undefined') Canvas.scrollToTableIdTop(t2.id);
+                            const card = document.querySelector(`.table-card[data-table-id="${t2.id}"]`);
+                            if (card) {
+                                card.classList.remove('explain-card-pulse');
+                                void card.offsetWidth;
+                                card.classList.add('explain-card-pulse');
+                                card.addEventListener('animationend', () => card.classList.remove('explain-card-pulse'), { once: true });
+                            }
+                        });
+                    });
+
+                    el.querySelectorAll('[data-lineage-alias]').forEach(span => {
+                        const isOwn = span.dataset.lineageAlias === thisAlias;
+                        const color = isOwn ? 'rgb(255, 179, 0)' : 'rgb(255 252 246 / 0.8)';
+                        span.style.color = color;
+                        span.querySelectorAll('span[style]').forEach(s => s.style.color = color);
+                        if (isOwn) {
+                            span.style.fontSize   = '16px';
+                            span.style.fontWeight = '700';
+                        }
+                    });
+                } else {
+                    el.textContent = joinText;
+                }
+
+                if (typeof Canvas !== 'undefined' && document.getElementById('jpath-' + j.id)) {
+                    el.classList.add('lineage-code--link');
+                    el.title = 'Click to focus JOIN line · click alias to focus table';
+                    el.addEventListener('click', () => Canvas.scrollToJoinId(j.id));
+                }
+
+                return el;
+            });
+            _lineageSection(body, 'JOINs', joinEls);
+        }
+
+        // Re-position after content is added
+        {
+            const pw2 = _lineagePopup.offsetWidth  || 320;
+            const ph2 = _lineagePopup.offsetHeight || 200;
+            let l2 = rect.left, t2 = rect.bottom + 6;
+            if (l2 + pw2 > vw - 8) l2 = vw - pw2 - 8;
+            if (t2 + ph2 > vh - 8) t2 = rect.top - ph2 - 6;
+            _lineagePopup.style.left = l2 + 'px';
+            _lineagePopup.style.top  = t2 + 'px';
+        }
+    }
+
     function _buildExplainNode(node) {
         const el = document.createElement('div');
         el.className = `explain-graph-node explain-score-${node.score}`;
@@ -3826,9 +4040,20 @@ const Results = (() => {
         );
         if (matchingTable) {
             el.classList.add('explain-graph-node--linked');
-            el.title = `Click to focus "${node.table}" on canvas`;
+            el.title = `Click for table details`;
             el.addEventListener('click', () => {
-                if (typeof Canvas !== 'undefined') Canvas.scrollToTableIdTop(matchingTable.id);
+                const card = document.querySelector(`.table-card[data-table-id="${matchingTable.id}"]`);
+                if (card) {
+                    card.classList.remove('explain-card-pulse');
+                    void card.offsetWidth;
+                    card.classList.add('explain-card-pulse');
+                    card.addEventListener('animationend', () => card.classList.remove('explain-card-pulse'), { once: true });
+                }
+                _showExplainNodePopup(el, matchingTable);
+            });
+            el.addEventListener('contextmenu', e => {
+                e.preventDefault();
+                if (typeof Canvas !== 'undefined') Canvas.scrollToTableId(matchingTable.id);
                 const card = document.querySelector(`.table-card[data-table-id="${matchingTable.id}"]`);
                 if (card) {
                     card.classList.remove('explain-card-pulse');
@@ -3839,11 +4064,26 @@ const Results = (() => {
             });
         }
 
-        // Table name
+        // Table name (alias)
         const nameEl = document.createElement('div');
         nameEl.className = 'explain-node-name';
         nameEl.textContent = node.table ?? '(unknown)';
         el.appendChild(nameEl);
+
+        // Secondary: db.table label (shown when alias differs from table name or db is known)
+        if (matchingTable) {
+            const fullName = matchingTable.database
+                ? `${matchingTable.database}.${matchingTable.name}`
+                : matchingTable.name;
+            const isAliasDifferent = (node.table ?? '').toLowerCase() !== matchingTable.name.toLowerCase()
+                || matchingTable.database;
+            if (isAliasDifferent) {
+                const dbTableEl = document.createElement('div');
+                dbTableEl.className = 'explain-node-dbtable';
+                dbTableEl.textContent = fullName;
+                el.appendChild(dbTableEl);
+            }
+        }
 
         // Join type badge
         if (node.joinType) {
