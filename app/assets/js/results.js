@@ -80,7 +80,8 @@ const Results = (() => {
 
     // EXPLAIN graph state
     let _isExplainResult    = false;
-    let _explainGraphVisible = false;
+    let _explainGraphVisible  = false;
+    let _lastExplainSqlJoins = []; // parsed JOIN clauses from the last EXPLAIN query's SQL
 
     // Distribution preview state
     let _distPreviewHandled = false;
@@ -3750,6 +3751,10 @@ const Results = (() => {
             };
         });
 
+        // Parse alias → {name, database} and JOIN clauses from the SQL text
+        const _sqlAliasMap     = _parseSqlAliasMap(_lastResult?.sql || '');
+        _lastExplainSqlJoins   = _parseSqlJoins(_lastResult?.sql || '');
+
         // --- Waterfall bar ---
         const totalCost = nodes.reduce((s, n) => s + n.cost, 0) || 1;
         const waterfall = document.createElement('div');
@@ -3801,7 +3806,7 @@ const Results = (() => {
             rowEl.className = 'explain-graph-row';
 
             group.forEach((node, ni) => {
-                rowEl.appendChild(_buildExplainNode(node));
+                rowEl.appendChild(_buildExplainNode(node, _sqlAliasMap));
                 if (ni < group.length - 1) {
                     const arrow = document.createElement('div');
                     arrow.className = 'explain-graph-arrow';
@@ -3815,7 +3820,57 @@ const Results = (() => {
         });
     }
 
-    function _showExplainNodePopup(anchorEl, tbl) {
+    function _parseSqlAliasMap(sql) {
+        const map = new Map();
+        if (!sql) return map;
+        const KEYWORDS = new Set([
+            'ON','WHERE','SET','INNER','LEFT','RIGHT','OUTER','CROSS','NATURAL',
+            'JOIN','AND','OR','NOT','IN','IS','NULL','LIKE','BETWEEN','EXISTS',
+            'SELECT','FROM','GROUP','ORDER','HAVING','LIMIT','OFFSET','UNION',
+            'USING','WITH','AS','BY',
+        ]);
+        // Match: FROM/JOIN [`]db[`].[`]table[`] [AS] alias  — or just [`]table[`] [AS] alias
+        const re = /(?:FROM|JOIN)\s+(`[^`]+`|[\w$]+)(?:\.(`[^`]+`|[\w$]+))?\s+(?:AS\s+)?(`[^`]+`|[\w$]+)/gi;
+        let m;
+        while ((m = re.exec(sql)) !== null) {
+            const part1 = m[1].replace(/`/g, '');
+            const part2 = m[2]?.replace(/`/g, '') ?? null;
+            const alias = m[3].replace(/`/g, '');
+            if (KEYWORDS.has(alias.toUpperCase())) continue;
+            const db    = part2 ? part1 : null;
+            const table = part2 ? part2 : part1;
+            map.set(alias.toLowerCase(), { name: table, database: db });
+        }
+        return map;
+    }
+
+    function _parseSqlJoins(sql) {
+        const joins = [];
+        if (!sql) return joins;
+        // Match: [INNER|LEFT|RIGHT|CROSS|FULL] [OUTER] JOIN db.table [AS] alias ON condition
+        const re = /\b((?:(?:INNER|LEFT|RIGHT|CROSS|FULL|NATURAL)\s+)?(?:OUTER\s+)?JOIN)\s+(`[^`]+`|[\w$]+)(?:\.(`[^`]+`|[\w$]+))?\s*(?:AS\s+)?(`[^`]+`|[\w$]+)?\s+ON\s+([\s\S]+?)(?=\b(?:INNER|LEFT|RIGHT|CROSS|FULL|NATURAL|WHERE|GROUP\s+BY|ORDER\s+BY|HAVING|LIMIT|UNION|;)\b|$)/gi;
+        let m;
+        while ((m = re.exec(sql)) !== null) {
+            const type   = m[1].replace(/\s+/g, ' ').trim().toUpperCase();
+            const part1  = m[2].replace(/`/g, '');
+            const part2  = m[3]?.replace(/`/g, '') ?? null;
+            const db     = part2 ? part1 : null;
+            const table  = part2 ? part2 : part1;
+            const alias  = (m[4]?.replace(/`/g, '') || table);
+            const onText = m[5].trim();
+            // Collect all alias references in the ON clause (alias.column pattern)
+            const aliasRefs = new Set();
+            const colRefRe  = /\b([\w$]+)\s*\.\s*[\w$]+/g;
+            let cr;
+            while ((cr = colRefRe.exec(onText)) !== null) aliasRefs.add(cr[1].toLowerCase());
+            const dbTable  = db ? `${db}.${table}` : table;
+            const fullText = `${type} ${dbTable}${alias.toLowerCase() !== table.toLowerCase() ? ' ' + alias : ''} ON ${onText}`;
+            joins.push({ type, db, table, alias: alias.toLowerCase(), onText, fullText, aliasRefs });
+        }
+        return joins;
+    }
+
+    function _showExplainNodePopup(anchorEl, tbl, linked = true) {
         _ensureLineagePopup();
 
         const tables = State.tables || [];
@@ -3870,20 +3925,103 @@ const Results = (() => {
         const srcOrigin = tbl.database ? `${tbl.database}.${tbl.name}` : tbl.name;
         const tableRow  = _lineageRow('Table', srcOrigin);
         const tableVal  = tableRow.querySelector('.lineage-val');
-        tableVal.classList.add('lineage-val--link');
-        tableVal.title = 'Click to focus on canvas';
-        tableVal.addEventListener('click', () => _focusTable(tbl.id));
-        if (tbl.alias && tbl.alias !== tbl.name) {
-            const aliasRow = _lineageRow('Alias', tbl.alias);
-            _lineageSection(body, 'Source', [tableRow, aliasRow]);
-        } else {
-            _lineageSection(body, 'Source', [tableRow]);
+        if (linked) {
+            tableVal.classList.add('lineage-val--link');
+            tableVal.title = 'Click to focus on canvas';
+            tableVal.addEventListener('click', () => _focusTable(tbl.id));
         }
+        const copyBtn = document.createElement('button');
+        copyBtn.className   = 'lineage-copy-btn';
+        copyBtn.textContent = '⎘';
+        copyBtn.title       = 'Copy to clipboard';
+        copyBtn.addEventListener('click', e => {
+            e.stopPropagation();
+            navigator.clipboard.writeText(srcOrigin).then(() => {
+                copyBtn.textContent = '✓';
+                setTimeout(() => { copyBtn.textContent = '⎘'; }, 1200);
+            });
+        });
+        tableRow.appendChild(copyBtn);
+        const displayAlias = tbl.alias || tbl._sqlAlias || null;
+        const sourceRows = [tableRow];
+        if (displayAlias && displayAlias.toLowerCase() !== tbl.name?.toLowerCase()) {
+            sourceRows.push(_lineageRow('Alias', displayAlias));
+        }
+        _lineageSection(body, 'Source', sourceRows);
 
-        // JOINs involving this table — same rich rendering as column lineage popup
-        const relatedJoins = joins.filter(j => j.fromTableId === tbl.id || j.toTableId === tbl.id);
-        if (!relatedJoins.length) {
-            _lineageSection(body, 'JOINs', [_lineageNote('Driving table — no JOINs connect here')]);
+        // JOINs — lookup by id when available, name-based fallback, then SQL-parsed joins
+        const effectiveTblId = tbl.id
+            ?? (tables.find(t => t.name?.toLowerCase() === tbl.name?.toLowerCase())?.id ?? null);
+        const canvasJoins = effectiveTblId != null
+            ? joins.filter(j => j.fromTableId === effectiveTblId || j.toTableId === effectiveTblId)
+            : [];
+
+        // The original SQL alias (e.g. "f") — used for the own-alias highlight in JOIN text
+        const ownSqlAlias = tbl._sqlAlias || tbl.alias || tbl.name || '';
+
+        // SQL-parsed joins that reference the own alias (fallback when canvas has no data)
+        const sqlJoins = canvasJoins.length ? [] : _lastExplainSqlJoins.filter(j =>
+            j.aliasRefs.has(ownSqlAlias.toLowerCase()) || j.alias === ownSqlAlias.toLowerCase()
+        );
+
+        if (!canvasJoins.length && !sqlJoins.length) {
+            _lineageSection(body, 'JOINs', [_lineageNote(
+                effectiveTblId == null
+                    ? 'Driving table — no JOINs found'
+                    : 'Driving table — no JOINs connect here'
+            )]);
+        } else if (sqlJoins.length) {
+            // Render SQL-parsed joins — same visual style, no click handlers
+            const JOIN_BG = [
+                'rgba(30,60,100,0.35)', 'rgba(60,30,80,0.35)', 'rgba(20,70,50,0.35)',
+                'rgba(80,50,20,0.35)',  'rgba(20,50,80,0.35)', 'rgba(70,20,40,0.35)',
+            ];
+            const joinEls = sqlJoins.map((j, ji) => {
+                const el = document.createElement('pre');
+                el.className = 'lineage-code';
+                el.style.background = JOIN_BG[ji % JOIN_BG.length];
+                if (typeof _highlightSQL === 'function') {
+                    el.innerHTML = _highlightSQL(j.fullText, null);
+                    // Tag alias.col patterns for coloring/sizing
+                    const aliasRe = new RegExp(
+                        `\\b(${[...j.aliasRefs].map(a => a.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})\\b`, 'g'
+                    );
+                    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+                    const textNodes = [];
+                    let tn;
+                    while ((tn = walker.nextNode())) textNodes.push(tn);
+                    textNodes.forEach(textNode => {
+                        if (textNode.parentElement?.closest('[data-lineage-alias]')) return;
+                        const text = textNode.textContent;
+                        aliasRe.lastIndex = 0;
+                        if (!aliasRe.test(text)) return;
+                        aliasRe.lastIndex = 0;
+                        const frag = document.createDocumentFragment();
+                        let last = 0, m2;
+                        while ((m2 = aliasRe.exec(text)) !== null) {
+                            if (last < m2.index) frag.appendChild(document.createTextNode(text.slice(last, m2.index)));
+                            const s = document.createElement('span');
+                            s.dataset.lineageAlias = m2[1];
+                            s.textContent = m2[1];
+                            frag.appendChild(s);
+                            last = m2.index + m2[0].length;
+                        }
+                        if (last < text.length) frag.appendChild(document.createTextNode(text.slice(last)));
+                        textNode.replaceWith(frag);
+                    });
+                    el.querySelectorAll('[data-lineage-alias]').forEach(span => {
+                        const isOwn = span.dataset.lineageAlias.toLowerCase() === ownSqlAlias.toLowerCase();
+                        const color = isOwn ? 'rgb(255, 179, 0)' : 'rgb(255 252 246 / 0.8)';
+                        span.style.color = color;
+                        span.querySelectorAll('span[style]').forEach(s => s.style.color = color);
+                        if (isOwn) { span.style.fontSize = '16px'; span.style.fontWeight = '700'; }
+                    });
+                } else {
+                    el.textContent = j.fullText;
+                }
+                return el;
+            });
+            _lineageSection(body, 'JOINs', joinEls);
         } else {
             const colorMap   = typeof _getTableColorMap === 'function' ? _getTableColorMap() : null;
             const aliasToTbl = new Map(tables.filter(t => t.alias).map(t => [t.alias, t]));
@@ -3891,10 +4029,12 @@ const Results = (() => {
                 'rgba(30,60,100,0.35)', 'rgba(60,30,80,0.35)', 'rgba(20,70,50,0.35)',
                 'rgba(80,50,20,0.35)',  'rgba(20,50,80,0.35)', 'rgba(70,20,40,0.35)',
             ];
-            const thisAlias = tbl.alias || tbl.name;
+            const effectiveTbl = effectiveTblId != null ? (tables.find(t => t.id === effectiveTblId) || tbl) : tbl;
+            const thisAlias    = effectiveTbl.alias || effectiveTbl.name;
+            const relatedJoins = canvasJoins;
 
             const joinEls = relatedJoins.map((j, ji) => {
-                const isFrom     = j.fromTableId === tbl.id;
+                const isFrom     = j.fromTableId === effectiveTblId;
                 const otherId    = isFrom ? j.toTableId : j.fromTableId;
                 const otherTbl   = tables.find(t => t.id === otherId);
                 const otherAlias = otherTbl?.alias || otherTbl?.name || otherId;
@@ -3973,24 +4113,26 @@ const Results = (() => {
                         });
                     }
 
-                    el.querySelectorAll('[data-lineage-alias]').forEach(span => {
-                        const alias = span.dataset.lineageAlias;
-                        const t2    = aliasToTbl.get(alias);
-                        if (!t2) return;
-                        span.classList.add('lineage-alias-link');
-                        span.title = `Click to show ${alias} on canvas`;
-                        span.addEventListener('click', e => {
-                            e.stopPropagation();
-                            if (typeof Canvas !== 'undefined') Canvas.scrollToTableIdTop(t2.id);
-                            const card = document.querySelector(`.table-card[data-table-id="${t2.id}"]`);
-                            if (card) {
-                                card.classList.remove('explain-card-pulse');
-                                void card.offsetWidth;
-                                card.classList.add('explain-card-pulse');
-                                card.addEventListener('animationend', () => card.classList.remove('explain-card-pulse'), { once: true });
-                            }
+                    if (linked) {
+                        el.querySelectorAll('[data-lineage-alias]').forEach(span => {
+                            const alias = span.dataset.lineageAlias;
+                            const t2    = aliasToTbl.get(alias);
+                            if (!t2) return;
+                            span.classList.add('lineage-alias-link');
+                            span.title = `Click to show ${alias} on canvas`;
+                            span.addEventListener('click', e => {
+                                e.stopPropagation();
+                                if (typeof Canvas !== 'undefined') Canvas.scrollToTableIdTop(t2.id);
+                                const card = document.querySelector(`.table-card[data-table-id="${t2.id}"]`);
+                                if (card) {
+                                    card.classList.remove('explain-card-pulse');
+                                    void card.offsetWidth;
+                                    card.classList.add('explain-card-pulse');
+                                    card.addEventListener('animationend', () => card.classList.remove('explain-card-pulse'), { once: true });
+                                }
+                            });
                         });
-                    });
+                    }
 
                     el.querySelectorAll('[data-lineage-alias]').forEach(span => {
                         const isOwn = span.dataset.lineageAlias === thisAlias;
@@ -4006,7 +4148,7 @@ const Results = (() => {
                     el.textContent = joinText;
                 }
 
-                if (typeof Canvas !== 'undefined' && document.getElementById('jpath-' + j.id)) {
+                if (linked && typeof Canvas !== 'undefined' && document.getElementById('jpath-' + j.id)) {
                     el.classList.add('lineage-code--link');
                     el.title = 'Click to focus JOIN line · click alias to focus table';
                     el.addEventListener('click', () => Canvas.scrollToJoinId(j.id));
@@ -4029,19 +4171,40 @@ const Results = (() => {
         }
     }
 
-    function _buildExplainNode(node) {
+    function _buildExplainNode(node, sqlAliasMap = new Map()) {
         const el = document.createElement('div');
         el.className = `explain-graph-node explain-score-${node.score}`;
 
-        // Click → scroll canvas to the matching table card and pulse it
+        const nodeTableLc = String(node.table ?? '').toLowerCase();
+
+        // Primary lookup: alias or name match → fully canvas-linked
         const matchingTable = (State.tables || []).find(t =>
-            t.alias?.toLowerCase() === String(node.table ?? '').toLowerCase() ||
-            t.name?.toLowerCase()  === String(node.table ?? '').toLowerCase()
+            t.alias?.toLowerCase() === nodeTableLc ||
+            t.name?.toLowerCase()  === nodeTableLc
         );
-        if (matchingTable) {
-            el.classList.add('explain-graph-node--linked');
-            el.title = `Click for table details`;
-            el.addEventListener('click', () => {
+
+        // SQL alias map entry: resolved from the custom query text (e.g. "f" → {name:"facilities", database:"bakery"})
+        const sqlResolved = sqlAliasMap.get(nodeTableLc) || null;
+
+        // Secondary canvas lookup: use the resolved real table name from SQL
+        const nameOnlyMatch = matchingTable ? null : (sqlResolved
+            ? (State.tables || []).find(t => t.name?.toLowerCase() === sqlResolved.name.toLowerCase())
+            : (State.tables || []).find(t => t.name?.toLowerCase() === nodeTableLc)
+        );
+
+        // Table arg for popup: prefer canvas match, then name-only match (unlinked), then SQL-resolved stub, then bare stub
+        // _sqlAlias carries the original SQL alias (e.g. "f") for JOIN rendering even after name resolution
+        const tblArg = matchingTable
+            || (nameOnlyMatch
+                ? { ...nameOnlyMatch, _unlinked: true, _sqlAlias: nodeTableLc }
+                : sqlResolved
+                    ? { name: sqlResolved.name, database: sqlResolved.database ?? State.activeDatabase ?? null, id: null, _unlinked: true, _sqlAlias: nodeTableLc }
+                    : { name: node.table ?? '(unknown)', database: State.activeDatabase || null, id: null, _unlinked: true, _sqlAlias: nodeTableLc });
+
+        el.classList.add('explain-graph-node--linked');
+        el.title = 'Click for table details';
+        el.addEventListener('click', () => {
+            if (matchingTable) {
                 const card = document.querySelector(`.table-card[data-table-id="${matchingTable.id}"]`);
                 if (card) {
                     card.classList.remove('explain-card-pulse');
@@ -4049,20 +4212,21 @@ const Results = (() => {
                     card.classList.add('explain-card-pulse');
                     card.addEventListener('animationend', () => card.classList.remove('explain-card-pulse'), { once: true });
                 }
-                _showExplainNodePopup(el, matchingTable);
-            });
-            el.addEventListener('contextmenu', e => {
-                e.preventDefault();
-                if (typeof Canvas !== 'undefined') Canvas.scrollToTableId(matchingTable.id);
-                const card = document.querySelector(`.table-card[data-table-id="${matchingTable.id}"]`);
-                if (card) {
-                    card.classList.remove('explain-card-pulse');
-                    void card.offsetWidth;
-                    card.classList.add('explain-card-pulse');
-                    card.addEventListener('animationend', () => card.classList.remove('explain-card-pulse'), { once: true });
-                }
-            });
-        }
+            }
+            _showExplainNodePopup(el, tblArg, !!matchingTable);
+        });
+        el.addEventListener('contextmenu', e => {
+            e.preventDefault();
+            if (!matchingTable) return;
+            if (typeof Canvas !== 'undefined') Canvas.scrollToTableId(matchingTable.id);
+            const card = document.querySelector(`.table-card[data-table-id="${matchingTable.id}"]`);
+            if (card) {
+                card.classList.remove('explain-card-pulse');
+                void card.offsetWidth;
+                card.classList.add('explain-card-pulse');
+                card.addEventListener('animationend', () => card.classList.remove('explain-card-pulse'), { once: true });
+            }
+        });
 
         // Table name (alias)
         const nameEl = document.createElement('div');
@@ -4070,14 +4234,18 @@ const Results = (() => {
         nameEl.textContent = node.table ?? '(unknown)';
         el.appendChild(nameEl);
 
-        // Secondary: db.table label (shown when alias differs from table name or db is known)
-        if (matchingTable) {
-            const fullName = matchingTable.database
-                ? `${matchingTable.database}.${matchingTable.name}`
-                : matchingTable.name;
-            const isAliasDifferent = (node.table ?? '').toLowerCase() !== matchingTable.name.toLowerCase()
-                || matchingTable.database;
-            if (isAliasDifferent) {
+        // Secondary: db.table label
+        {
+            const refTbl = matchingTable || nameOnlyMatch;
+            const resolved = refTbl
+                ? { name: refTbl.name, database: refTbl.database ?? null }
+                : sqlResolved
+                    ? { name: sqlResolved.name, database: sqlResolved.database ?? State.activeDatabase ?? null }
+                    : { name: node.table ?? '', database: State.activeDatabase ?? null };
+            const fullName = resolved.database ? `${resolved.database}.${resolved.name}` : resolved.name;
+            const aliasName = node.table ?? '';
+            const isAliasDifferent = aliasName.toLowerCase() !== resolved.name.toLowerCase() || resolved.database;
+            if (fullName && isAliasDifferent) {
                 const dbTableEl = document.createElement('div');
                 dbTableEl.className = 'explain-node-dbtable';
                 dbTableEl.textContent = fullName;

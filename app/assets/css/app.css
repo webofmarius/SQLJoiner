@@ -5458,6 +5458,20 @@ th.calc-nop { opacity: 0.1; font-weight: bold; }
     color: #ffe566;
     text-decoration-color: #f4cc39;
 }
+.lineage-copy-btn {
+    flex-shrink: 0;
+    background: transparent;
+    border: none;
+    color: var(--text-faint);
+    font-size: 12px;
+    padding: 0 2px;
+    cursor: pointer;
+    opacity: 0.4;
+    transition: opacity 0.15s, color 0.15s;
+    line-height: 1;
+    margin-left: auto;
+}
+.lineage-copy-btn:hover { opacity: 1; color: var(--accent); }
 .lineage-code {
     margin: 0;
     padding: 5px 8px;
