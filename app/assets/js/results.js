@@ -4709,6 +4709,29 @@ const Results = (() => {
             return;
         }
 
+        // Alt+E — show selected cell value in a read-only expr popup
+        if (e.altKey && e.code === 'KeyE' && _selectedCell) {
+            if (!['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) {
+                e.preventDefault();
+                e.stopPropagation();
+                const value = _selectedCell.dataset.raw ?? _selectedCell.textContent;
+                const colIdx = _selectedCell.cellIndex;
+                const th = _selectedCell.closest('table')
+                    ?.querySelector('thead tr')
+                    ?.cells[colIdx];
+                const colName = th?.dataset.raw ?? th?.textContent?.trim() ?? 'CELL VALUE';
+                QueryPanel.openExprPopup(
+                    () => value,
+                    () => {},
+                    colName,
+                    false,
+                    null,
+                    { hideActions: true, readOnly: true }
+                );
+                return;
+            }
+        }
+
         const isCopy = (e.metaKey || e.ctrlKey) && e.key === 'c';
         if (!isCopy || !_selectedCell) return;
 

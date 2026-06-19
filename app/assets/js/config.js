@@ -1246,6 +1246,7 @@ const QueryPanel = (() => {
         activeEl.style.display   = 'block';
         if (isLabel) _exprPopup.style.height = '';
         activeEl.value = getValue();
+        activeEl.readOnly = !!options.readOnly;
 
         // Only reset to centre when the popup is currently hidden so a dragged
         // position is preserved when switching between expression inputs.
@@ -1275,6 +1276,8 @@ const QueryPanel = (() => {
             if (_exprPopupTA?.classList.contains('scope-mode-on') && typeof SqlBackdrop !== 'undefined') {
                 SqlBackdrop.toggleScopeMode(_exprPopupTA);
             }
+            if (_exprPopupTA)    _exprPopupTA.readOnly    = false;
+            if (_exprPopupInput) _exprPopupInput.readOnly = false;
         }
         _exprPopupOnShiftEnter = null;
         const cb = _exprPopupOnClose;
@@ -3098,6 +3101,7 @@ const QueryPanel = (() => {
         setShowCheckedOnly: (val) => { _showCheckedOnly = !!val; },
         getCheckedOnlySnapshot: () => _checkedOnlySnapshot ? [..._checkedOnlySnapshot] : null,
         setCheckedOnlySnapshot: (arr) => { _checkedOnlySnapshot = arr ? new Set(arr) : null; },
+        openExprPopup: _openExprPopup,
         applyModeUI: _applyModeUI,
         getAllMinimized: () => _allMinimized,
         setAllMinimized: (val) => {
