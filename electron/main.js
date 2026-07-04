@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain } = require('electron');
 const { spawn } = require('child_process');
 const net = require('net');
 const path = require('path');
@@ -82,6 +82,7 @@ async function createWindow(port) {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
+      preload: path.join(__dirname, 'preload.js'),
     }
   });
 
@@ -98,6 +99,10 @@ async function createWindow(port) {
     mainWindow = null;
   });
 }
+
+ipcMain.handle('dialog:open-file', async (event, options) => {
+  return dialog.showOpenDialog(mainWindow, options);
+});
 
 app.whenReady().then(async () => {
   try {

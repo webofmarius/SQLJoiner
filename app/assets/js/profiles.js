@@ -49,13 +49,15 @@ const Profiles = (() => {
             item.className      = 'profile-item';
             item.dataset.id     = p.id;
 
+            const isSqlite  = (p.type === 'sqlite');
+            const subtitle  = isSqlite
+                ? _esc(p.file_path || '')
+                : `${_esc(p.user)}@${_esc(p.host)}:${p.port}&nbsp;/&nbsp;<strong>${_esc(p.database)}</strong>`;
+
             item.innerHTML = `
                 <div class="profile-item__info">
                     <div class="profile-item__name">${_esc(p.name)}</div>
-                    <div class="profile-item__host">
-                        ${_esc(p.user)}@${_esc(p.host)}:${p.port}
-                        &nbsp;/&nbsp;<strong>${_esc(p.database)}</strong>
-                    </div>
+                    <div class="profile-item__host">${subtitle}</div>
                 </div>
                 <div class="profile-item__actions">
                     <button class="btn-icon btn-edit" title="Edit profile">✏</button>
@@ -100,17 +102,34 @@ const Profiles = (() => {
     // Form helpers
     // =========================================================================
 
+    /** Toggles visible form fields based on the selected connection type. */
+    function _applyTypeToggle(type) {
+        const isSqlite = type === 'sqlite';
+        document.getElementById('profile-fields-mysql').style.display  = isSqlite ? 'none' : '';
+        document.getElementById('profile-fields-sqlite').style.display = isSqlite ? ''     : 'none';
+    }
+
     /** Fills the form fields for editing an existing profile. */
     function _populateForm(profile) {
+        const isSqlite = profile.type === 'sqlite';
+
         document.getElementById('profile-form-title').textContent = 'Edit Profile';
         document.getElementById('profile-id').value               = profile.id;
         document.getElementById('profile-name').value             = profile.name;
-        document.getElementById('profile-host').value             = profile.host;
-        document.getElementById('profile-port').value             = profile.port;
-        document.getElementById('profile-database').value         = profile.database;
-        document.getElementById('profile-user').value             = profile.user;
-        document.getElementById('profile-password').value         = '';
-        document.getElementById('profile-password').placeholder   = '(leave blank to keep existing password)';
+        document.getElementById('profile-type').value             = profile.type || 'mysql';
+
+        if (isSqlite) {
+            document.getElementById('profile-file-path').value = profile.file_path || '';
+        } else {
+            document.getElementById('profile-host').value             = profile.host     || '';
+            document.getElementById('profile-port').value             = profile.port     || 3306;
+            document.getElementById('profile-database').value         = profile.database || '';
+            document.getElementById('profile-user').value             = profile.user     || '';
+            document.getElementById('profile-password').value         = '';
+            document.getElementById('profile-password').placeholder   = '(leave blank to keep existing password)';
+        }
+
+        _applyTypeToggle(profile.type || 'mysql');
         _clearTestResult();
     }
 
@@ -119,16 +138,30 @@ const Profiles = (() => {
         document.getElementById('profile-form-title').textContent = 'Add Profile';
         document.getElementById('profile-form').reset();
         document.getElementById('profile-id').value             = '';
+        document.getElementById('profile-type').value           = 'mysql';
         document.getElementById('profile-port').value           = '3306';
         document.getElementById('profile-password').placeholder = '(leave blank if none)';
+        _applyTypeToggle('mysql');
         _clearTestResult();
     }
 
     /** Reads current form values into a plain object. */
     function _readForm() {
+        const type = document.getElementById('profile-type').value;
+
+        if (type === 'sqlite') {
+            return {
+                id:        document.getElementById('profile-id').value.trim() || null,
+                name:      document.getElementById('profile-name').value.trim(),
+                type:      'sqlite',
+                file_path: document.getElementById('profile-file-path').value.trim(),
+            };
+        }
+
         return {
             id:       document.getElementById('profile-id').value.trim() || null,
             name:     document.getElementById('profile-name').value.trim(),
+            type:     'mysql',
             host:     document.getElementById('profile-host').value.trim(),
             port:     parseInt(document.getElementById('profile-port').value, 10) || 3306,
             database: document.getElementById('profile-database').value.trim(),
@@ -142,10 +175,16 @@ const Profiles = (() => {
     // =========================================================================
 
     async function _saveProfile() {
-        const data = _readForm();
+        const data     = _readForm();
+        const isSqlite = data.type === 'sqlite';
 
-        if (!data.name || !data.host || !data.database || !data.user) {
-            _showTestResult('Name, Host, Database and Username are required.', 'error');
+        if (!data.name || (isSqlite ? !data.file_path : (!data.host || !data.database || !data.user))) {
+            _showTestResult(
+                isSqlite
+                    ? 'Name and File path are required.'
+                    : 'Name, Host, Database and Username are required.',
+                'error'
+            );
             return;
         }
 
@@ -220,10 +259,16 @@ const Profiles = (() => {
     // =========================================================================
 
     async function _testProfile() {
-        const data = _readForm();
+        const data     = _readForm();
+        const isSqlite = data.type === 'sqlite';
 
-        if (!data.host || !data.database || !data.user) {
-            _showTestResult('Host, Database and Username are required to test.', 'error');
+        if (isSqlite ? !data.file_path : (!data.host || !data.database || !data.user)) {
+            _showTestResult(
+                isSqlite
+                    ? 'File path is required to test.'
+                    : 'Host, Database and Username are required to test.',
+                'error'
+            );
             return;
         }
 
@@ -281,6 +326,10 @@ const Profiles = (() => {
 
         document.getElementById('btn-clear-profile-form')
             .addEventListener('click', clearForm);
+
+        document.getElementById('profile-type')
+            .addEventListener('change', e => _applyTypeToggle(e.target.value));
+
     }
 
     // =========================================================================

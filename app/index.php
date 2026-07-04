@@ -586,27 +586,42 @@
                         <input type="text" id="profile-name" placeholder="My Production DB" required>
                     </label>
                     <label>
-                        Host
-                        <input type="text" id="profile-host" placeholder="localhost" required>
+                        Type
+                        <select id="profile-type">
+                            <option value="mysql">MySQL</option>
+                            <option value="sqlite">SQLite</option>
+                        </select>
                     </label>
-                    <div class="form-row">
-                        <label style="flex:1">
-                            Port
-                            <input type="number" id="profile-port" value="3306" min="1" max="65535">
+                    <div id="profile-fields-mysql">
+                        <label>
+                            Host
+                            <input type="text" id="profile-host" placeholder="localhost">
                         </label>
-                        <label style="flex:2">
-                            Database
-                            <input type="text" id="profile-database" placeholder="my_database" required>
+                        <div class="form-row">
+                            <label style="flex:1">
+                                Port
+                                <input type="number" id="profile-port" value="3306" min="1" max="65535">
+                            </label>
+                            <label style="flex:2">
+                                Database
+                                <input type="text" id="profile-database" placeholder="my_database">
+                            </label>
+                        </div>
+                        <label>
+                            Username
+                            <input type="text" id="profile-user" placeholder="root">
+                        </label>
+                        <label>
+                            Password
+                            <input type="password" id="profile-password" placeholder="(leave blank if none)">
                         </label>
                     </div>
-                    <label>
-                        Username
-                        <input type="text" id="profile-user" placeholder="root" required>
-                    </label>
-                    <label>
-                        Password
-                        <input type="password" id="profile-password" placeholder="(leave blank if none)">
-                    </label>
+                    <div id="profile-fields-sqlite" style="display:none">
+                        <label>
+                            File path
+                            <input type="text" id="profile-file-path" placeholder="/path/to/database.db">
+                        </label>
+                    </div>
                     <div class="form-actions">
                         <button type="button" id="btn-save-profile">Save Profile</button>
                         <button type="button" id="btn-test-profile">Test Connection</button>

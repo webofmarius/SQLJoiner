@@ -771,6 +771,9 @@ class QueryBuilder
      */
     private function registerConnectionId(\PDO $pdo): void
     {
+        if ($pdo->getAttribute(\PDO::ATTR_DRIVER_NAME) !== 'mysql') {
+            return;
+        }
         $connId = (int) $pdo->query('SELECT CONNECTION_ID()')->fetchColumn();
         $_SESSION['active_query_conn_id'] = $connId;
         session_write_close(); // release lock before blocking query

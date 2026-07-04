@@ -52,7 +52,13 @@ class ProfileManager
     public function save(Request $request): void
     {
         $data = $request->all();
-        $this->requireFields($data, ['name', 'host', 'database', 'user']);
+        $type = $data['type'] ?? 'mysql';
+
+        if ($type === 'sqlite') {
+            $this->requireFields($data, ['name', 'file_path']);
+        } else {
+            $this->requireFields($data, ['name', 'host', 'database', 'user']);
+        }
 
         $profiles = $this->readProfiles();
         $id       = $data['id'] ?? null;
@@ -128,8 +134,10 @@ class ProfileManager
     {
         $data = $request->all();
 
-        if (!empty($data['id']) && empty($data['host'])) {
-            // Mode A: test by stored profile ID
+        // Mode A: only an id is provided — load the full stored profile
+        $isModeA = !empty($data['id']) && empty($data['host']) && empty($data['file_path']);
+
+        if ($isModeA) {
             $profiles = $this->readProfiles();
             $profile  = $this->findById($profiles, $data['id']);
             if (!$profile) {
@@ -137,15 +145,21 @@ class ProfileManager
             }
         } else {
             // Mode B: test with form data
-            $this->requireFields($data, ['host', 'database', 'user']);
+            $type    = $data['type'] ?? 'mysql';
             $profile = $data;
 
-            // If editing an existing profile and password was left blank,
-            // pull the stored password so the test uses real credentials
-            if (!empty($data['id']) && ($data['password'] ?? '') === '') {
-                $profiles = $this->readProfiles();
-                $existing = $this->findById($profiles, $data['id']);
-                $profile['password'] = $existing['password'] ?? '';
+            if ($type === 'sqlite') {
+                $this->requireFields($data, ['file_path']);
+            } else {
+                $this->requireFields($data, ['host', 'database', 'user']);
+
+                // If editing an existing profile and password was left blank,
+                // pull the stored password so the test uses real credentials
+                if (!empty($data['id']) && ($data['password'] ?? '') === '') {
+                    $profiles = $this->readProfiles();
+                    $existing = $this->findById($profiles, $data['id']);
+                    $profile['password'] = $existing['password'] ?? '';
+                }
             }
         }
 
@@ -163,9 +177,21 @@ class ProfileManager
 
     private function buildProfile(array $data, string $id, string $password): array
     {
+        $type = $data['type'] ?? 'mysql';
+
+        if ($type === 'sqlite') {
+            return [
+                'id'        => $id,
+                'name'      => trim($data['name']      ?? ''),
+                'type'      => 'sqlite',
+                'file_path' => trim($data['file_path'] ?? ''),
+            ];
+        }
+
         return [
             'id'       => $id,
             'name'     => trim($data['name']     ?? ''),
+            'type'     => 'mysql',
             'host'     => trim($data['host']     ?? 'localhost'),
             'port'     => (int) ($data['port']   ?? 3306),
             'database' => trim($data['database'] ?? ''),
