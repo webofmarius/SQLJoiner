@@ -14,8 +14,10 @@ namespace Query;
  *               Operators are whitelisted.
  *               Column refs (alias.colname) are validated against \w+\.\w+.
  *
- *   'raw'     — State.whereRaw passed through verbatim (developer owns the SQL).
- *               Intended for complex expressions the visual builder can't express.
+ *   'raw'     — State.whereRaw appended verbatim (developer owns the SQL).
+ *               If visual conditions are also present they are emitted first, with
+ *               the raw text appended as an additional AND clause.  This lets users
+ *               keep drag-and-drop conditions and add complex raw expressions on top.
  *
  * Output examples:
  *   WHERE u.name LIKE 'john%'
@@ -48,67 +50,79 @@ class WhereClause
         string $rawWhere = '',
         string $mode     = 'visual'
     ): string {
-        if ($mode === 'raw') {
-            $raw = trim($rawWhere);
-            return $raw !== '' ? "WHERE\n\t$raw" : '';
+        $raw        = $mode === 'raw' ? trim($rawWhere) : '';
+        $hasRaw     = $raw !== '';
+        $hasVisual  = false;
+
+        // Check whether any visual conditions are enabled
+        foreach ($conditions as $cond) {
+            if (isset($cond['enabled']) && $cond['enabled'] === false) continue;
+            $hasVisual = true;
+            break;
         }
 
-        if (empty($conditions)) {
+        if (!$hasVisual && !$hasRaw) {
             return '';
         }
 
         $parts = [];
 
-        foreach ($conditions as $idx => $cond) {
-            // Skip conditions that have been disabled via the enable checkbox
-            if (isset($cond['enabled']) && $cond['enabled'] === false) continue;
+        if ($hasVisual) {
+            foreach ($conditions as $cond) {
+                if (isset($cond['enabled']) && $cond['enabled'] === false) continue;
 
-            $type     = (string) ($cond['type']     ?? 'column');
-            $operator = strtoupper((string) ($cond['operator'] ?? 'AND'));
+                $type     = (string) ($cond['type']     ?? 'column');
+                $operator = strtoupper((string) ($cond['operator'] ?? 'AND'));
 
-            if ($operator !== 'AND' && $operator !== 'OR') {
-                $operator = 'AND';
-            }
+                if ($operator !== 'AND' && $operator !== 'OR') {
+                    $operator = 'AND';
+                }
 
-            $part = '';
+                $part = '';
 
-            if ($type === 'raw') {
-                $expr = trim((string) ($cond['expr'] ?? ''));
-                if ($expr === '') continue;
-                if (preg_match('/^select\s/i', $expr)) $expr = "($expr)";
-                $part = $expr;
-            } else {
-                $col = (string) ($cond['col'] ?? '');
-                $op  = (string) ($cond['op']  ?? '=');
-                $val = (string) ($cond['val'] ?? '');
-
-                // Operator must be in the whitelist
-                if (!in_array($op, self::ALLOWED_OPS, true)) continue;
-
-                // Column reference must be alias.colname or bare colname (word chars only)
-                if (!preg_match('/^\w+(\.\w+)?$/', $col)) continue;
-
-                if ($op === 'IS NULL' || $op === 'IS NOT NULL') {
-                    $part = "$col $op";
-                } elseif ($op === 'IN' || $op === 'NOT IN') {
-                    $vals = array_map('trim', explode(',', $val));
-                    $list = implode(', ', $vals);
-                    $part = "$col $op ($list)";
-                } elseif ($op === 'BETWEEN' || $op === 'NOT BETWEEN') {
-                    $val2 = (string) ($cond['val2'] ?? '');
-                    $part = "$col $op $val AND $val2";
+                if ($type === 'raw') {
+                    $expr = trim((string) ($cond['expr'] ?? ''));
+                    if ($expr === '') continue;
+                    if (preg_match('/^select\s/i', $expr)) $expr = "($expr)";
+                    $part = $expr;
                 } else {
-                    $part = "$col $op $val";
+                    $col = (string) ($cond['col'] ?? '');
+                    $op  = (string) ($cond['op']  ?? '=');
+                    $val = (string) ($cond['val'] ?? '');
+
+                    if (!in_array($op, self::ALLOWED_OPS, true)) continue;
+                    if (!preg_match('/^\w+(\.\w+)?$/', $col)) continue;
+
+                    if ($op === 'IS NULL' || $op === 'IS NOT NULL') {
+                        $part = "$col $op";
+                    } elseif ($op === 'IN' || $op === 'NOT IN') {
+                        $vals = array_map('trim', explode(',', $val));
+                        $list = implode(', ', $vals);
+                        $part = "$col $op ($list)";
+                    } elseif ($op === 'BETWEEN' || $op === 'NOT BETWEEN') {
+                        $val2 = (string) ($cond['val2'] ?? '');
+                        $part = "$col $op $val AND $val2";
+                    } else {
+                        $part = "$col $op $val";
+                    }
+                }
+
+                if (!empty($cond['startGroup'])) $part = "($part";
+                if (!empty($cond['endGroup']))   $part = "$part)";
+
+                if (empty($parts)) {
+                    $parts[] = "WHERE\n\t    $part";
+                } else {
+                    $parts[] = "\t$operator $part";
                 }
             }
+        }
 
-            if (!empty($cond['startGroup'])) $part = "($part";
-            if (!empty($cond['endGroup']))   $part = "$part)";
-
+        if ($hasRaw) {
             if (empty($parts)) {
-                $parts[] = "WHERE\n\t    $part";
+                $parts[] = "WHERE\n\t$raw";
             } else {
-                $parts[] = "\t$operator $part";
+                $parts[] = "\tAND ($raw)";
             }
         }
 

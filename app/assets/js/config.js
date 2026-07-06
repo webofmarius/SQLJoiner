@@ -2536,6 +2536,10 @@ const QueryPanel = (() => {
 
         const rawText = parts.join('\n');
         State.whereRaw = rawText;
+        // Visual conditions are now represented in the raw textarea — clear them
+        // so they are not double-applied when raw and visual are both present.
+        State.where = [];
+        _refreshWhere();
         const _whereTa = document.getElementById('where-raw-input');
         _whereTa.value = rawText;
         if (typeof SqlBackdrop !== 'undefined') SqlBackdrop.refresh(_whereTa);
@@ -2983,41 +2987,55 @@ const QueryPanel = (() => {
 
 
         // --- WHERE ---
-        if (state.whereMode === 'raw' && state.whereRaw?.trim()) {
-            sql += `\nWHERE\n\t${state.whereRaw.trim()}`;
-        } else if (state.where?.length) {
+        const _hasRawWhere    = state.whereMode === 'raw' && state.whereRaw?.trim();
+        const _hasVisualWhere = state.where?.some(c => c.enabled !== false);
+
+        if (_hasVisualWhere || _hasRawWhere) {
             let whereSql = '';
             let firstPart = true;
-            state.where.forEach((c, idx) => {
-                if (c.enabled === false) return;
-                let part = '';
-                if (c.type === 'raw') {
-                    const expr = (c.expr ?? '').trim();
-                    if (!expr) return;
-                    part = /^select\s/i.test(expr) ? `(${expr})` : expr;
-                } else if (c.op === 'IS NULL')     { part = `${c.col} IS NULL`; }
-                else if (c.op === 'IS NOT NULL')   { part = `${c.col} IS NOT NULL`; }
-                else if (c.op === 'IN' || c.op === 'NOT IN') {
-                    const vals = String(c.val ?? '').split(',').map(v => v.trim()).filter(v => v !== '');
-                    part = `${c.col} ${c.op} (${vals.join(', ')})`;
-                } else if (c.op === 'BETWEEN' || c.op === 'NOT BETWEEN') {
-                    part = `${c.col} ${c.op} ${String(c.val ?? '')} AND ${String(c.val2 ?? '')}`;
-                } else {
-                    const v = String(c.val ?? '');
-                    part = `${c.col} ${c.op} ${v}`;
-                }
 
-                if (c.startGroup) part = '(' + part;
-                if (c.endGroup)   part = part + ')';
+            if (_hasVisualWhere) {
+                state.where.forEach((c) => {
+                    if (c.enabled === false) return;
+                    let part = '';
+                    if (c.type === 'raw') {
+                        const expr = (c.expr ?? '').trim();
+                        if (!expr) return;
+                        part = /^select\s/i.test(expr) ? `(${expr})` : expr;
+                    } else if (c.op === 'IS NULL')     { part = `${c.col} IS NULL`; }
+                    else if (c.op === 'IS NOT NULL')   { part = `${c.col} IS NOT NULL`; }
+                    else if (c.op === 'IN' || c.op === 'NOT IN') {
+                        const vals = String(c.val ?? '').split(',').map(v => v.trim()).filter(v => v !== '');
+                        part = `${c.col} ${c.op} (${vals.join(', ')})`;
+                    } else if (c.op === 'BETWEEN' || c.op === 'NOT BETWEEN') {
+                        part = `${c.col} ${c.op} ${String(c.val ?? '')} AND ${String(c.val2 ?? '')}`;
+                    } else {
+                        const v = String(c.val ?? '');
+                        part = `${c.col} ${c.op} ${v}`;
+                    }
 
+                    if (c.startGroup) part = '(' + part;
+                    if (c.endGroup)   part = part + ')';
+
+                    if (firstPart) {
+                        whereSql += `\nWHERE\n\t    ${part}`;
+                        firstPart = false;
+                    } else {
+                        const op = c.operator || 'AND';
+                        whereSql += `\n\t${op} ${part}`;
+                    }
+                });
+            }
+
+            if (_hasRawWhere) {
+                const rawTrimmed = state.whereRaw.trim();
                 if (firstPart) {
-                    whereSql += `\nWHERE\n\t    ${part}`;
-                    firstPart = false;
+                    whereSql += `\nWHERE\n\t${rawTrimmed}`;
                 } else {
-                    const op = c.operator || 'AND';
-                    whereSql += `\n\t${op} ${part}`;
+                    whereSql += `\n\tAND (${rawTrimmed})`;
                 }
-            });
+            }
+
             sql += whereSql;
         }
 
