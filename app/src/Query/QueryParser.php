@@ -1128,13 +1128,13 @@ class QueryParser
         }
 
         // NOT IN
-        if (preg_match('/^(.+?)\s+NOT\s+IN\s*\((.+)\)\s*$/i', $clean, $m)) {
-            return ['col' => trim($m[1]), 'op' => 'NOT IN', 'val' => trim($m[2])];
+        if (preg_match('/^(.+?)\s+NOT\s+IN\s*\((.+)\)\s*$/is', $clean, $m)) {
+            return ['col' => trim($m[1]), 'op' => 'NOT IN', 'val' => $this->normaliseInVal($m[2])];
         }
 
         // IN
-        if (preg_match('/^(.+?)\s+IN\s*\((.+)\)\s*$/i', $clean, $m)) {
-            return ['col' => trim($m[1]), 'op' => 'IN', 'val' => trim($m[2])];
+        if (preg_match('/^(.+?)\s+IN\s*\((.+)\)\s*$/is', $clean, $m)) {
+            return ['col' => trim($m[1]), 'op' => 'IN', 'val' => $this->normaliseInVal($m[2])];
         }
 
         // LIKE
@@ -1181,6 +1181,17 @@ class QueryParser
 
         // The whole string is wrapped — strip one layer and recurse
         return $this->stripOuterParens(trim(substr($text, 1, $len - 2)));
+    }
+
+    /**
+     * Normalise whitespace around commas in an IN value list so that multi-line
+     * SQL like "(\n    1,\n    2,\n    3\n)" displays cleanly as "1, 2, 3" in the
+     * UI value textbox.  Only the whitespace adjacent to commas is collapsed —
+     * internal whitespace inside string literals is left untouched.
+     */
+    private function normaliseInVal(string $raw): string
+    {
+        return trim(preg_replace('/\s*,\s*/s', ', ', trim($raw)));
     }
 
     /**
