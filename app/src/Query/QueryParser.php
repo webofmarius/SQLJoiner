@@ -1100,6 +1100,7 @@ class QueryParser
     private function parseConditionExpr(string $expr): array
     {
         $clean = trim($this->stripOuterParens(trim($expr)));
+        $clean = str_replace('`', '', $clean);
 
         // IS NOT NULL  (must check before IS NULL)
         if (preg_match('/^(.+?)\s+IS\s+NOT\s+NULL\s*$/i', $clean, $m)) {
