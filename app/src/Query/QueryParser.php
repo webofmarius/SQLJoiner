@@ -1102,6 +1102,15 @@ class QueryParser
         $clean = trim($this->stripOuterParens(trim($expr)));
         $clean = str_replace('`', '', $clean);
 
+        // Conditions containing a subquery cannot be represented by the visual
+        // col/op/val builder — the column dropdown only lists table columns, and
+        // the operator regexes below would match keywords inside the subquery
+        // (e.g. the "=" in "(SELECT x FROM t WHERE a = b) = 'val'").
+        // Keep the whole condition as a raw row instead.
+        if ($this->containsSubquery($clean)) {
+            return ['type' => 'raw', 'expr' => trim($expr)];
+        }
+
         // IS NOT NULL  (must check before IS NULL)
         if (preg_match('/^(.+?)\s+IS\s+NOT\s+NULL\s*$/i', $clean, $m)) {
             return ['col' => trim($m[1]), 'op' => 'IS NOT NULL', 'val' => ''];
@@ -1181,6 +1190,38 @@ class QueryParser
 
         // The whole string is wrapped — strip one layer and recurse
         return $this->stripOuterParens(trim(substr($text, 1, $len - 2)));
+    }
+
+    /**
+     * True when the expression contains a parenthesized subquery — "(SELECT …" —
+     * anywhere outside of string literals.
+     */
+    private function containsSubquery(string $text): bool
+    {
+        $len      = strlen($text);
+        $inString = false;
+        $strChar  = '';
+
+        for ($i = 0; $i < $len; $i++) {
+            $ch = $text[$i];
+            if (!$inString && ($ch === "'" || $ch === '"')) {
+                $inString = true;
+                $strChar  = $ch;
+                continue;
+            }
+            if ($inString) {
+                if ($ch === $strChar) {
+                    if (($i + 1) < $len && $text[$i + 1] === $strChar) { $i++; continue; }
+                    $inString = false;
+                }
+                continue;
+            }
+            if ($ch === '(' && preg_match('/\G\(\s*SELECT\b/iA', $text, $m, 0, $i)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
