@@ -8593,9 +8593,13 @@ async function _copyAsSqlSelect() {
 
         const cellStates    = []; // { ri, ci, classes:[], featureOverride:string|null }
         const rowHighlights = []; // [ri, ...]
+        const rowColorMarks = []; // { ri, theme }
 
         Array.from(tbody.querySelectorAll('tr')).forEach((tr, ri) => {
             if (tr.classList.contains('row-highlighted')) rowHighlights.push(ri);
+            const rowNumTd = tr.querySelector('.td-row-num');
+            const theme    = rowNumTd ? THEMES.find(t => rowNumTd.classList.contains(t)) : null;
+            if (theme) rowColorMarks.push({ ri, theme });
             Array.from(tr.querySelectorAll('td:not(.td-row-num)')).forEach((td, ci) => {
                 const classes         = _ALL_FEATURE_CLS.filter(c => td.classList.contains(c));
                 const featureOverride = td.dataset.featureOverride || null;
@@ -8614,6 +8618,7 @@ async function _copyAsSqlSelect() {
             dupOriginPos:    _cellPosition(_duplicateOriginCell),
             cellStates,
             rowHighlights,
+            rowColorMarks,
             dimActive:       table.classList.contains('is-dimmed'),
             dimRowMode:      _dimRowMode,
             dimPinnedCols:   [..._dimPinnedCols],
@@ -8652,6 +8657,14 @@ async function _copyAsSqlSelect() {
         // Row highlights (alt+click)
         viewState.rowHighlights?.forEach(ri => {
             trs[ri]?.classList.add('row-highlighted');
+        });
+
+        // Row color marks (right-click on the row-number cell)
+        viewState.rowColorMarks?.forEach(({ ri, theme }) => {
+            if (!THEMES.includes(theme)) return;
+            const tr = trs[ri];
+            if (!tr) return;
+            tr.querySelectorAll('td').forEach(td => td.classList.add(theme));
         });
 
         // Cmd/Ctrl+right-click column highlights (also checks legacy 'shiftColHighlights' key)
