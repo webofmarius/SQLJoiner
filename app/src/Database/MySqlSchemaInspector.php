@@ -96,27 +96,37 @@ class MySqlSchemaInspector implements SchemaInspectorInterface
         }
 
         try {
-            $tableRef = $database !== ''
-                ? "`{$database}`.`{$table}`"
-                : "`{$table}`";
-
-            $stmt    = $this->pdo->query("DESCRIBE {$tableRef}");
-            $columns = $stmt->fetchAll();
-
-            $normalised = array_map(fn(array $col) => [
-                'name'      => $col['Field'],
-                'type'      => $col['Type'],
-                'shortType' => $this->shortType($col['Type']),
-                'nullable'  => $col['Null'] === 'YES',
-                'key'       => $col['Key'],
-                'default'   => $col['Default'],
-                'extra'     => $col['Extra'],
-            ], $columns);
-
-            Response::success($normalised);
+            Response::success(self::fetchColumns($this->pdo, $table, $database));
         } catch (\PDOException $e) {
             Response::error('Failed to fetch columns: ' . $e->getMessage());
         }
+    }
+
+    /**
+     * Data-returning column lookup shared with QueryParser, which already
+     * holds an open PDO connection for the profile and needs the raw array
+     * (not a Response) while enriching tables parsed out of an imported SQL query.
+     *
+     * @throws \PDOException
+     */
+    public static function fetchColumns(\PDO $pdo, string $table, string $database = ''): array
+    {
+        $tableRef = $database !== ''
+            ? "`{$database}`.`{$table}`"
+            : "`{$table}`";
+
+        $stmt    = $pdo->query("DESCRIBE {$tableRef}");
+        $columns = $stmt->fetchAll();
+
+        return array_map(fn(array $col) => [
+            'name'      => $col['Field'],
+            'type'      => $col['Type'],
+            'shortType' => self::shortType($col['Type']),
+            'nullable'  => $col['Null'] === 'YES',
+            'key'       => $col['Key'],
+            'default'   => $col['Default'],
+            'extra'     => $col['Extra'],
+        ], $columns);
     }
 
     public function getCreateStatement(Request $request): void
@@ -204,7 +214,7 @@ class MySqlSchemaInspector implements SchemaInspectorInterface
         }
     }
 
-    private function shortType(string $type): string
+    private static function shortType(string $type): string
     {
         return strtolower(preg_replace('/\(.*\)/', '', $type));
     }

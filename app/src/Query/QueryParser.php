@@ -7,7 +7,9 @@ namespace Query;
 use Core\Request;
 use Core\Response;
 use Database\Connection;
+use Database\MySqlSchemaInspector;
 use Database\ProfileManager;
+use Database\SqliteSchemaInspector;
 
 /**
  * QueryParser — validates and parses an external SELECT query into the
@@ -76,38 +78,18 @@ class QueryParser
         // --- Parse ---
         $parsed = $this->parseSql($cleanSql);
 
-        // --- Enrich tables with real columns from INFORMATION_SCHEMA ---
+        // --- Enrich tables with real columns from the schema ---
+        $isSqlite = ($profile['type'] ?? 'mysql') === 'sqlite';
         foreach ($parsed['tables'] as &$table) {
             if (!empty($table['isSubquery'])) {
                 continue; // virtual tables keep empty columns
             }
             try {
-                $db   = (string) ($table['database'] ?? '');
-                $stmt = $pdo->prepare(
-                    'SELECT COLUMN_NAME    AS `name`,
-                            COLUMN_TYPE    AS `type`,
-                            DATA_TYPE      AS `shortType`,
-                            IS_NULLABLE    AS `nullable`,
-                            COLUMN_KEY     AS `key`,
-                            COLUMN_DEFAULT AS `default`,
-                            EXTRA          AS `extra`
-                       FROM INFORMATION_SCHEMA.COLUMNS
-                      WHERE TABLE_NAME   = ?
-                        AND TABLE_SCHEMA = IFNULL(NULLIF(?, \'\'), DATABASE())
-                      ORDER BY ORDINAL_POSITION'
-                );
-                $stmt->execute([$table['name'], $db]);
-                $rows = $stmt->fetchAll(\PDO::FETCH_ASSOC);
-                if (!empty($rows)) {
-                    $table['columns'] = array_map(fn(array $c) => [
-                        'name'      => $c['name'],
-                        'type'      => $c['type'],
-                        'shortType' => strtolower($c['shortType']),
-                        'nullable'  => $c['nullable'] === 'YES',
-                        'key'       => $c['key'],       // PRI | UNI | MUL | ""
-                        'default'   => $c['default'],
-                        'extra'     => strtolower((string) $c['extra']),
-                    ], $rows);
+                $columns = $isSqlite
+                    ? SqliteSchemaInspector::fetchColumns($pdo, $table['name'])
+                    : MySqlSchemaInspector::fetchColumns($pdo, $table['name'], (string) ($table['database'] ?? ''));
+                if (!empty($columns)) {
+                    $table['columns'] = $columns;
                 }
                 // else: leave as empty array — table may not exist in current db context
             } catch (\PDOException $e) {
@@ -129,15 +111,16 @@ class QueryParser
 
         $sections = $this->splitSections($sql);
 
-        // SELECT
-        [$select, $selectRaw, $selectAliases, $selectCustomExprs] = !empty($sections['select'])
-            ? $this->parseSelect($sections['select'])
-            : [[], '', [], []];
-
-        // FROM + JOINs
+        // FROM + JOINs — parsed before SELECT so unqualified column names can be
+        // resolved to the sole table when there's no ambiguity (see parseSelect).
         [$tables, $joins] = !empty($sections['from'])
             ? $this->parseFrom($sections['from'])
             : [[], []];
+
+        // SELECT
+        [$select, $selectRaw, $selectAliases, $selectCustomExprs] = !empty($sections['select'])
+            ? $this->parseSelect($sections['select'], $tables)
+            : [[], '', [], []];
 
         // WHERE — raw text + parsed visual conditions
         $where            = trim($sections['where'] ?? '');
@@ -331,17 +314,24 @@ class QueryParser
      * Each SELECT item is classified:
      *   alias.col [AS col_alias]  → added to $visualCols (checkbox in SELECT panel)
      *                               col_alias recorded in $selectAliases map
+     *   bare col [AS col_alias]   → same, resolved to the sole FROM table, but only
+     *                               when the query has exactly one table (no JOINs);
+     *                               otherwise the table it belongs to is ambiguous
+     *                               and it falls through to Custom Expression
      *   anything else             → added to $selectCustomExprs (Custom Expression row)
      *
      * SELECT * is ignored (leaves $visualCols empty = SELECT *).
      */
-    private function parseSelect(string $text): array
+    private function parseSelect(string $text, array $tables = []): array
     {
         $rawText       = trim($text);
         $parts         = $this->splitByTopLevelComma($text);
         $cols          = [];
         $selectAliases = [];
         $customExprs   = [];
+
+        $soleAlias = count($tables) === 1 ? ($tables[0]['alias'] ?? $tables[0]['name'] ?? null) : null;
+        $literalKeywords = ['NULL', 'TRUE', 'FALSE', 'DEFAULT'];
 
         foreach ($parts as $part) {
             $part = trim($part);
@@ -364,6 +354,21 @@ class QueryParser
                 $cols[] = $key;
                 if (!empty($m[3])) {
                     $selectAliases[$key] = $m[3];
+                }
+                continue;
+            }
+
+            // Bare column name (no table qualifier) — only resolvable without
+            // ambiguity when the query selects from a single table.
+            if ($soleAlias !== null
+                && preg_match('/^(\w+)(?:\s+AS\s+(\w+))?$/i', $clean, $m)
+                && !ctype_digit($m[1])
+                && !in_array(strtoupper($m[1]), $literalKeywords, true)
+            ) {
+                $key = strtolower($soleAlias) . '.' . $m[1];
+                $cols[] = $key;
+                if (!empty($m[2])) {
+                    $selectAliases[$key] = $m[2];
                 }
                 continue;
             }
