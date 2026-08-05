@@ -5316,10 +5316,28 @@ th.calc-nop { opacity: 0.1; font-weight: bold; }
     border-top: 1px solid var(--border);
     margin: 2px 0 0;
 }
+.dist-popup-copy-col-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 6px 10px 8px;
+}
+.dist-popup-copy-col-vert-label {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+.dist-popup-copy-col-vert-label input[type="checkbox"] {
+    width: auto;
+    margin: 0;
+    cursor: pointer;
+}
 .dist-popup-copy-col-btn {
     display: block;
-    width: calc(100% - 20px);
-    margin: 6px 10px 8px;
+    flex: 1;
+    width: auto;
+    margin: 0;
     padding: 4px 8px;
     font-size: 11px;
     background: var(--surface3);

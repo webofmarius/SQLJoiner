@@ -3285,14 +3285,27 @@ const Results = (() => {
         hr.className = 'dist-popup-hr';
         container.appendChild(hr);
 
+        const copyColRow = document.createElement('div');
+        copyColRow.className = 'dist-popup-copy-col-row';
+
+        const vertLabel = document.createElement('label');
+        vertLabel.className = 'dist-popup-copy-col-vert-label';
+        vertLabel.title      = 'When checked, copy one value per line, unquoted (paste into Excel as a column)';
+        const vertChk = document.createElement('input');
+        vertChk.type    = 'checkbox';
+        vertChk.checked = true;
+        vertLabel.appendChild(vertChk);
+        copyColRow.appendChild(vertLabel);
+
         const copyColBtn = document.createElement('button');
         copyColBtn.className   = 'dist-popup-copy-col-btn';
         copyColBtn.textContent = 'Copy CSV column';
         copyColBtn.title       = 'Copy unique column values as SQL IN(…) list';
         copyColBtn.addEventListener('click', () => {
             if (colIdx === -1 || !_lastResult) return;
-            const seen  = new Set();
-            const parts = [];
+            const seen    = new Set();
+            const parts   = [];
+            const rawVals = [];
 
             const table  = document.getElementById('results-table');
             const isDimRowMode = table?.classList.contains('is-dimmed') && _dimRowMode;
@@ -3311,6 +3324,7 @@ const Results = (() => {
                     seen.add(s);
                     const isNum = s.trim() !== '' && !isNaN(s);
                     parts.push(isNum ? s : `'${s.replace(/'/g, "''")}'`);
+                    rawVals.push(s);
                 }
             } else {
                 // No DIM (or column-mode DIM): use all fetched rows
@@ -3323,14 +3337,17 @@ const Results = (() => {
                     // Numeric literal — no quotes needed
                     const isNum = s.trim() !== '' && !isNaN(s);
                     parts.push(isNum ? s : `'${s.replace(/'/g, "''")}'`);
+                    rawVals.push(s);
                 }
             }
 
             if (!parts.length) { App.notify?.('Column has no non-NULL values', 'warn'); return; }
-            navigator.clipboard.writeText(parts.join(', '))
+            const text = vertChk.checked ? rawVals.join('\n') : parts.join(', ');
+            navigator.clipboard.writeText(text)
                 .then(() => App.notify?.(`${parts.length} value${parts.length === 1 ? '' : 's'} copied`, 'success'));
         });
-        container.appendChild(copyColBtn);
+        copyColRow.appendChild(copyColBtn);
+        container.appendChild(copyColRow);
     }
 
     // =========================================================================
