@@ -2343,78 +2343,25 @@ const App = (() => {
     }
 
     // -------------------------------------------------------------------------
-    // Plot Query
+    // Plot Query — builds the chart from whatever is currently shown in the
+    // Results table (last executed query, loaded CSV/XLSX, or a restored
+    // Recording) instead of re-running a query against the database. This
+    // lets data sourced from elsewhere (other apps, cached Recordings) be
+    // plotted without needing a live connection profile or canvas tables.
     // -------------------------------------------------------------------------
-    async function runPlotQuery() {
-        if (!State.activeProfileId) {
-            _notify('No connection profile selected.', 'error');
-            return;
-        }
-        if (State.tables.length === 0) {
-            _notify('Add at least one table to the canvas first.', 'warn');
+    function runPlotQuery() {
+        const result = (typeof Results !== 'undefined') ? Results.getLastResult() : null;
+        if (!result || !result.rows || !result.cols) {
+            _notify('No results to plot — run a query or load data into the results table first.', 'warn');
             return;
         }
 
-        // Island check — same as runQuery
-        const _enabledJoins = State.joins.filter(j => j.enabled !== false);
-        const _islands      = computeIslands(State.tables, _enabledJoins);
-        if (_islands.length > 1) {
-            const selected = State.selectedIslandKey ?? null;
-            if (!selected) {
-                _notify('Multiple disconnected table groups found. Select one to plot.', 'warn');
-                return;
-            }
-            const selIds = new Set(selected.split('|'));
-            const match  = _islands.find(g => g.length === selIds.size && g.every(id => selIds.has(id)));
-            if (!match) {
-                _notify('Selected island no longer exists. Please select one to plot.', 'warn');
-                return;
-            }
-        }
+        // Best-effort island key/name, used only to group pinned plots next
+        // to the matching island on the canvas (if one is selected).
+        const islandKey  = _currentIslandKey();
+        const islandName = islandKey ? ((State.islandNames?.[islandKey] ?? '').trim() || null) : null;
 
-        const _activeIslandIds = (() => {
-            if (_islands.length <= 1) return _islands[0] ? new Set(_islands[0]) : new Set(State.tables.map(t => t.id));
-            return new Set((State.selectedIslandKey ?? '').split('|'));
-        })();
-        const islandKey      = [..._activeIslandIds].sort().join('|');
-        const _filteredTables = State.tables.filter(t => _activeIslandIds.has(t.id));
-        const _filteredJoins  = _enabledJoins.filter(j => _activeIslandIds.has(j.fromTableId) && _activeIslandIds.has(j.toTableId));
-
-        // Pass island name as title hint; openPlot falls back to "col1 vs col2" if empty
-        const islandName = (State.islandNames?.[islandKey] ?? '').trim() || null;
-
-        const btn = document.getElementById('btn-plot-query');
-        btn.disabled    = true;
-        btn.textContent = '⏳ Plotting…';
-        _queryAbortController = new AbortController();
-        _showCancelBtn();
-        _startMetaSpinner();
-
-        try {
-            const result = await API.query.execute({
-                profileId: State.activeProfileId,
-                ...State,
-                tables: _filteredTables,
-                joins:  _filteredJoins,
-            }, _queryAbortController.signal);
-
-            Modals.openPlot(result, islandKey, islandName);
-            if (document.getElementById('chk-plot-show-results')?.checked) {
-                Results.render(result);
-            }
-        } catch (e) {
-            if (e.name === 'AbortError') {
-                _notify('Query cancelled.', 'warn');
-            } else {
-                _notify('Plot query failed: ' + e.message, 'error');
-            }
-        } finally {
-            _queryAbortController = null;
-            _hideCancelBtn();
-            _stopMetaSpinner();
-            btn.disabled    = false;
-            btn.textContent = '📊 Plot';
-        }
+        Modals.openPlot(result, islandKey, islandName);
     }
 
     // -------------------------------------------------------------------------
