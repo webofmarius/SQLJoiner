@@ -762,8 +762,11 @@ const QueryPanel = (() => {
                     if (typeof UndoRedo !== 'undefined') UndoRedo.snapshot();
                     if (!chk.checked) {
                         if (State.select.length === 0 && !State.selectNone) {
-                            // Expand SELECT * to explicit list first, then remove this key
-                            State.select = State.columnOrder.filter(k => k !== key);
+                            // Expand SELECT * to explicit list first, then remove this key.
+                            // Scope to the active island only (matches the group-header
+                            // checkbox above) so unrelated islands' columns never get
+                            // pulled into State.select.
+                            State.select = _activeColumns().filter(k => k !== key);
                         } else {
                             State.select = State.select.filter(k => k !== key);
                         }
@@ -774,7 +777,7 @@ const QueryPanel = (() => {
                             State.select.push(key);
                             State.select.sort((a, b) => State.columnOrder.indexOf(a) - State.columnOrder.indexOf(b));
                         }
-                        if (_allColumns().every(k => State.select.includes(k))) State.select = [];
+                        if (_activeColumns().every(k => State.select.includes(k))) State.select = [];
                     }
                     _refreshSelect();
                     App.updateSQLPreview();
@@ -2828,10 +2831,16 @@ const QueryPanel = (() => {
                     .join(', ')
                 : raw;
         } else if (state.select.length > 0) {
-            const cols = useSortVisual ? _alphaSorted(state.select) : state.select;
-            selectPart = useDelimiter
-                ? (useSortVisual ? _injectDelimitersByGroup(cols) : _injectDelimiters(cols))
-                : cols.map(_colWithAlias).join(', ');
+            // state.select spans ALL islands; restrict to the active island's aliases
+            // so toggling a checkbox never leaks a column key from another island into
+            // this island's SELECT clause (mirrors QueryBuilder.php's $aliasFilter).
+            const activeSelect = state.select.filter(k => _preActiveAliases.has(String(k).split('.')[0]));
+            if (activeSelect.length > 0) {
+                const cols = useSortVisual ? _alphaSorted(activeSelect) : activeSelect;
+                selectPart = useDelimiter
+                    ? (useSortVisual ? _injectDelimitersByGroup(cols) : _injectDelimiters(cols))
+                    : cols.map(_colWithAlias).join(', ');
+            }
         } else if (_activeColOrder.length > 0) {
             const defaultOrder = _activeAllCols();
             const isDefault = _activeColOrder.length === defaultOrder.length &&
