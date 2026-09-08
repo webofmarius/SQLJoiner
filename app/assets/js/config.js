@@ -815,8 +815,8 @@ const QueryPanel = (() => {
 
                 row.appendChild(lbl);
 
-                // FROM_UNIXTIME quick-add — hover-revealed. Adds a Custom
-                // Expression wrapping this column, for unix-timestamp columns.
+                // FROM_UNIXTIME quick-add — hover-revealed, floats just left of
+                // the alias input. Adds a Custom Expression wrapping this column.
                 const futBtn = document.createElement('button');
                 futBtn.type = 'button';
                 futBtn.className = 'select-col-fut-btn';
@@ -828,7 +828,6 @@ const QueryPanel = (() => {
                     e.stopPropagation();
                     _addFromUnixtimeExpr(key);
                 });
-                row.appendChild(futBtn);
 
                 // Alias input (visual mode only)
                 const aliasWrap = document.createElement('div');
@@ -878,6 +877,7 @@ const QueryPanel = (() => {
 
                 aliasWrap.appendChild(aliasInput);
                 aliasWrap.appendChild(aliasClearBtn);
+                aliasWrap.appendChild(futBtn);
                 row.appendChild(aliasWrap);
 
                 // Highlight checkbox — lights up the matching results column

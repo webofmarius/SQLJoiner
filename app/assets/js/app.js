@@ -78,7 +78,7 @@ const State = {
     selectRaw: '',
 
     /** When true, '|||' is injected between each table's columns in visual SELECT */
-    selectAddDelimiter: false,
+    selectAddDelimiter: true,
 
     /** When true, SELECT columns are sorted A→Z by column name in the query (UI order unchanged) */
     selectSortAlpha: false,
@@ -1702,7 +1702,7 @@ const App = (() => {
             select,
             selectRaw: '', selectMode: 'visual',
             selectCustomExprs: [], selectCustomExprsOrder: 'first', selectAliases: {}, selectNone: false,
-            selectAddDelimiter: false, selectSortAlpha: false, selectDistinct: false,
+            selectAddDelimiter: true, selectSortAlpha: false, selectDistinct: false,
             where: [], whereRaw: '', whereMode: 'visual',
             groupBy: [], groupByRaw: '', groupByMode: 'visual',
             having: [], havingRaw: '', havingMode: 'visual',
@@ -1742,7 +1742,7 @@ const App = (() => {
                 tableOrder, select,
                 selectRaw: '', selectMode: 'visual',
                 selectCustomExprs: [], selectCustomExprsOrder: 'first', selectAliases: {}, selectNone: false,
-                selectAddDelimiter: false, selectSortAlpha: false, selectDistinct: false,
+                selectAddDelimiter: true, selectSortAlpha: false, selectDistinct: false,
                 where: [], whereRaw: '', whereMode: 'visual',
                 groupBy: [], groupByRaw: '', groupByMode: 'visual',
                 having: [], havingRaw: '', havingMode: 'visual',

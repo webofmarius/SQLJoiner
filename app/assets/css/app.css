@@ -2596,6 +2596,15 @@ body.is-cut-mode * { cursor: crosshair !important; }
     color: var(--text);
     cursor: pointer;
     min-width: 0;
+    overflow: hidden;
+}
+/* column-name span (not the PK/ENUM badges) ellipsises when the hover button
+   claims space */
+.select-col-row label > span:not(.col-badge) {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .select-col-row.is-draggable {
@@ -2618,11 +2627,13 @@ body.is-cut-mode * { cursor: crosshair !important; }
     border-radius: 3px;
 }
 
-/* FROM_UNIXTIME quick-add — absolutely positioned so it never reflows the row;
-   revealed on row hover, overlaying the right edge */
+/* FROM_UNIXTIME quick-add — lives inside .col-alias-wrap and floats just off
+   its left edge, revealed on row hover. Absolutely positioned so it never
+   reflows the row; it briefly overlays the column name while hovering. */
 .select-col-fut-btn {
     position: absolute;
-    right: 3px;
+    right: 100%;
+    margin-right: 4px;
     top: 50%;
     transform: translateY(-50%);
     z-index: 3;
@@ -2638,7 +2649,7 @@ body.is-cut-mode * { cursor: crosshair !important; }
     cursor: pointer;
     opacity: 0;
     pointer-events: none;
-    box-shadow: -8px 0 8px 3px var(--surface);
+    box-shadow: -7px 0 7px 3px var(--surface);
     transition: opacity 0.12s, color 0.12s, border-color 0.12s;
 }
 .select-col-row:hover .select-col-fut-btn {
@@ -2670,8 +2681,8 @@ body.is-cut-mode * { cursor: crosshair !important; }
 .col-alias-input.has-value { padding-right: 18px; }
 .col-alias-wrap {
     position: relative;
-    margin-left: auto;
-    flex: 0 0 35%;
+    margin-left: auto; /* pin the alias input to the row's right edge */
+    flex: 0 0 26.25%; /* trimmed a quarter off the former 35% */
     min-width: 24px;
 }
 .col-alias-wrap .col-alias-input {
