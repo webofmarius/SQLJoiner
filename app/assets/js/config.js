@@ -811,7 +811,24 @@ const QueryPanel = (() => {
                     lbl.appendChild(badge);
                 }
 
+                if (_isEnumCol(colData)) lbl.appendChild(_makeEnumBadge(colData));
+
                 row.appendChild(lbl);
+
+                // FROM_UNIXTIME quick-add — hover-revealed. Adds a Custom
+                // Expression wrapping this column, for unix-timestamp columns.
+                const futBtn = document.createElement('button');
+                futBtn.type = 'button';
+                futBtn.className = 'select-col-fut-btn';
+                futBtn.textContent = 'FROM_UNIXTIME';
+                futBtn.title = `Add custom expression:  FROM_UNIXTIME(${key}) AS _${colName}`;
+                futBtn.addEventListener('mousedown', e => e.stopPropagation());
+                futBtn.addEventListener('dragstart', e => e.stopPropagation());
+                futBtn.addEventListener('click', e => {
+                    e.stopPropagation();
+                    _addFromUnixtimeExpr(key);
+                });
+                row.appendChild(futBtn);
 
                 // Alias input (visual mode only)
                 const aliasWrap = document.createElement('div');
@@ -1288,6 +1305,53 @@ const QueryPanel = (() => {
         cb?.();
     }
 
+    /**
+     * Quick-add a FROM_UNIXTIME() custom expression for a column, triggered by
+     * the hover button on each SELECT column row.
+     *   alias:  _<column name, table prefix stripped>
+     *   expr:   FROM_UNIXTIME(<table alias>.<column>)
+     * If INCLUSION is "Exclude" (custom expressions suppressed), bump it to
+     * "Combined" so the new expression is actually emitted.
+     */
+    function _addFromUnixtimeExpr(colKey) {
+        const colName = colKey.includes('.') ? colKey.split('.')[1] : colKey;
+        const alias   = '_' + colName;
+        const expr    = `FROM_UNIXTIME(${colKey})`;
+
+        if (typeof UndoRedo !== 'undefined') UndoRedo.snapshot();
+        if (!Array.isArray(State.selectCustomExprs)) State.selectCustomExprs = [];
+
+        if ((State.selectCustomExprsMode ?? 'exclude') === 'exclude') {
+            State.selectCustomExprsMode = 'combined';
+        }
+
+        let targetIdx = State.selectCustomExprs.findIndex(
+            e => (e.alias || '').trim() === alias && (e.expr || '').trim() === expr
+        );
+        if (targetIdx === -1) {
+            State.selectCustomExprs.push({
+                id: 'cx_' + Date.now(),
+                expr,
+                alias,
+                label: '',
+                enabled: true,
+            });
+            targetIdx = State.selectCustomExprs.length - 1;
+        }
+
+        _refreshSelect();
+        App.updateSQLPreview();
+
+        requestAnimationFrame(() => {
+            const rows = document.querySelectorAll('#select-columns .select-expr-row');
+            const el = rows[targetIdx];
+            if (!el) return;
+            el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            el.classList.add('select-expr-flash');
+            setTimeout(() => el.classList.remove('select-expr-flash'), 2000);
+        });
+    }
+
     function _buildCustomExprRow(expr, idx) {
         const row = document.createElement('div');
         row.className = 'select-expr-row is-draggable';
@@ -1593,6 +1657,36 @@ const QueryPanel = (() => {
         return parts.join(', ');
     }
 
+    // -------------------------------------------------------------------------
+    // enum column helper
+    //
+    // MySQL stores an enum value as its 1-based position, so `col = 0` and
+    // `col = '0'` are NOT the same query. Flag enum columns everywhere a column
+    // name is shown (WHERE / HAVING rows, SELECT column list) so it can't bite
+    // silently.
+    // -------------------------------------------------------------------------
+    function _colMeta(colRef) {
+        if (typeof colRef !== 'string') return null;
+        const m = colRef.match(/^([A-Za-z_]\w*)\.([A-Za-z_]\w*)$/);
+        if (!m) return null;
+        const table = State.tables.find(t => t.alias === m[1]);
+        return table?.columns?.find(c => c.name === m[2]) ?? null;
+    }
+
+    function _isEnumCol(colData) {
+        return String(colData?.shortType || '').toLowerCase() === 'enum';
+    }
+
+    function _makeEnumBadge(colData) {
+        const badge = document.createElement('span');
+        badge.className = 'col-badge col-badge--enum';
+        badge.textContent = 'ENUM';
+        badge.title = colData?.type
+            ? `${colData.type}  —  stored as the 1-based index; "col = 0" ≠ "col = '0'"`
+            : 'enum column — stored as the 1-based index; "col = 0" ≠ "col = \'0\'"';
+        return badge;
+    }
+
     // =========================================================================
     // WHERE section
     // =========================================================================
@@ -1779,6 +1873,8 @@ const QueryPanel = (() => {
                 }
                 row.appendChild(badge);
             }
+
+            if (_isEnumCol(colData)) row.appendChild(_makeEnumBadge(colData));
         }
 
         // Operator select
@@ -2151,6 +2247,9 @@ const QueryPanel = (() => {
             }
         });
         row.appendChild(colSpan);
+
+        const havingEnumMeta = _colMeta(cond.col);
+        if (_isEnumCol(havingEnumMeta)) row.appendChild(_makeEnumBadge(havingEnumMeta));
 
         // Operator dropdown
         const opSel = document.createElement('select');

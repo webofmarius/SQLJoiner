@@ -698,10 +698,15 @@ const Canvas = (() => {
             ? `${_esc(col.shortType)} ↑`
             : _esc(col.shortType);
 
+        // enum: MySQL stores the 1-based index, so `col = 0` ≠ `col = '0'`.
+        // Flag the type label loudly (full definition is in the row's title).
+        const isEnum   = String(col.shortType || '').toLowerCase() === 'enum';
+        const typeCls  = 'table-card__col-type' + (isEnum ? ' table-card__col-type--enum' : '');
+
         li.innerHTML = `
             <span class="table-card__col-name">${_esc(col.name)}</span>
             ${badge}
-            <span class="table-card__col-type">${typeStr}</span>
+            <span class="${typeCls}">${typeStr}</span>
             <button class="table-card__col-copy-btn" title="Copy column name to clipboard">⎘</button>
         `;
 

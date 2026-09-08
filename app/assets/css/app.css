@@ -572,6 +572,10 @@ body.is-resizing * { user-select: none !important; }
 .select-col-row.select-col-flash {
     animation: select-col-row-flash 2s ease-out forwards;
 }
+.select-expr-row.select-expr-flash {
+    animation: select-col-row-flash 2s ease-out forwards;
+    border-radius: 3px;
+}
 
 .tl-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tl-rows { flex-shrink: 0; font-size: 10px; color: var(--text-faint); margin-left: auto; }
@@ -2202,6 +2206,16 @@ body.is-cut-mode * { cursor: crosshair !important; }
     flex-shrink: 0;
 }
 
+/* enum columns: the value stored is the 1-based index, so `col = 0` and
+   `col = '0'` are NOT equivalent — flag the type label loudly */
+.table-card__col-type--enum {
+    background: var(--error);
+    color: #fff;
+    font-weight: 700;
+    padding: 1px 4px;
+    border-radius: 3px;
+}
+
 .table-card__col-copy-btn {
     flex-shrink: 0;
     background: transparent;
@@ -2238,6 +2252,8 @@ body.is-cut-mode * { cursor: crosshair !important; }
 .col-badge--pk  { background: rgba(240,160, 50,0.18); color: var(--warning); border: 1px solid rgba(240,160,50,0.35); }
 .col-badge--fk  { background: rgba( 74,158,255,0.15); color: var(--accent);  border: 1px solid rgba(74,158,255,0.3);  }
 .col-badge--uni { background: rgba( 52,211,153,0.15); color: var(--join-right); border: 1px solid rgba(52,211,153,0.3); }
+/* enum: stored value is the 1-based index — `= 0` vs `= '0'` differ. Hover shows allowed values. */
+.col-badge--enum { background: var(--error); color: #fff; border: 1px solid var(--error); cursor: help; }
 
 /* =============================================================================
    9. Right Panel — Query Config
@@ -2562,6 +2578,7 @@ body.is-cut-mode * { cursor: crosshair !important; }
 }
 .select-table-hdr-txt--none { color: #ff6b6b; }
 .select-col-row {
+    position: relative;
     display: flex;
     align-items: center;
     gap: 6px;
@@ -2599,6 +2616,39 @@ body.is-cut-mode * { cursor: crosshair !important; }
 .select-col-row.is-highlighted {
     animation: select-col-flash 3s ease-out forwards;
     border-radius: 3px;
+}
+
+/* FROM_UNIXTIME quick-add — absolutely positioned so it never reflows the row;
+   revealed on row hover, overlaying the right edge */
+.select-col-fut-btn {
+    position: absolute;
+    right: 3px;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 3;
+    white-space: nowrap;
+    background: var(--surface3);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    font-size: 9px;
+    letter-spacing: 0.3px;
+    padding: 2px 5px;
+    cursor: pointer;
+    opacity: 0;
+    pointer-events: none;
+    box-shadow: -8px 0 8px 3px var(--surface);
+    transition: opacity 0.12s, color 0.12s, border-color 0.12s;
+}
+.select-col-row:hover .select-col-fut-btn {
+    opacity: 0.95;
+    pointer-events: auto;
+}
+.select-col-fut-btn:hover {
+    opacity: 1;
+    color: var(--accent);
+    border-color: var(--accent);
 }
 .col-alias-input {
     width: 100%;
