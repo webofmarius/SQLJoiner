@@ -309,8 +309,8 @@
                 <button id="btn-diff-csv-exit" class="hidden is-active" title="Exit CSV diff">✕ Exit Diff CSV</button>
                 <button id="btn-diff-query" title="Capture the current result, then re-run the query to diff against it" disabled>⊙ Diff Query</button>
                 <button id="btn-diff-query-exit" class="hidden is-active" title="Exit query diff">✕ Exit Diff Query</button>
-                <button id="btn-diff-query-cols" title="Set-diff chosen columns against the next query (array_diff / intersect / union)" disabled>⊙± Diff Query cols</button>
-                <button id="btn-diff-query-cols-exit" class="hidden is-active" title="Exit columns diff">✕ Exit Diff Query cols</button>
+                <button id="btn-diff-cols" title="Set-diff chosen columns against the next query or a CSV (array_diff / intersect / union)" disabled>⊙± Diff cols</button>
+                <button id="btn-diff-cols-exit" class="hidden is-active" title="Exit columns diff">✕ Exit Diff cols</button>
                 <button id="btn-explain-graph" class="hidden" title="Toggle EXPLAIN graph view">⎇ Explain Graph</button>
                 <input id="chk-search-sql-mode" type="checkbox"  title="SQL operator mode: type expressions like > 5, = 'John', IS NULL">
                 <button id="btn-search-cols" title="Toggle column search inputs">⌕ Search</button>
@@ -332,7 +332,7 @@
             <span id="legend-compare" class="hidden"><strong>Compare mode:</strong> click header to compare column · click cell to compare column · right-click cell to compare row</span>
             <span id="legend-duplicates" class="hidden"><strong>Duplicates mode:</strong> click header to scan column for duplicates · click cell to scan column · right-click cell to scan row</span>
             <span id="legend-trace" class="hidden"><strong>Trace mode:</strong> repeated values are dimmed — only changes from the previous row are shown at full intensity</span>
-            <span id="legend-diff-query-cols" class="hidden"><strong>Diff Query cols:</strong> <span id="legend-dqc-detail"></span></span>
+            <span id="legend-diff-cols" class="hidden"><strong>Diff cols:</strong> <span id="legend-dqc-detail"></span></span>
         </div>
         <div id="results-error" class="hidden"></div>
         <div id="results-table-wrapper">
@@ -810,14 +810,26 @@
         </div>
     </div>
 
-    <div id="modal-diff-query-cols" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modal-diff-query-cols-title">
+    <div id="modal-diff-cols" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modal-diff-cols-title">
         <div class="modal-box modal-box--small">
             <div class="modal-header">
-                <h2 id="modal-diff-query-cols-title">Diff Query columns</h2>
+                <h2 id="modal-diff-cols-title">Diff columns</h2>
                 <button id="btn-dqc-x" aria-label="Close">✕</button>
             </div>
             <div class="modal-body">
                 <div id="dqc-info" class="diff-csv-info"></div>
+                <div class="dqc-source-row">
+                    <label><input type="radio" name="dqc-source" value="query" checked> Against the next query</label>
+                    <label><input type="radio" name="dqc-source" value="csv"> Against CSV data</label>
+                </div>
+                <div id="dqc-csv-box" class="dqc-csv-box hidden">
+                    <div class="dqc-csv-actions">
+                        <button type="button" id="btn-dqc-csv-load">↑ Load CSV file</button>
+                        <input type="file" id="dqc-csv-file" accept=".csv" class="hidden">
+                        <label class="dqc-csv-hdr-chk"><input type="checkbox" id="chk-dqc-csv-header" checked> First row is header</label>
+                    </div>
+                    <textarea id="dqc-csv-paste" placeholder="Paste CSV data here…" spellcheck="false" rows="4"></textarea>
+                </div>
                 <div class="dqc-row">
                     <label>Operation
                         <select id="sel-dqc-op">
@@ -840,7 +852,7 @@
                         </select>
                     </label>
                 </div>
-                <div class="dqc-cols-header"><strong>Columns to diff on</strong> — matched to the next query by name</div>
+                <div class="dqc-cols-header"><strong>Columns to diff on</strong> <span id="dqc-cols-hint">— matched by column name</span></div>
                 <div class="dqc-cols-toolbar">
                     <div class="dqc-col-search-wrap">
                         <input type="text" id="dqc-col-search" class="col-search" placeholder="Search columns…" autocomplete="off" spellcheck="false">

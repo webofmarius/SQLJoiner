@@ -3653,13 +3653,13 @@ tr.calculus-hl > td {
 }
 
 #btn-diff-csv-exit,
-#btn-diff-query-cols-exit,
+#btn-diff-cols-exit,
 #btn-diff-query-exit {
     background: #e53935;
     color: #fff;
 }
 #btn-diff-csv-exit:hover,
-#btn-diff-query-cols-exit:hover,
+#btn-diff-cols-exit:hover,
 #btn-diff-query-exit:hover {
     background: #c62828;
 }
@@ -5630,8 +5630,16 @@ th.calc-nop { opacity: 0.1; font-weight: bold; }
 .diff-csv-b-actions { display: flex; gap: 8px; margin-bottom: 8px; }
 #diff-csv-paste-area { width: 100%; box-sizing: border-box; resize: vertical; font-family: monospace; font-size: 12px; background: var(--bg-input, #1a1a1a); color: var(--text, #ccc); border: 1px solid var(--border, #444); border-radius: 4px; padding: 6px 8px; margin-bottom: 6px; }
 .diff-csv-error { font-size: 12px; color: var(--error, #e53935); background: var(--error-dim, rgba(229,57,53,.12)); border: 1px solid color-mix(in srgb, var(--error, #e53935) 35%, transparent); border-radius: 4px; padding: 7px 10px; margin-bottom: 8px; }
-/* Diff Query columns modal */
-#modal-diff-query-cols .modal-box { width: 460px; }
+/* Diff columns modal */
+#modal-diff-cols .modal-box { width: 460px; }
+.dqc-source-row { display: flex; gap: 16px; margin-bottom: 10px; }
+.dqc-source-row label { display: flex; flex-direction: row; align-items: center; gap: 5px; margin: 0; font-size: 12px; color: var(--text, #ccc); cursor: pointer; }
+.dqc-source-row input { flex: none; margin: 0; }
+.dqc-csv-box { border: 1px solid var(--border, #444); border-radius: 4px; padding: 8px 10px; margin-bottom: 10px; }
+.dqc-csv-actions { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.dqc-csv-hdr-chk { display: flex; flex-direction: row; align-items: center; gap: 5px; margin: 0 0 0 auto; font-size: 12px; color: var(--text-muted, #888); cursor: pointer; white-space: nowrap; }
+.dqc-csv-hdr-chk input { flex: none; margin: 0; }
+#dqc-csv-paste { width: 100%; box-sizing: border-box; resize: vertical; font-family: monospace; font-size: 12px; background: var(--bg-input, #1a1a1a); color: var(--text, #ccc); border: 1px solid var(--border, #444); border-radius: 4px; padding: 6px 8px; }
 .dqc-row { display: flex; gap: 10px; margin-bottom: 10px; }
 .dqc-row label { display: flex; flex-direction: column; gap: 3px; font-size: 11px; color: var(--text-muted, #888); flex: 1; }
 .dqc-row select { font-size: 12px; background: var(--bg-input, #1a1a1a); color: var(--text, #ccc); border: 1px solid var(--border, #444); border-radius: 4px; padding: 4px 6px; }
