@@ -91,6 +91,10 @@ const Results = (() => {
     let _diffQuery           = null; // {cols: string[], rows: any[][]} — captured baseline result
     let _diffChangedColIdxs  = null; // Set<number> of col indices with changes (null = no diff rendered yet)
 
+    // Diff Query columns state (set-diff of chosen columns against the next query)
+    // { op, mode, output, colNames:string[], captured:{cols,rows,col_tables,col_types} } | null
+    let _diffQueryCols       = null;
+
     // Column highlight (SELECT box ☆ checkbox)
     const _highlightedCols = new Set();
 
@@ -367,6 +371,136 @@ const Results = (() => {
             });
 
             btnExit.addEventListener('click', _exitDiffCsv);
+        })();
+
+        // ---- Diff Query columns modal ----
+        (function () {
+            const modal    = document.getElementById('modal-diff-query-cols');
+            const btnOpen   = document.getElementById('btn-diff-query-cols');
+            const btnExit   = document.getElementById('btn-diff-query-cols-exit');
+            const btnClose  = document.getElementById('btn-dqc-x');
+            const btnCancel = document.getElementById('btn-dqc-cancel');
+            const btnRun    = document.getElementById('btn-dqc-run');
+            const selOp       = document.getElementById('sel-dqc-op');
+            const selMode     = document.getElementById('sel-dqc-mode');
+            const selOutput   = document.getElementById('sel-dqc-output');
+            const colList        = document.getElementById('dqc-col-list');
+            const colSearch      = document.getElementById('dqc-col-search');
+            const colSearchClear = document.getElementById('dqc-col-search-clear');
+            const colToggleAll   = document.getElementById('dqc-col-toggle-all');
+            const infoEl         = document.getElementById('dqc-info');
+            const errEl          = document.getElementById('dqc-error');
+
+            function _close() { modal.classList.add('hidden'); }
+
+            function _syncRun() {
+                btnRun.disabled = !colList.querySelector('input:checked');
+            }
+            function _syncOutputEnabled() {
+                selOutput.disabled = selMode.value !== 'composite';
+            }
+            const _visibleCbs = () => [...colList.querySelectorAll('label')]
+                .filter(l => l.style.display !== 'none')
+                .map(l => l.querySelector('input[type="checkbox"]'))
+                .filter(Boolean);
+            function _syncToggleAll() {
+                const vis     = _visibleCbs();
+                const checked = vis.filter(c => c.checked).length;
+                colToggleAll.disabled      = vis.length === 0;
+                colToggleAll.checked       = vis.length > 0 && checked === vis.length;
+                colToggleAll.indeterminate = checked > 0 && checked < vis.length;
+            }
+            function _applyColFilter() {
+                const raw = colSearch.value.trim();
+                const q   = raw.toLowerCase();
+                colSearchClear.style.display = raw ? '' : 'none';
+                let anyVisible = false;
+                colList.querySelectorAll('label').forEach(l => {
+                    const hide = q && !l.textContent.toLowerCase().includes(q);
+                    l.style.display = hide ? 'none' : '';
+                    if (!hide) anyVisible = true;
+                });
+                let msg = colList.querySelector('.col-search-no-match');
+                if (raw && !anyVisible) {
+                    if (!msg) {
+                        msg = document.createElement('div');
+                        msg.className = 'col-search-no-match';
+                        colList.appendChild(msg);
+                    }
+                    msg.textContent = `No columns matching "${raw}"`;
+                } else if (msg) {
+                    msg.remove();
+                }
+                _syncToggleAll();
+            }
+            function _clearColSearch() {
+                colSearch.value = '';
+                _applyColFilter();
+            }
+
+            btnOpen.addEventListener('click', () => {
+                if (!_lastResult) { App.notify?.('Run a query or load a CSV first.', 'error'); return; }
+                errEl.classList.add('hidden'); errEl.textContent = '';
+                colSearch.value = '';
+                const rc = _lastResult.count;
+                const cc = _lastResult.cols.length;
+                infoEl.textContent = `Captured: ${rc.toLocaleString()} row${rc !== 1 ? 's' : ''} × ${cc} col${cc !== 1 ? 's' : ''}`;
+                // Build the column checkbox list from the live headers
+                const ths = [...document.querySelectorAll('#results-table thead th:not(.th-row-num)')];
+                colList.innerHTML = '';
+                _lastResult.cols.forEach((col, i) => {
+                    const label = ths[i] ? _thGetLabel(ths[i]) : col;
+                    const extra = (label && label !== col && !label.includes(col)) ? `  — ${label}` : '';
+                    const row = document.createElement('label');
+                    const cb  = document.createElement('input');
+                    cb.type = 'checkbox';
+                    cb.value = col;
+                    cb.dataset.idx = String(i);
+                    cb.addEventListener('change', () => { _syncRun(); _syncToggleAll(); });
+                    row.appendChild(cb);
+                    row.appendChild(document.createTextNode(' ' + col + extra));
+                    colList.appendChild(row);
+                });
+                _applyColFilter();
+                _syncRun();
+                _syncOutputEnabled();
+                modal.classList.remove('hidden');
+                colSearch.focus();
+            });
+
+            colSearch.addEventListener('input', _applyColFilter);
+            colSearch.addEventListener('keydown', e => {
+                if (e.key === 'Escape' && colSearch.value) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    _clearColSearch();
+                }
+            });
+            colSearchClear.addEventListener('click', () => { _clearColSearch(); colSearch.focus(); });
+            colToggleAll.addEventListener('change', () => {
+                _visibleCbs().forEach(c => { c.checked = colToggleAll.checked; });
+                colToggleAll.indeterminate = false;
+                _syncRun();
+            });
+
+            selMode.addEventListener('change', _syncOutputEnabled);
+            btnClose.addEventListener('click', _close);
+            btnCancel.addEventListener('click', _close);
+            modal.addEventListener('click', e => { if (e.target === modal) _close(); });
+
+            btnRun.addEventListener('click', () => {
+                const colNames = [...colList.querySelectorAll('input:checked')].map(cb => cb.value);
+                if (!colNames.length) return;
+                _captureDiffQueryCols({
+                    op:     selOp.value,
+                    mode:   selMode.value,
+                    output: selOutput.value,
+                    colNames,
+                });
+                _close();
+            });
+
+            btnExit.addEventListener('click', _clearDiffQueryCols);
         })();
 
         document.getElementById('btn-calculus')
@@ -752,6 +886,11 @@ const Results = (() => {
         // If a captured diff-query baseline exists, render the diff instead of plain table
         if (_diffQuery) {
             _renderDiff(result.cols, result.rows, result.col_tables || [], result.col_types || []);
+        } else if (_diffQueryCols) {
+            // Set-diff of chosen columns against this query; may replace _lastResult
+            // with a synthetic result of the surviving values.
+            const synth = _renderDiffQueryCols(result);
+            if (synth) _lastResult = synth;
         } else {
             _populateTable(result.cols, result.rows, result.col_tables || [], result.col_types || []);
         }
@@ -773,8 +912,10 @@ const Results = (() => {
                 .forEach(th => { th.style.minWidth = th.offsetWidth + 'px'; });
         });
 
+        // In Diff Query cols mode the table shows the synthetic result, not `result`
+        const _metaCount = _diffQueryCols ? _lastResult.count : result.count;
         document.getElementById('results-meta').textContent =
-            `${result.count.toLocaleString()} row${result.count !== 1 ? 's' : ''}`;
+            `${_metaCount.toLocaleString()} row${_metaCount !== 1 ? 's' : ''}`;
 
         // Expand on new results so the user always sees the data
         _setCollapsed(false);
@@ -796,6 +937,14 @@ const Results = (() => {
         }
         document.getElementById('btn-diff-query-exit')?.classList.toggle('hidden', !_diffQuery);
 
+        // Enable Diff Query cols button; update active state
+        const _diffQueryColsBtn = document.getElementById('btn-diff-query-cols');
+        if (_diffQueryColsBtn) {
+            _diffQueryColsBtn.disabled = false;
+            _diffQueryColsBtn.classList.toggle('hidden', !!_diffQueryCols);
+        }
+        document.getElementById('btn-diff-query-cols-exit')?.classList.toggle('hidden', !_diffQueryCols);
+
         // Mirror the server-generated SQL in the preview bar so the user sees
         // exactly what ran (after parameter substitution and JOIN ordering).
         if (result.sql) {
@@ -803,7 +952,7 @@ const Results = (() => {
         }
 
         // Record this result (skip diff renders and replayed recordings)
-        if (typeof Recordings !== 'undefined' && !_diffQuery && !result._fromRecording) {
+        if (typeof Recordings !== 'undefined' && !_diffQuery && !_diffQueryCols && !result._fromRecording) {
             Recordings.setCurrentRec?.(null); // clear before onQuerySuccess (re-sets if recording is on)
             Recordings.onQuerySuccess(result);
         }
@@ -818,6 +967,12 @@ const Results = (() => {
             _diffCsvActive = false;
             document.getElementById('btn-diff-csv-exit')?.classList.add('hidden');
             document.getElementById('btn-diff-csv')?.classList.remove('hidden');
+        }
+        if (_diffQueryCols) {
+            _diffQueryCols = null;
+            document.getElementById('btn-diff-query-cols-exit')?.classList.add('hidden');
+            document.getElementById('btn-diff-query-cols')?.classList.remove('hidden');
+            document.getElementById('legend-diff-query-cols')?.classList.add('hidden');
         }
         _lastResult = null;
         _colThemes = {};
@@ -845,6 +1000,8 @@ const Results = (() => {
         document.getElementById('results-panel').classList.add('hidden');
         const _diffQueryBtnClear = document.getElementById('btn-diff-query');
         if (_diffQueryBtnClear) { _diffQueryBtnClear.disabled = true; _diffQueryBtnClear.classList.remove('hidden'); }
+        const _diffQueryColsBtnClear = document.getElementById('btn-diff-query-cols');
+        if (_diffQueryColsBtnClear) { _diffQueryColsBtnClear.disabled = true; _diffQueryColsBtnClear.classList.remove('hidden'); }
         _colFilters = {};
         _lastResultIsCsv = false;
         document.querySelector('#results-table thead').innerHTML = '';
@@ -1210,6 +1367,7 @@ const Results = (() => {
         });
 
         _diffCsvActive = true;
+        _disarmDiffQueryCols(); // mutually exclusive with Diff Query cols
         document.getElementById('btn-diff-csv').classList.add('hidden');
         document.getElementById('btn-diff-csv-exit').classList.remove('hidden');
 
@@ -2722,6 +2880,7 @@ const Results = (() => {
 
     function _captureDiffQuery() {
         if (!_lastResult) return;
+        _disarmDiffQueryCols(); // mutually exclusive with Diff Query cols
         _diffQuery = {
             cols:       _lastResult.cols.slice(),
             rows:       _lastResult.rows.map(r => r.slice()),
@@ -3032,6 +3191,241 @@ const Results = (() => {
             _applyDimVisibility();
             _applyDimRowVisibility();
         });
+    }
+
+    // =========================================================================
+    // Diff Query columns — set operations (array_diff family) on chosen columns
+    // =========================================================================
+
+    const _DQC_OP_LABELS = {
+        a_minus_b: 'only in captured (A ∖ B)',
+        b_minus_a: 'only in latest (B ∖ A)',
+        intersect: 'in both (A ∩ B)',
+        union:     'in either (A ∪ B)',
+    };
+
+    /**
+     * Normalise a cell value into a stable set-membership key.
+     * Numeric values (incl. numeric strings like "10.00") collapse together;
+     * NULL is its own distinct key.
+     */
+    function _dqcKey(v) {
+        if (v === null || v === undefined) return ' NULL';
+        if (_isNumeric(v)) return '#' + String(Number(v));
+        return 's' + String(v);
+    }
+
+    /** Apply a set operation to two flat value lists, returning distinct survivors in first-seen order. */
+    function _dqcApplySetOp(aVals, bVals, op) {
+        const aKeys = new Set(aVals.map(_dqcKey));
+        const bKeys = new Set(bVals.map(_dqcKey));
+        const out = [];
+        const seen = new Set();
+        const push = (vals, cond) => vals.forEach(v => {
+            const k = _dqcKey(v);
+            if (seen.has(k) || !cond(k)) return;
+            seen.add(k);
+            out.push(v);
+        });
+        if (op === 'a_minus_b')      push(aVals, k => !bKeys.has(k));
+        else if (op === 'b_minus_a') push(bVals, k => !aKeys.has(k));
+        else if (op === 'intersect') push(aVals, k =>  bKeys.has(k));
+        else                       { push(aVals, () => true); push(bVals, () => true); } // union
+        return out;
+    }
+
+    /**
+     * Compute the column set-operation between the captured result and `result`.
+     * Returns { cols, rows, col_tables, col_types } or { error }.
+     */
+    function _computeColsSetOp(captured, result, cfg) {
+        const { op, mode, output, colNames } = cfg;
+
+        const aIdx = colNames.map(n => captured.cols.indexOf(n));
+        const bIdx = colNames.map(n => result.cols.indexOf(n));
+        const missIdx = bIdx.findIndex(i => i === -1);
+        if (missIdx !== -1) {
+            return { error: `Diff aborted — the latest query has no column "${colNames[missIdx]}"` };
+        }
+
+        const pick = (arr, idx) => (idx >= 0 && arr && arr[idx] != null) ? arr[idx] : '';
+        const chosenTypes  = colNames.map((_n, i) => pick(captured.col_types,  aIdx[i]) || pick(result.col_types,  bIdx[i]));
+        const chosenTables = colNames.map((_n, i) => pick(captured.col_tables, aIdx[i]) || pick(result.col_tables, bIdx[i]));
+
+        if (mode === 'per_column') {
+            const perCol = colNames.map((_n, ci) => _dqcApplySetOp(
+                captured.rows.map(r => r[aIdx[ci]]),
+                result.rows.map(r => r[bIdx[ci]]),
+                op,
+            ));
+            const maxLen = perCol.reduce((m, list) => Math.max(m, list.length), 0);
+            const rows = [];
+            for (let i = 0; i < maxLen; i++) {
+                rows.push(perCol.map(list => (i < list.length ? list[i] : '')));
+            }
+            return { cols: colNames.slice(), rows, col_tables: chosenTables, col_types: chosenTypes };
+        }
+
+        // Composite row-key mode
+        const keyOf   = tuple => tuple.map(_dqcKey).join('');
+        const aTuples = captured.rows.map(r => aIdx.map(i => r[i]));
+        const bTuples = result.rows.map(r => bIdx.map(i => r[i]));
+        const aKeys   = new Set(aTuples.map(keyOf));
+        const bKeys   = new Set(bTuples.map(keyOf));
+
+        // Ordered list of (source rows, side, predicate) that contribute to the result.
+        let sources;
+        if (op === 'a_minus_b')      sources = [{ tuples: aTuples, srcRows: captured.rows, side: 'a', cond: k => !bKeys.has(k) }];
+        else if (op === 'b_minus_a') sources = [{ tuples: bTuples, srcRows: result.rows,   side: 'b', cond: k => !aKeys.has(k) }];
+        else if (op === 'intersect') sources = [{ tuples: aTuples, srcRows: captured.rows, side: 'a', cond: k =>  bKeys.has(k) }];
+        else                         sources = [{ tuples: aTuples, srcRows: captured.rows, side: 'a', cond: () => true },
+                                                 { tuples: bTuples, srcRows: result.rows,   side: 'b', cond: k => !aKeys.has(k) }]; // union
+
+        const projectB = full => captured.cols.map(cn => {
+            const bi = result.cols.indexOf(cn);
+            return bi >= 0 ? full[bi] : null;
+        });
+
+        if (output === 'full_rows') {
+            // Every row whose key survives — not distinct-by-key.
+            const cols = captured.cols.slice();
+            const rows = [];
+            sources.forEach(src => src.tuples.forEach((t, ri) => {
+                if (!src.cond(keyOf(t))) return;
+                rows.push(src.side === 'a' ? src.srcRows[ri].slice() : projectB(src.srcRows[ri]));
+            }));
+            return { cols, rows, col_tables: captured.col_tables.slice(), col_types: captured.col_types.slice() };
+        }
+
+        // cols_only — one row per surviving key (distinct), first-seen order.
+        const seen = new Set();
+        const rows = [];
+        sources.forEach(src => src.tuples.forEach(t => {
+            const k = keyOf(t);
+            if (seen.has(k) || !src.cond(k)) return;
+            seen.add(k);
+            rows.push(t.slice());
+        }));
+        return { cols: colNames.slice(), rows, col_tables: chosenTables, col_types: chosenTypes };
+    }
+
+    /** Arm the Diff Query cols waiting state from the current result. Mirrors _captureDiffQuery. */
+    function _captureDiffQueryCols(cfg) {
+        if (!_lastResult) return;
+
+        // Mutually exclusive with the other two diff features — disarm them first.
+        if (_diffCsvActive) _exitDiffCsv();
+        if (_diffQuery) {
+            _diffQuery = null;
+            _diffChangedColIdxs = null;
+            document.getElementById('btn-diff-query')?.classList.remove('hidden');
+            document.getElementById('btn-diff-query-exit')?.classList.add('hidden');
+        }
+
+        _diffQueryCols = {
+            op:       cfg.op,
+            mode:     cfg.mode,
+            output:   cfg.output,
+            colNames: cfg.colNames.slice(),
+            captured: {
+                cols:       _lastResult.cols.slice(),
+                rows:       _lastResult.rows.map(r => r.slice()),
+                col_tables: (_lastResult.col_tables || []).slice(),
+                col_types:  (_lastResult.col_types  || []).slice(),
+            },
+        };
+
+        document.getElementById('btn-diff-query-cols')?.classList.add('hidden');
+        document.getElementById('btn-diff-query-cols-exit')?.classList.remove('hidden');
+        _dqcUpdateLegend('run the next query to compute');
+
+        App.notify?.('Columns captured — run the next query to compute the diff', 'success');
+    }
+
+    /** Refresh the "Diff Query cols" legend line with the armed config + a trailing hint. */
+    function _dqcUpdateLegend(hint) {
+        if (!_diffQueryCols) return;
+        const cfg = _diffQueryCols;
+        const detail = document.getElementById('legend-dqc-detail');
+        if (detail) {
+            const modeLabel = cfg.mode === 'composite'
+                ? `composite${cfg.output === 'full_rows' ? ' · full rows' : ''}`
+                : 'per-column';
+            detail.textContent =
+                `${_DQC_OP_LABELS[cfg.op] || cfg.op} · ${modeLabel} · ${cfg.colNames.join(', ')} — ${hint}`;
+        }
+        document.getElementById('legend-diff-query-cols')?.classList.remove('hidden');
+    }
+
+    /** Reset the Diff Query cols button / legend / state without repainting the table. */
+    function _disarmDiffQueryCols() {
+        if (!_diffQueryCols) return;
+        _diffQueryCols = null;
+        document.getElementById('btn-diff-query-cols')?.classList.remove('hidden');
+        document.getElementById('btn-diff-query-cols-exit')?.classList.add('hidden');
+        document.getElementById('legend-diff-query-cols')?.classList.add('hidden');
+    }
+
+    /** Exit Diff Query cols mode and restore the captured baseline table. Mirrors _clearDiffQuery. */
+    function _clearDiffQueryCols() {
+        const state = _diffQueryCols;
+        _disarmDiffQueryCols();
+        if (state) {
+            const c = state.captured;
+            _populateTable(c.cols, c.rows, c.col_tables, c.col_types);
+            _lastResult = {
+                cols: c.cols, rows: c.rows, count: c.rows.length,
+                col_tables: c.col_tables, col_types: c.col_types, sql: null,
+            };
+            document.getElementById('results-meta').textContent =
+                `${c.rows.length.toLocaleString()} row${c.rows.length !== 1 ? 's' : ''}`;
+        }
+    }
+
+    /**
+     * Compute + render the column set-operation against `result` (the just-run query).
+     * Replaces the table with a synthetic result of the surviving values and returns it
+     * (so render() can adopt it as _lastResult), or null on abort.
+     */
+    function _renderDiffQueryCols(result) {
+        const cfg = _diffQueryCols;
+        const out = _computeColsSetOp(cfg.captured, result, cfg);
+        if (out.error) {
+            App.notify?.(out.error, 'error');
+            _populateTable(result.cols, result.rows, result.col_tables || [], result.col_types || []);
+            return null;
+        }
+
+        const synth = {
+            cols:       out.cols,
+            rows:       out.rows,
+            count:      out.rows.length,
+            col_tables: out.col_tables,
+            col_types:  out.col_types,
+            sql:        null,
+            _csvSource: _lastResult?._csvSource,
+        };
+        _populateTable(synth.cols, synth.rows, synth.col_tables, synth.col_types);
+
+        const tbody = document.querySelector('#results-table tbody');
+        if (tbody) {
+            const n = out.rows.length;
+            const fullRows  = cfg.mode === 'composite' && cfg.output === 'full_rows';
+            const modeLabel = cfg.mode === 'composite'
+                ? `composite${fullRows ? ' · full rows' : ''}`
+                : 'per-column';
+            const unit = fullRows ? (n === 1 ? 'row' : 'rows') : (n === 1 ? 'value' : 'values');
+            const tr = document.createElement('tr');
+            tr.className = 'diff-banner-tr';
+            const td = document.createElement('td');
+            td.colSpan = (out.cols.length || 1) + 1;
+            td.className = 'diff-banner ' + (n ? 'diff-banner--summary' : 'diff-banner--same');
+            td.textContent = `⊙± ${_DQC_OP_LABELS[cfg.op] || cfg.op} · ${modeLabel} · ${cfg.colNames.join(', ')} — ${n.toLocaleString()} ${unit}`;
+            tr.appendChild(td);
+            tbody.insertBefore(tr, tbody.firstChild);
+        }
+        _dqcUpdateLegend('showing result · re-run to update · Exit to restore');
+        return synth;
     }
 
     // =========================================================================
@@ -4919,7 +5313,10 @@ async function _copyAsSqlSelect() {
         const visibleRowIndices = [];
         let dataIdx = 0;
         trs.forEach(tr => {
-            if (tr.classList.contains('diff-csv-banner-row')) return; // not a data row
+            // Banner / placeholder rows are not backed by _lastResult.rows
+            if (tr.classList.contains('diff-csv-banner-row') ||
+                tr.classList.contains('diff-banner-tr') ||
+                tr.querySelector('.results-empty')) return;
             if (!tr.classList.contains('row-col-filter-hidden') &&
                 !tr.classList.contains('dim-row-hidden')) {
                 visibleRowIndices.push(dataIdx);
@@ -8283,7 +8680,7 @@ async function _copyAsSqlSelect() {
 
             // Show the file name in the meta bar instead of just the row count
             const metaEl = document.getElementById('results-meta');
-            if (metaEl) {
+            if (metaEl && !_diffQuery && !_diffQueryCols) {
                 const rowLabel = `${parsed.rows.length.toLocaleString()} row${parsed.rows.length !== 1 ? 's' : ''}`;
                 metaEl.textContent = `${rowLabel} — ${file.name}`;
             }
@@ -8568,7 +8965,7 @@ async function _copyAsSqlSelect() {
             });
 
             const metaEl = document.getElementById('results-meta');
-            if (metaEl) {
+            if (metaEl && !_diffQuery && !_diffQueryCols) {
                 const rowLabel = `${rows.length.toLocaleString()} row${rows.length !== 1 ? 's' : ''}`;
                 metaEl.textContent = `${rowLabel} — ${file.name}`;
             }
@@ -8868,6 +9265,8 @@ async function _copyAsSqlSelect() {
         clearDim: () => _setDimmed(false),
         /** Exit Diff CSV mode, stripping all diff highlights and turning off Dim. */
         exitDiffCsv: _exitDiffCsv,
+        /** Exit Diff Query cols mode, restoring the captured baseline table. */
+        clearDiffQueryCols: _clearDiffQueryCols,
         /** Parse a CSV File object and load it into the results table. */
         loadCsvFile,
         /** Parse an XLSX File object and load it into the results table. */
@@ -8887,7 +9286,7 @@ async function _copyAsSqlSelect() {
                 _csvSource: `memory (delimiter: ${delimLabel})`,
             });
             const metaEl = document.getElementById('results-meta');
-            if (metaEl) {
+            if (metaEl && !_diffQuery && !_diffQueryCols) {
                 const rowLabel = `${parsed.rows.length.toLocaleString()} row${parsed.rows.length !== 1 ? 's' : ''}`;
                 metaEl.textContent = `${rowLabel} — CSV (memory)`;
             }

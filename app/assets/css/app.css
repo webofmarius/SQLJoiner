@@ -3653,11 +3653,13 @@ tr.calculus-hl > td {
 }
 
 #btn-diff-csv-exit,
+#btn-diff-query-cols-exit,
 #btn-diff-query-exit {
     background: #e53935;
     color: #fff;
 }
 #btn-diff-csv-exit:hover,
+#btn-diff-query-cols-exit:hover,
 #btn-diff-query-exit:hover {
     background: #c62828;
 }
@@ -5628,6 +5630,23 @@ th.calc-nop { opacity: 0.1; font-weight: bold; }
 .diff-csv-b-actions { display: flex; gap: 8px; margin-bottom: 8px; }
 #diff-csv-paste-area { width: 100%; box-sizing: border-box; resize: vertical; font-family: monospace; font-size: 12px; background: var(--bg-input, #1a1a1a); color: var(--text, #ccc); border: 1px solid var(--border, #444); border-radius: 4px; padding: 6px 8px; margin-bottom: 6px; }
 .diff-csv-error { font-size: 12px; color: var(--error, #e53935); background: var(--error-dim, rgba(229,57,53,.12)); border: 1px solid color-mix(in srgb, var(--error, #e53935) 35%, transparent); border-radius: 4px; padding: 7px 10px; margin-bottom: 8px; }
+/* Diff Query columns modal */
+#modal-diff-query-cols .modal-box { width: 460px; }
+.dqc-row { display: flex; gap: 10px; margin-bottom: 10px; }
+.dqc-row label { display: flex; flex-direction: column; gap: 3px; font-size: 11px; color: var(--text-muted, #888); flex: 1; }
+.dqc-row select { font-size: 12px; background: var(--bg-input, #1a1a1a); color: var(--text, #ccc); border: 1px solid var(--border, #444); border-radius: 4px; padding: 4px 6px; }
+.dqc-row select:disabled { opacity: 0.4; }
+.dqc-cols-header { font-size: 12px; color: var(--text-muted, #888); margin-bottom: 6px; }
+.dqc-cols-toolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.dqc-col-search-wrap { position: relative; display: flex; align-items: center; flex: 1; min-width: 0; }
+.dqc-col-search-wrap .col-search { flex: 1; width: auto; padding-right: 20px; font-size: 12px; }
+.dqc-col-search-wrap .col-search-clear { right: 3px; }
+.dqc-toggle-all { display: flex; flex-direction: row; align-items: center; gap: 5px; margin: 0; font-size: 12px; color: var(--text-muted, #888); cursor: pointer; white-space: nowrap; }
+.dqc-toggle-all input { flex: none; margin: 0; }
+.dqc-col-list { max-height: 180px; overflow-y: auto; border: 1px solid var(--border, #444); border-radius: 4px; padding: 6px 8px; margin-bottom: 10px; }
+.dqc-col-list label { display: flex; flex-direction: row; align-items: center; gap: 6px; margin: 0; font-size: 12px; padding: 2px 0; cursor: pointer; }
+.dqc-col-list input[type="checkbox"] { flex: none; margin: 0; }
+.dqc-col-list label:hover { color: var(--text, #fff); }
 .modal-box--large { width: 800px; max-width: 90vw; height: 75vh; resize: both; min-width: 420px; min-height: 260px; }
 .modal-box--notes { width: 660px; max-width: 90vw; height: 560px; min-width: 320px; min-height: 220px; resize: both; overflow: hidden; display: flex; flex-direction: column; }
 .modal-box--notes .modal-body { display: flex; flex-direction: column; overflow: hidden; flex: 1; min-height: 0; }
