@@ -27,11 +27,11 @@ const Results = (() => {
     let _compareRefValue = null; // raw value of the first clicked cell in compare mode
     let _compareRefCell  = null; // the actual first TD element (reference)
 
-    // Dataset compare state
-    let _datasetCompareActive     = false;
-    let _datasetCompareTrs        = []; // <tr> elements marked row-highlighted by compare
-    let _datasetCompareTds        = []; // <td> elements marked cell-ds-diff by compare
-    let _datasetCompareBannerTr   = null; // injected status banner row (green = all equal, red = diffs)
+    // Diff CSV state
+    let _diffCsvActive     = false;
+    let _diffCsvTrs        = []; // <tr> elements marked row-highlighted by the CSV diff
+    let _diffCsvTds        = []; // <td> elements marked cell-diff-csv by the CSV diff
+    let _diffCsvBannerTr   = null; // injected status banner row (green = all equal, red = diffs)
 
     // Duplicates mode
     let _duplicateMode = false;
@@ -87,8 +87,8 @@ const Results = (() => {
     let _distPreviewHandled = false;
     let _distPopup          = null;
 
-    // Query Diff state
-    let _diffSnapshot        = null; // {cols: string[], rows: any[][]}
+    // Diff Query state
+    let _diffQuery           = null; // {cols: string[], rows: any[][]} — captured baseline result
     let _diffChangedColIdxs  = null; // Set<number> of col indices with changes (null = no diff rendered yet)
 
     // Column highlight (SELECT box ☆ checkbox)
@@ -153,7 +153,7 @@ const Results = (() => {
     const FEATURE_COLOR_CLASSES = [
         'cell-compare-ref', 'cell-compare-match', 'cell-compare-diff',
         'cell-dup-origin', 'cell-dup-match', 'cell-dup-unique',
-        'cell-ds-diff', 'td-diff-changed'
+        'cell-diff-csv', 'td-diff-changed'
     ];
 
     // -------------------------------------------------------------------------
@@ -228,8 +228,8 @@ const Results = (() => {
             });
         })();
 
-        document.getElementById('btn-diff-snapshot').addEventListener('click', _takeSnapshot);
-        document.getElementById('btn-diff-exit').addEventListener('click', _clearSnapshot);
+        document.getElementById('btn-diff-query').addEventListener('click', _captureDiffQuery);
+        document.getElementById('btn-diff-query-exit').addEventListener('click', _clearDiffQuery);
 
         // Close floating popups (dist, lineage) whenever any modal becomes visible
         new MutationObserver(mutations => {
@@ -291,21 +291,21 @@ const Results = (() => {
             _applyColFilter();
         });
 
-        // ---- Dataset compare modal ----
+        // ---- Diff CSV modal ----
         (function () {
-            const modal       = document.getElementById('modal-compare-datasets');
-            const btnOpen     = document.getElementById('btn-compare-datasets');
-            const btnExit     = document.getElementById('btn-exit-compare-datasets');
-            const btnClose    = document.getElementById('btn-compare-ds-x');
-            const btnCancel   = document.getElementById('btn-compare-ds-cancel');
-            const btnRun      = document.getElementById('btn-compare-ds-run');
-            const btnLoadFile = document.getElementById('btn-compare-ds-load-file');
-            const fileInput   = document.getElementById('compare-ds-file-input');
-            const pasteArea   = document.getElementById('compare-ds-paste-area');
-            const infoA       = document.getElementById('compare-ds-info-a');
-            const infoB       = document.getElementById('compare-ds-info-b');
-            const errEl       = document.getElementById('compare-ds-error');
-            const chkHeader   = document.getElementById('chk-compare-csv-header');
+            const modal       = document.getElementById('modal-diff-csv');
+            const btnOpen     = document.getElementById('btn-diff-csv');
+            const btnExit     = document.getElementById('btn-diff-csv-exit');
+            const btnClose    = document.getElementById('btn-diff-csv-x');
+            const btnCancel   = document.getElementById('btn-diff-csv-cancel');
+            const btnRun      = document.getElementById('btn-diff-csv-run');
+            const btnLoadFile = document.getElementById('btn-diff-csv-load-file');
+            const fileInput   = document.getElementById('diff-csv-file-input');
+            const pasteArea   = document.getElementById('diff-csv-paste-area');
+            const infoA       = document.getElementById('diff-csv-info-a');
+            const infoB       = document.getElementById('diff-csv-info-b');
+            const errEl       = document.getElementById('diff-csv-error');
+            const chkHeader   = document.getElementById('chk-diff-csv-header');
 
             function _resetModal() {
                 btnRun.disabled = true;
@@ -325,7 +325,7 @@ const Results = (() => {
                 _resetModal();
                 const rc = _lastResult.count;
                 const cc = _lastResult.cols.length;
-                infoA.textContent = `Dataset A (current result): ${rc.toLocaleString()} row${rc !== 1 ? 's' : ''} × ${cc} col${cc !== 1 ? 's' : ''}`;
+                infoA.textContent = `Current result: ${rc.toLocaleString()} row${rc !== 1 ? 's' : ''} × ${cc} col${cc !== 1 ? 's' : ''}`;
                 modal.classList.remove('hidden');
                 pasteArea.focus();
             });
@@ -357,7 +357,7 @@ const Results = (() => {
             });
 
             btnRun.addEventListener('click', () => {
-                const err = _runDatasetCompare(pasteArea.value, chkHeader.checked);
+                const err = _runDiffCsv(pasteArea.value, chkHeader.checked);
                 if (err) {
                     errEl.textContent = err;
                     errEl.classList.remove('hidden');
@@ -366,7 +366,7 @@ const Results = (() => {
                 }
             });
 
-            btnExit.addEventListener('click', _exitDatasetCompare);
+            btnExit.addEventListener('click', _exitDiffCsv);
         })();
 
         document.getElementById('btn-calculus')
@@ -689,13 +689,13 @@ const Results = (() => {
      */
     function render(result) {
         // Reset all transient button states — new results replace old context
-        if (_datasetCompareActive) {
-            _datasetCompareTrs = [];
-            _datasetCompareTds = [];
-            _datasetCompareBannerTr = null;
-            _datasetCompareActive = false;
-            document.getElementById('btn-exit-compare-datasets')?.classList.add('hidden');
-            document.getElementById('btn-compare-datasets')?.classList.remove('hidden');
+        if (_diffCsvActive) {
+            _diffCsvTrs = [];
+            _diffCsvTds = [];
+            _diffCsvBannerTr = null;
+            _diffCsvActive = false;
+            document.getElementById('btn-diff-csv-exit')?.classList.add('hidden');
+            document.getElementById('btn-diff-csv')?.classList.remove('hidden');
         }
         _setDimmed(false);
         if (_compareMode) {
@@ -749,8 +749,8 @@ const Results = (() => {
         _colThemes = {};
         _lastResultIsCsv = !!result._csvSource;
 
-        // If a diff snapshot exists, render the diff instead of plain table
-        if (_diffSnapshot) {
+        // If a captured diff-query baseline exists, render the diff instead of plain table
+        if (_diffQuery) {
             _renderDiff(result.cols, result.rows, result.col_tables || [], result.col_types || []);
         } else {
             _populateTable(result.cols, result.rows, result.col_tables || [], result.col_types || []);
@@ -788,13 +788,13 @@ const Results = (() => {
             _calcBtn.title = 'Calculus mode — double-click numeric cells to build expressions';
         }
 
-        // Enable snapshot button; update active state
-        const _snapBtn = document.getElementById('btn-diff-snapshot');
-        if (_snapBtn) {
-            _snapBtn.disabled = false;
-            _snapBtn.classList.toggle('hidden', !!_diffSnapshot);
+        // Enable Diff Query button; update active state
+        const _diffQueryBtn = document.getElementById('btn-diff-query');
+        if (_diffQueryBtn) {
+            _diffQueryBtn.disabled = false;
+            _diffQueryBtn.classList.toggle('hidden', !!_diffQuery);
         }
-        document.getElementById('btn-diff-exit')?.classList.toggle('hidden', !_diffSnapshot);
+        document.getElementById('btn-diff-query-exit')?.classList.toggle('hidden', !_diffQuery);
 
         // Mirror the server-generated SQL in the preview bar so the user sees
         // exactly what ran (after parameter substitution and JOIN ordering).
@@ -803,7 +803,7 @@ const Results = (() => {
         }
 
         // Record this result (skip diff renders and replayed recordings)
-        if (typeof Recordings !== 'undefined' && !_diffSnapshot && !result._fromRecording) {
+        if (typeof Recordings !== 'undefined' && !_diffQuery && !result._fromRecording) {
             Recordings.setCurrentRec?.(null); // clear before onQuerySuccess (re-sets if recording is on)
             Recordings.onQuerySuccess(result);
         }
@@ -811,13 +811,13 @@ const Results = (() => {
 
     /** Hide the panel and wipe all content. */
     function clear() {
-        if (_datasetCompareActive) {
-            _datasetCompareTrs = [];
-            _datasetCompareTds = [];
-            _datasetCompareBannerTr = null; // tbody is about to be wiped
-            _datasetCompareActive = false;
-            document.getElementById('btn-exit-compare-datasets')?.classList.add('hidden');
-            document.getElementById('btn-compare-datasets')?.classList.remove('hidden');
+        if (_diffCsvActive) {
+            _diffCsvTrs = [];
+            _diffCsvTds = [];
+            _diffCsvBannerTr = null; // tbody is about to be wiped
+            _diffCsvActive = false;
+            document.getElementById('btn-diff-csv-exit')?.classList.add('hidden');
+            document.getElementById('btn-diff-csv')?.classList.remove('hidden');
         }
         _lastResult = null;
         _colThemes = {};
@@ -843,8 +843,8 @@ const Results = (() => {
         document.getElementById('btn-trace')?.classList.remove('is-active');
         document.getElementById('legend-trace')?.classList.add('hidden');
         document.getElementById('results-panel').classList.add('hidden');
-        const _snapBtnClear = document.getElementById('btn-diff-snapshot');
-        if (_snapBtnClear) { _snapBtnClear.disabled = true; _snapBtnClear.classList.remove('hidden'); }
+        const _diffQueryBtnClear = document.getElementById('btn-diff-query');
+        if (_diffQueryBtnClear) { _diffQueryBtnClear.disabled = true; _diffQueryBtnClear.classList.remove('hidden'); }
         _colFilters = {};
         _lastResultIsCsv = false;
         document.querySelector('#results-table thead').innerHTML = '';
@@ -1139,9 +1139,9 @@ const Results = (() => {
             const isHighlighted   = tr.classList.contains('row-highlighted');
             const isFaded         = tr.classList.contains('row-hl-faded');
             const isCalculusHl    = tr.classList.contains('calculus-hl');
-            const isCompareBanner = tr.classList.contains('compare-banner-row');
+            const isDiffCsvBanner = tr.classList.contains('diff-csv-banner-row');
             const hasRowColor     = THEMES.some(t => tr.querySelector('.td-row-num')?.classList.contains(t));
-            if (isHighlighted || isFaded || isCalculusHl || isCompareBanner || hasRowColor) {
+            if (isHighlighted || isFaded || isCalculusHl || isDiffCsvBanner || hasRowColor) {
                 tr.classList.remove('dim-row-hidden');
             } else {
                 tr.classList.add('dim-row-hidden');
@@ -1150,13 +1150,13 @@ const Results = (() => {
     }
 
     /**
-     * Compare the current result table (Dataset A) against a CSV string (Dataset B).
+     * Diff the current result table against a CSV string.
      * Highlights mismatched rows with row-highlighted and mismatched cells with
-     * cell-ds-diff (red), then auto-activates DIM in row-mode.
+     * cell-diff-csv (red), then auto-activates DIM in row-mode.
      * Returns an error string on failure, or null on success.
      */
-    function _runDatasetCompare(csvText, hasHeader) {
-        if (!_lastResult) return 'No current result to compare against.';
+    function _runDiffCsv(csvText, hasHeader) {
+        if (!_lastResult) return 'No current result to diff against.';
 
         const parsed = _parseCsv(csvText);
         if (parsed.error) return parsed.error;
@@ -1173,17 +1173,17 @@ const Results = (() => {
         const bColCnt = parsed.cols.length;
 
         if (aColCnt !== bColCnt) {
-            return `Column count mismatch: Dataset A has ${aColCnt} column${aColCnt !== 1 ? 's' : ''}, Dataset B has ${bColCnt} column${bColCnt !== 1 ? 's' : ''}.`;
+            return `Column count mismatch: current result has ${aColCnt} column${aColCnt !== 1 ? 's' : ''}, CSV has ${bColCnt} column${bColCnt !== 1 ? 's' : ''}.`;
         }
 
         const aRowCnt = aTrs.length;
         const bRowCnt = bRows.length;
         if (aRowCnt !== bRowCnt) {
-            return `Row count mismatch: Dataset A has ${aRowCnt.toLocaleString()} row${aRowCnt !== 1 ? 's' : ''}, Dataset B has ${bRowCnt.toLocaleString()} row${bRowCnt !== 1 ? 's' : ''}.`;
+            return `Row count mismatch: current result has ${aRowCnt.toLocaleString()} row${aRowCnt !== 1 ? 's' : ''}, CSV has ${bRowCnt.toLocaleString()} row${bRowCnt !== 1 ? 's' : ''}.`;
         }
 
-        _datasetCompareTrs = [];
-        _datasetCompareTds = [];
+        _diffCsvTrs = [];
+        _diffCsvTds = [];
 
         aTrs.forEach((tr, ri) => {
             const tds  = Array.from(tr.querySelectorAll('td:not(.td-row-num)'));
@@ -1198,38 +1198,38 @@ const Results = (() => {
                 const aNum = Number(aVal);
                 const bNum = Number(bVal);
                 if (aVal !== '' && bVal !== '' && !isNaN(aNum) && !isNaN(bNum) && aNum === bNum) return;
-                td.classList.add('cell-ds-diff');
-                _datasetCompareTds.push(td);
+                td.classList.add('cell-diff-csv');
+                _diffCsvTds.push(td);
                 mismatch = true;
             });
 
             if (mismatch) {
                 tr.classList.add('row-highlighted');
-                _datasetCompareTrs.push(tr);
+                _diffCsvTrs.push(tr);
             }
         });
 
-        _datasetCompareActive = true;
-        document.getElementById('btn-compare-datasets').classList.add('hidden');
-        document.getElementById('btn-exit-compare-datasets').classList.remove('hidden');
+        _diffCsvActive = true;
+        document.getElementById('btn-diff-csv').classList.add('hidden');
+        document.getElementById('btn-diff-csv-exit').classList.remove('hidden');
 
         const colSpan = (_lastResult.cols.length || 1) + 1; // +1 for row-num col
         const bannerTr = document.createElement('tr');
         const bannerTd = document.createElement('td');
         bannerTd.colSpan = colSpan;
         tbody.insertBefore(bannerTr, tbody.firstChild);
-        _datasetCompareBannerTr = bannerTr;
+        _diffCsvBannerTr = bannerTr;
 
-        if (_datasetCompareTrs.length === 0) {
+        if (_diffCsvTrs.length === 0) {
             // All rows matched
-            bannerTr.className = 'compare-banner-row compare-banner-row--ok';
+            bannerTr.className = 'diff-csv-banner-row diff-csv-banner-row--ok';
             bannerTd.textContent = '✓ All rows are equal';
         } else {
             // Differences found
-            const rc = _datasetCompareTrs.length;
-            const dc = new Set(_datasetCompareTds.map(td => td.cellIndex)).size;
-            const ec = _datasetCompareTds.length;
-            bannerTr.className = 'compare-banner-row compare-banner-row--diff';
+            const rc = _diffCsvTrs.length;
+            const dc = new Set(_diffCsvTds.map(td => td.cellIndex)).size;
+            const ec = _diffCsvTds.length;
+            bannerTr.className = 'diff-csv-banner-row diff-csv-banner-row--diff';
             bannerTd.textContent = `✕ ${rc.toLocaleString()} row${rc !== 1 ? 's' : ''}, ${dc.toLocaleString()} column${dc !== 1 ? 's' : ''}, ${ec.toLocaleString()} cell${ec !== 1 ? 's' : ''} have differences`;
             // row-highlighted marks are already set — _dimWantRowMode will pick up row-mode
             _setDimmed(true);
@@ -1239,19 +1239,19 @@ const Results = (() => {
         return null;
     }
 
-    function _exitDatasetCompare() {
-        _datasetCompareTrs.forEach(tr => tr.classList.remove('row-highlighted'));
-        _datasetCompareTds.forEach(td => td.classList.remove('cell-ds-diff'));
-        _datasetCompareTrs = [];
-        _datasetCompareTds = [];
-        _datasetCompareBannerTr?.remove();
-        _datasetCompareBannerTr = null;
-        _datasetCompareActive = false;
+    function _exitDiffCsv() {
+        _diffCsvTrs.forEach(tr => tr.classList.remove('row-highlighted'));
+        _diffCsvTds.forEach(td => td.classList.remove('cell-diff-csv'));
+        _diffCsvTrs = [];
+        _diffCsvTds = [];
+        _diffCsvBannerTr?.remove();
+        _diffCsvBannerTr = null;
+        _diffCsvActive = false;
 
         _setDimmed(false);
 
-        document.getElementById('btn-exit-compare-datasets').classList.add('hidden');
-        document.getElementById('btn-compare-datasets').classList.remove('hidden');
+        document.getElementById('btn-diff-csv-exit').classList.add('hidden');
+        document.getElementById('btn-diff-csv').classList.remove('hidden');
     }
 
     /**
@@ -2717,31 +2717,31 @@ const Results = (() => {
     }
 
     // =========================================================================
-    // Query Diff
+    // Diff Query
     // =========================================================================
 
-    function _takeSnapshot() {
+    function _captureDiffQuery() {
         if (!_lastResult) return;
-        _diffSnapshot = {
+        _diffQuery = {
             cols:       _lastResult.cols.slice(),
             rows:       _lastResult.rows.map(r => r.slice()),
             col_tables: (_lastResult.col_tables || []).slice(),
             col_types:  (_lastResult.col_types  || []).slice(),
         };
-        document.getElementById('btn-diff-snapshot')?.classList.add('hidden');
-        document.getElementById('btn-diff-exit')?.classList.remove('hidden');
-        App.notify?.('Snapshot taken — re-run the query to see the diff', 'success');
+        document.getElementById('btn-diff-query')?.classList.add('hidden');
+        document.getElementById('btn-diff-query-exit')?.classList.remove('hidden');
+        App.notify?.('Query captured — re-run the query to see the diff', 'success');
     }
 
-    function _clearSnapshot() {
-        const snap          = _diffSnapshot;
-        _diffSnapshot       = null;
+    function _clearDiffQuery() {
+        const base          = _diffQuery;
+        _diffQuery          = null;
         _diffChangedColIdxs = null;
-        document.getElementById('btn-diff-snapshot')?.classList.remove('hidden');
-        document.getElementById('btn-diff-exit')?.classList.add('hidden');
-        // Restore the original snapshot data, not the latest query result
-        if (snap) {
-            _populateTable(snap.cols, snap.rows, snap.col_tables, snap.col_types);
+        document.getElementById('btn-diff-query')?.classList.remove('hidden');
+        document.getElementById('btn-diff-query-exit')?.classList.add('hidden');
+        // Restore the original captured data, not the latest query result
+        if (base) {
+            _populateTable(base.cols, base.rows, base.col_tables, base.col_types);
         }
     }
 
@@ -2750,7 +2750,7 @@ const Results = (() => {
     }
 
     function _computeDiff(snapRows, newRows) {
-        // Build a frequency map of hashed rows from the snapshot
+        // Build a frequency map of hashed rows from the captured baseline
         const snapMap = new Map();
         snapRows.forEach((r, i) => {
             const h = _hashRow(r);
@@ -2809,18 +2809,18 @@ const Results = (() => {
     }
 
     function _renderDiff(newCols, newRows, colTables, colTypes) {
-        const snapCols = _diffSnapshot.cols;
-        const snapRows = _diffSnapshot.rows;
+        const snapCols = _diffQuery.cols;
+        const snapRows = _diffQuery.rows;
 
         // Hard stop: column structure must match exactly
         const _abortDiff = (msg) => App.notify?.(msg, 'error');
         if (snapCols.length !== newCols.length) {
-            _abortDiff(`Diff aborted — column count changed (snapshot: ${snapCols.length}, now: ${newCols.length})`);
+            _abortDiff(`Diff aborted — column count changed (captured: ${snapCols.length}, now: ${newCols.length})`);
             return;
         }
         const mismatch = snapCols.findIndex((c, i) => c !== newCols[i]);
         if (mismatch !== -1) {
-            _abortDiff(`Diff aborted — column "${newCols[mismatch]}" differs from snapshot column "${snapCols[mismatch]}" at position ${mismatch + 1}`);
+            _abortDiff(`Diff aborted — column "${newCols[mismatch]}" differs from captured column "${snapCols[mismatch]}" at position ${mismatch + 1}`);
             return;
         }
 
@@ -2856,7 +2856,7 @@ const Results = (() => {
             const bannerTd = document.createElement('td');
             bannerTd.colSpan = newCols.length + 1;
             bannerTd.className = 'diff-banner diff-banner--same';
-            bannerTd.textContent = '✓ No differences — result is identical to snapshot';
+            bannerTd.textContent = '✓ No differences — result is identical to the captured query';
             bannerTr.appendChild(bannerTd);
             tbody.insertBefore(bannerTr, tbody.firstChild);
             return;
@@ -2893,7 +2893,7 @@ const Results = (() => {
         // Build a set of new row indices that appear in changed/added diff entries
         const diffNewIdxSet = new Set();
         const usedNewHashes = new Map();
-        _diffSnapshot.rows.forEach(r => {
+        _diffQuery.rows.forEach(r => {
             const h = _hashRow(r);
             usedNewHashes.set(h, (usedNewHashes.get(h) || 0) + 1);
         });
@@ -2902,7 +2902,7 @@ const Results = (() => {
             const h   = _hashRow(row);
             const cnt = usedNewHashes.get(h) || 0;
             if (cnt > 0) {
-                usedNewHashes.set(h, cnt - 1); // this row matched a snapshot row exactly
+                usedNewHashes.set(h, cnt - 1); // this row matched a baseline row exactly
             } else {
                 diffNewIdxSet.add(rowIdx); // this row is new/changed
             }
@@ -2976,10 +2976,62 @@ const Results = (() => {
                 td.classList.add('td-diff-changed');
             }
 
+            // Preserve the raw value so Compare / Duplicates match on the true value
+            if (val !== null && val !== undefined) {
+                td.dataset.raw = String(val);
+            }
+
+            // The diff view rebuilds <tbody> from scratch, so its cells are inert by
+            // default. Wire them up so Compare / Duplicates work on top of the diff
+            // result set (header-click column mode already works via the untouched
+            // <thead>; this restores cell-click + right-click parity).
+            _wireDiffFeatureCell(td, colIdx);
+
             tr.appendChild(td);
         });
 
         return tr;
+    }
+
+    /** Attach Compare / Duplicates / select + right-click colour handlers to a diff cell. */
+    function _wireDiffFeatureCell(td, colIdx) {
+        td.addEventListener('click', () => {
+            if (_compareMode)        { _compareCell(td);   _selectedCell = td; }
+            else if (_duplicateMode) { _duplicateCell(td); _selectedCell = td; }
+            else                     { _selectCell(td); }
+        });
+
+        td.addEventListener('contextmenu', e => {
+            e.preventDefault();
+            e.stopPropagation();
+
+            // Alt+right-click in Compare/Duplicates mode: strip feature colouring so a
+            // manual colour shows through (restored when cycled back to no-colour).
+            if (_altKeyHeld && (_compareMode || _duplicateMode)) {
+                const featureCls = [
+                    'cell-compare-ref', 'cell-compare-match', 'cell-compare-diff',
+                    'cell-dup-origin',  'cell-dup-match',     'cell-dup-unique'
+                ].filter(c => td.classList.contains(c));
+                if (featureCls.length) {
+                    td.dataset.featureOverride = featureCls.join(' ');
+                    td.classList.remove(...featureCls);
+                }
+            }
+
+            const currentTheme = THEMES.find(t => td.classList.contains(t));
+            const currentIndex = THEMES.indexOf(currentTheme);
+            if (currentTheme) td.classList.remove(currentTheme);
+            const nextTheme = THEMES[currentIndex + 1];
+            if (nextTheme) {
+                td.classList.add(nextTheme);
+                _dimPinCol(colIdx);
+            } else if ((_compareMode || _duplicateMode) && td.dataset.featureOverride) {
+                td.classList.add(...td.dataset.featureOverride.split(' '));
+                delete td.dataset.featureOverride;
+            }
+            _applyDimVisibility();
+            _applyDimRowVisibility();
+        });
     }
 
     // =========================================================================
@@ -4867,7 +4919,7 @@ async function _copyAsSqlSelect() {
         const visibleRowIndices = [];
         let dataIdx = 0;
         trs.forEach(tr => {
-            if (tr.classList.contains('compare-banner-row')) return; // not a data row
+            if (tr.classList.contains('diff-csv-banner-row')) return; // not a data row
             if (!tr.classList.contains('row-col-filter-hidden') &&
                 !tr.classList.contains('dim-row-hidden')) {
                 visibleRowIndices.push(dataIdx);
@@ -8533,7 +8585,7 @@ async function _copyAsSqlSelect() {
     const _ALL_FEATURE_CLS = [
         'cell-compare-ref', 'cell-compare-match', 'cell-compare-diff',
         'cell-dup-origin',  'cell-dup-match',     'cell-dup-unique',
-        'cell-ds-diff',
+        'cell-diff-csv',
         'col-highlight-1', 'col-highlight-2', 'col-highlight-3', 'col-highlight-4',
     ];
 
@@ -8814,8 +8866,8 @@ async function _copyAsSqlSelect() {
         applyViewState,
         /** Turn off Dim (called on context load/reset). */
         clearDim: () => _setDimmed(false),
-        /** Exit dataset compare mode, stripping all compare highlights and turning off Dim. */
-        exitDatasetCompare: _exitDatasetCompare,
+        /** Exit Diff CSV mode, stripping all diff highlights and turning off Dim. */
+        exitDiffCsv: _exitDiffCsv,
         /** Parse a CSV File object and load it into the results table. */
         loadCsvFile,
         /** Parse an XLSX File object and load it into the results table. */
@@ -8846,14 +8898,14 @@ async function _copyAsSqlSelect() {
          * snapResult = the "before" (base), newResult = the "after".
          */
         compareRecordings(snapResult, newResult) {
-            _diffSnapshot = {
+            _diffQuery = {
                 cols:       (snapResult.cols       || []).slice(),
                 rows:       (snapResult.rows       || []).map(r => r.slice()),
                 col_tables: (snapResult.col_tables || []).slice(),
                 col_types:  (snapResult.col_types  || []).slice(),
             };
-            document.getElementById('btn-diff-snapshot')?.classList.add('hidden');
-            document.getElementById('btn-diff-exit')?.classList.remove('hidden');
+            document.getElementById('btn-diff-query')?.classList.add('hidden');
+            document.getElementById('btn-diff-query-exit')?.classList.remove('hidden');
             render({ ...newResult, _fromRecording: true });
         },
     };

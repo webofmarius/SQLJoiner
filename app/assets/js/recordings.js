@@ -1044,7 +1044,7 @@ const Recordings = (() => {
         const recs = ids.map(id => (State.recordings || []).find(r => r.id === id));
         if (!recs[0] || !recs[1]) return;
         if (typeof Results === 'undefined') return;
-        // Top entry in the list = "before" (snapshot), bottom = "after"
+        // Top entry in the list = "before" (baseline), bottom = "after"
         Results.compareRecordings(recs[0].results, recs[1].results);
     }
 

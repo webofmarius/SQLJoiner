@@ -288,7 +288,7 @@
                         <div class="results-help-row"><kbd>Double-click</kbd> Add number to Calculus</div>
                         <div class="results-help-row"><kbd>Alt + J</kbd> Copy row as JSON</div>
                         <div class="results-help-row"><kbd>Alt + C</kbd> Load CSV / XLSX file</div>
-                        <div class="results-help-row"><kbd>⊙ Snapshot</kbd> Snapshot result for diff</div>
+                        <div class="results-help-row"><kbd>⊙ Diff Query</kbd> Capture result, then re-run to diff</div>
                     </div>
                     <div class="results-help-section">
                         <span class="results-help-group">Header</span>
@@ -305,10 +305,10 @@
                 <button id="btn-trace" title="Hide repeated values row-to-row (Trace)">⋮ Trace</button>
                 <button id="btn-toggle-dim" title="Dim unhighlighted cells">☾ Dim</button>
                 <button id="btn-calculus" title="Run a query first to enable Calculus mode" disabled>∑ Calculus</button>
-                <button id="btn-compare-datasets" title="Compare current result against a CSV">⇌ Compare Datasets</button>
-                <button id="btn-exit-compare-datasets" class="hidden is-active" title="Exit dataset comparison">✕ Exit Compare</button>
-                <button id="btn-diff-snapshot" title="Snapshot current result for compare comparison" disabled>⊙ Diff Snapshot</button>
-                <button id="btn-diff-exit" class="hidden is-active" title="Exit compare mode">✕ Exit Diff</button>
+                <button id="btn-diff-csv" title="Diff the current result against a CSV">⇌ Diff CSV</button>
+                <button id="btn-diff-csv-exit" class="hidden is-active" title="Exit CSV diff">✕ Exit Diff CSV</button>
+                <button id="btn-diff-query" title="Capture the current result, then re-run the query to diff against it" disabled>⊙ Diff Query</button>
+                <button id="btn-diff-query-exit" class="hidden is-active" title="Exit query diff">✕ Exit Diff Query</button>
                 <button id="btn-explain-graph" class="hidden" title="Toggle EXPLAIN graph view">⎇ Explain Graph</button>
                 <input id="chk-search-sql-mode" type="checkbox"  title="SQL operator mode: type expressions like > 5, = 'John', IS NULL">
                 <button id="btn-search-cols" title="Toggle column search inputs">⌕ Search</button>
@@ -357,7 +357,7 @@
             <input type="checkbox" id="chk-rec-select-all" class="rec-select-all-chk" title="Select / deselect all recordings">
             <button id="btn-rec-dim" class="rec-filter-btn" title="DIM — show only selected (checked) recordings">☾ DIM</button>
             <button id="btn-rec-same-color" class="rec-filter-btn" title="Same color — show only recordings whose color matches a checked recording">◈ Same color</button>
-            <button id="btn-rec-compare" class="rec-compare-btn" disabled title="Select exactly 2 recordings to compare their results using Diff Snapshot">⊙ Compare</button>
+            <button id="btn-rec-compare" class="rec-compare-btn" disabled title="Select exactly 2 recordings to compare their results using Diff Query">⊙ Compare</button>
             <button id="btn-rec-delete-selected" class="rec-delete-sel-btn" disabled>⊗</button>
             <span class="rec-header-sep"></span>
             <button id="btn-rec-add-group" class="rec-add-group-btn" title="Create a new recording group">⊞ Group</button>
@@ -775,31 +775,31 @@
         </div>
     </div>
 
-    <div id="modal-compare-datasets" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modal-compare-datasets-title">
+    <div id="modal-diff-csv" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modal-diff-csv-title">
         <div class="modal-box modal-box--small">
             <div class="modal-header">
-                <h2 id="modal-compare-datasets-title">Compare Datasets</h2>
-                <button id="btn-compare-ds-x" aria-label="Close">✕</button>
+                <h2 id="modal-diff-csv-title">Diff CSV</h2>
+                <button id="btn-diff-csv-x" aria-label="Close">✕</button>
             </div>
             <div class="modal-body">
-                <div id="compare-ds-info-a" class="compare-ds-info"></div>
-                <div class="compare-ds-b">
-                    <div class="compare-ds-b-header">
-                        <strong>Dataset B — CSV</strong>
+                <div id="diff-csv-info-a" class="diff-csv-info"></div>
+                <div class="diff-csv-b">
+                    <div class="diff-csv-b-header">
+                        <strong>CSV to diff against</strong>
                     </div>
-                    <div class="compare-ds-b-actions">
-                        <button type="button" id="btn-compare-ds-load-file">↑ Load CSV file</button>
-                        <input type="file" id="compare-ds-file-input" accept=".csv" class="hidden">
+                    <div class="diff-csv-b-actions">
+                        <button type="button" id="btn-diff-csv-load-file">↑ Load CSV file</button>
+                        <input type="file" id="diff-csv-file-input" accept=".csv" class="hidden">
                     </div>
-                    <textarea id="compare-ds-paste-area" placeholder="Paste CSV data here…" spellcheck="false" rows="6"></textarea>
-                    <div id="compare-ds-info-b" class="compare-ds-info"></div>
+                    <textarea id="diff-csv-paste-area" placeholder="Paste CSV data here…" spellcheck="false" rows="6"></textarea>
+                    <div id="diff-csv-info-b" class="diff-csv-info"></div>
                 </div>
-                <div id="compare-ds-error" class="compare-ds-error hidden"></div>
+                <div id="diff-csv-error" class="diff-csv-error hidden"></div>
                 <div class="form-actions">
-                    <button type="button" id="btn-compare-ds-cancel">Cancel</button>
-                    <button type="button" id="btn-compare-ds-run" class="primary" disabled>Compare</button>
-                    <label class="compare-ds-header-chk">
-                        <input type="checkbox" id="chk-compare-csv-header" checked>
+                    <button type="button" id="btn-diff-csv-cancel">Cancel</button>
+                    <button type="button" id="btn-diff-csv-run" class="primary" disabled>Diff</button>
+                    <label class="diff-csv-header-chk">
+                        <input type="checkbox" id="chk-diff-csv-header" checked>
                         First row is header
                     </label>
                 </div>
