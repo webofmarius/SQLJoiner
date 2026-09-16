@@ -612,10 +612,13 @@ class QueryBuilder
             }
             $expr = $m[1] . '.`' . $this->esc($m[2]) . '`';
             $colAlias = isset($selectAliases[$item]) ? trim((string) $selectAliases[$item]) : '';
-            if ($colAlias !== '' && preg_match('/^\w+$/', $colAlias)) {
+            if ($colAlias !== '') {
+                // Alias is always backtick-quoted with backticks escaped by esc(),
+                // so any identifier text is safe here — no need to restrict to \w+
+                // (that used to silently drop aliases containing spaces, hyphens, etc.).
                 $expr .= ' AS `' . $this->esc($colAlias) . '`';
             }
-            $colAliasSortKey = ($colAlias !== '' && preg_match('/^\w+$/', $colAlias)) ? $colAlias : '';
+            $colAliasSortKey = $colAlias !== '' ? $colAlias : '';
             $cols[] = [
                 'alias'    => $m[1],
                 'colname'  => $m[2],
