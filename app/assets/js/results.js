@@ -75,6 +75,11 @@ const Results = (() => {
     let _colFilters     = {}; // colIdx (number) → filter text
     let _colFilterSqlMode = false; // true = SQL operator mode (> 5, = 'x', IS NULL…)
 
+    // Manually resized column widths — colKey → px. Persists across re-renders
+    // (sort, reorder, filter) of the same session; injected as CSS so every
+    // row's cell in that column is sized without touching tbody DOM directly.
+    let _colWidths = {};
+
     // True when the current result came from a CSV file (drives Excel-style header letters)
     let _lastResultIsCsv = false;
 
@@ -2034,6 +2039,69 @@ const Results = (() => {
             if (th.classList.contains('th-row-num')) return;
             th.dataset.colIdx = String(dataIdx++);
         });
+        // Column order changed — the injected width CSS is nth-child based, so refresh it
+        _applyColumnWidthStyles(thead);
+    }
+
+    // Re-injects a <style> block sizing every th/td in a manually-resized column
+    // (by nth-child position) so widths survive re-renders without touching each
+    // tbody row's cells directly.
+    function _applyColumnWidthStyles(thead) {
+        let styleEl = document.getElementById('results-col-widths-style');
+        if (!Object.keys(_colWidths).length) {
+            if (styleEl) styleEl.textContent = '';
+            return;
+        }
+        if (!styleEl) {
+            styleEl = document.createElement('style');
+            styleEl.id = 'results-col-widths-style';
+            document.head.appendChild(styleEl);
+        }
+        const ths = thead ? Array.from(thead.querySelectorAll('tr th')) : [];
+        let css = '';
+        ths.forEach((th, idx) => {
+            const key = th.dataset.colKey;
+            if (!key || _colWidths[key] == null) return;
+            const n = idx + 1; // nth-child is 1-based
+            const w = _colWidths[key];
+            css += `#results-table th:nth-child(${n}), #results-table td:nth-child(${n}) { width:${w}px; min-width:${w}px; max-width:${w}px; }\n`;
+        });
+        styleEl.textContent = css;
+    }
+
+    // Drag-resize a column via the handle appended to its <th>. Reuses the
+    // mousemove/mouseup document-listener pattern used elsewhere (see app.js
+    // _makeResizable) rather than HTML5 drag, which is already claimed by
+    // column reordering on the same <th>.
+    function _startColumnResize(e, th) {
+        e.preventDefault();
+        e.stopPropagation();
+        const key = th.dataset.colKey;
+        if (!key) return;
+        const thead = th.closest('thead');
+        const handle = e.currentTarget;
+        const startX = e.clientX;
+        const startW = _colWidths[key] ?? th.getBoundingClientRect().width;
+        const MIN_W = 40;
+
+        handle.classList.add('is-resizing');
+        document.body.style.userSelect = 'none';
+        document.body.style.cursor = 'col-resize';
+
+        function onMove(ev) {
+            const dx = ev.clientX - startX;
+            _colWidths[key] = Math.max(MIN_W, Math.round(startW + dx));
+            _applyColumnWidthStyles(thead);
+        }
+        function onUp() {
+            handle.classList.remove('is-resizing');
+            document.body.style.userSelect = '';
+            document.body.style.cursor = '';
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', onUp);
+        }
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
     }
 
     function _applySortToTbody(tbody, colIdx, dir) {
@@ -2517,12 +2585,24 @@ const Results = (() => {
                     QueryPanel.refresh();
                     App.updateSQLPreview();
                 });
+
+                // Resize handle: drag the border on the right edge of the header
+                // to change the column's width. draggable=false stops the native
+                // HTML5 drag (used above for reordering) from hijacking the grab.
+                const resizeHandle = document.createElement('div');
+                resizeHandle.className = 'col-resize-handle';
+                resizeHandle.draggable = false;
+                resizeHandle.addEventListener('mousedown', e => _startColumnResize(e, th));
+                resizeHandle.addEventListener('click', e => e.stopPropagation());
+                resizeHandle.addEventListener('dblclick', e => e.stopPropagation());
+                th.appendChild(resizeHandle);
             }
 
             trHead.appendChild(th);
         });
         thead.innerHTML = '';
         thead.appendChild(trHead);
+        _applyColumnWidthStyles(thead);
 
         // --- Body ---
         tbody.innerHTML = '';
