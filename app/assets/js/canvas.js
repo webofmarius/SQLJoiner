@@ -722,14 +722,14 @@ const Canvas = (() => {
 
         let _colClickTimer = null;
 
-        // Cmd/Ctrl+double-click → add column to ORDER BY (DESC by default), or
+        // Alt+double-click → add column to ORDER BY (DESC by default), or
         // toggle ASC/DESC if it's already there.
         // Plain double-click → add column to WHERE box (same as drag-drop)
         li.addEventListener('dblclick', e => {
             e.stopPropagation();
             clearTimeout(_colClickTimer); // cancel any pending single-click color cycle
 
-            if (e.metaKey || e.ctrlKey) {
+            if (e.altKey) {
                 QueryPanel.toggleOrderByColumn(`${tableData.alias}.${col.name}`);
                 document.getElementById('section-orderby')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
                 return;
