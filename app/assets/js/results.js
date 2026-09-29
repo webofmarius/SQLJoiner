@@ -2049,6 +2049,63 @@ const Results = (() => {
         _applyColumnWidthStyles(thead);
     }
 
+    /**
+     * Move data columns to match an arbitrary target permutation without re-running
+     * the query. newOrder[p] = the current data-column index that should end up at
+     * position p (0-based, excluding the leading # column).
+     */
+    function _applyColumnPermutation(thead, tbody, newOrder) {
+        [thead, tbody].forEach(section => {
+            if (!section) return;
+            Array.from(section.rows).forEach(row => {
+                const dataCells = Array.from(row.cells).slice(1); // skip leading # column
+                newOrder.forEach(i => {
+                    const cell = dataCells[i];
+                    if (cell) row.appendChild(cell); // moves the existing node, doesn't clone
+                });
+            });
+        });
+        let dataIdx = 0;
+        Array.from(thead.querySelectorAll('th')).forEach(th => {
+            if (th.classList.contains('th-row-num')) return;
+            th.dataset.colIdx = String(dataIdx++);
+        });
+        _applyColumnWidthStyles(thead);
+    }
+
+    /**
+     * Called after a Select-box drag-reorder (table header or column row) changes
+     * State.columnOrder — reorders the already-rendered results table's columns to
+     * match, live, without re-running the query. Columns not present in `order`
+     * (e.g. custom-expression columns) keep their current slot; matched columns
+     * are re-sequenced among themselves following `order`.
+     */
+    function reorderColumnsToMatch(order) {
+        if (!_lastResult) return;
+        const thead = document.querySelector('#results-table thead');
+        const tbody = document.querySelector('#results-table tbody');
+        if (!thead || !thead.rows.length) return;
+
+        const ths  = Array.from(thead.querySelectorAll('th')).filter(th => !th.classList.contains('th-row-num'));
+        if (ths.length < 2) return;
+        const keys = ths.map(th => th.dataset.colKey || '');
+
+        const rankOf = new Map(order.map((k, i) => [k, i]));
+        const matchedQueue = keys
+            .map((k, idx) => ({ idx, rank: rankOf.has(k) ? rankOf.get(k) : null }))
+            .filter(e => e.rank !== null)
+            .sort((a, b) => a.rank - b.rank)
+            .map(e => e.idx);
+
+        let qi = 0;
+        const newOrder = keys.map(k => (rankOf.has(k) ? matchedQueue[qi++] : null));
+        // Unmatched columns keep their current slot
+        newOrder.forEach((v, i) => { if (v === null) newOrder[i] = i; });
+
+        if (newOrder.every((v, i) => v === i)) return; // already in the right order
+        _applyColumnPermutation(thead, tbody, newOrder);
+    }
+
     // Re-injects a <style> block sizing every th/td in a manually-resized column
     // (by nth-child position) so widths survive re-renders without touching each
     // tbody row's cells directly.
@@ -9438,6 +9495,8 @@ async function _copyAsSqlSelect() {
         },
         /** Destroy all Calculus expression rows. */
         calcClear: _calcClearAll,
+        /** Live-reorder the already-rendered results columns to match a new columnOrder (no re-query). */
+        reorderColumnsToMatch,
         /**
          * Scroll to and briefly flash the results-table column matching colKey
          * (format: "tableAlias.colName"). Falls back to bare column name.

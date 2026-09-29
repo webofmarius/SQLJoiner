@@ -718,12 +718,13 @@ const QueryPanel = (() => {
                     }
                     
                     State.columnOrder = remainingCols;
-                    
+
                     if (State.select.length > 0) {
                         State.select.sort((a, b) => State.columnOrder.indexOf(a) - State.columnOrder.indexOf(b));
                     }
                     _refreshSelect();
                     App.updateSQLPreview();
+                    if (typeof Results !== 'undefined') Results.reorderColumnsToMatch?.(State.columnOrder);
                 }
             });
 
@@ -941,6 +942,7 @@ const QueryPanel = (() => {
                         }
                         _refreshSelect();
                         App.updateSQLPreview();
+                        if (typeof Results !== 'undefined') Results.reorderColumnsToMatch?.(State.columnOrder);
                     }
                 });
             });
