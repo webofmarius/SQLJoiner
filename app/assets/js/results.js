@@ -1031,6 +1031,12 @@ const Results = (() => {
             document.getElementById('btn-diff-cols')?.classList.remove('hidden');
             document.getElementById('legend-diff-cols')?.classList.add('hidden');
         }
+        if (_diffQuery) {
+            _diffQuery          = null;
+            _diffChangedColIdxs = null;
+            document.getElementById('btn-diff-query-exit')?.classList.add('hidden');
+            document.getElementById('btn-diff-query')?.classList.remove('hidden');
+        }
         _lastResult = null;
         _colThemes = {};
         _cmdColHighlights = new Set();

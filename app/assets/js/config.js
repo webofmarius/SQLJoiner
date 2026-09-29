@@ -2507,6 +2507,23 @@ const QueryPanel = (() => {
         _dropColKey(zone, `${table.alias}.${colName}`);
     }
 
+    /**
+     * Cmd/Ctrl+double-click on a canvas column → add it to ORDER BY with DESC
+     * as the default direction, or toggle ASC/DESC if it's already there.
+     */
+    function toggleOrderByColumn(colKey) {
+        if (State.orderByMode !== 'visual') return;
+        if (typeof UndoRedo !== 'undefined') UndoRedo.snapshot();
+        const existing = State.orderBy.find(o => o.col === colKey);
+        if (existing) {
+            existing.dir = existing.dir === 'DESC' ? 'ASC' : 'DESC';
+        } else {
+            State.orderBy.push({ col: colKey, dir: 'DESC' });
+        }
+        _refreshOrderBy();
+        App.updateSQLPreview();
+    }
+
     /** Generates the SELECT clause part from State.select */
     function _copySelectVisualToRaw() {
         if (State.tables.length === 0) {
@@ -3221,6 +3238,7 @@ const QueryPanel = (() => {
         refresh,
         buildSQL,
         onColumnDrop,
+        toggleOrderByColumn,
         sortSelectInSQL: _sortSelectInSQL,
         bindNotePopup,
         getShowCheckedOnly: () => _showCheckedOnly,

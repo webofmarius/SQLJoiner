@@ -2067,19 +2067,27 @@ const App = (() => {
     let _spinnerTimer = null;
     let _spinnerIdx   = 0;
     let _queryAbortController = null;
+    let _runningQueryProfileId = null; // snapshot — the profile the running query actually used, in case the user switches profile before cancelling
 
     function _showCancelBtn()  { document.getElementById('btn-cancel-query')?.classList.remove('hidden'); }
     function _hideCancelBtn()  { document.getElementById('btn-cancel-query')?.classList.add('hidden'); }
 
     async function _cancelRunningQuery() {
         if (_queryAbortController) _queryAbortController.abort();
+        const profileId = _runningQueryProfileId ?? State.activeProfileId;
         try {
-            await fetch('cancel_query.php', {
+            const res  = await fetch('cancel_query.php', {
                 method:  'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body:    JSON.stringify({ profileId: State.activeProfileId }),
+                body:    JSON.stringify({ profileId }),
             });
-        } catch { /* best-effort */ }
+            const json = await res.json().catch(() => null);
+            if (!json?.success) {
+                _notify('Cancel query: ' + (json?.message || 'server did not confirm the query was killed.'), 'warn');
+            }
+        } catch (e) {
+            _notify('Cancel query request failed: ' + e.message, 'error');
+        }
     }
 
     function _startMetaSpinner() {
@@ -2149,7 +2157,8 @@ const App = (() => {
         const btn = document.getElementById('btn-run-query');
         btn.disabled    = true;
         btn.textContent = '⏳ Running…';
-        _queryAbortController = new AbortController();
+        _queryAbortController   = new AbortController();
+        _runningQueryProfileId  = State.activeProfileId;
         _showCancelBtn();
         _startMetaSpinner();
 
@@ -2183,7 +2192,8 @@ const App = (() => {
                 _notify('Query failed — see results panel for details.', 'error');
             }
         } finally {
-            _queryAbortController = null;
+            _queryAbortController  = null;
+            _runningQueryProfileId = null;
             _hideCancelBtn();
             _stopMetaSpinner();
             btn.disabled    = false;
@@ -2283,7 +2293,8 @@ const App = (() => {
         const btn = document.getElementById('btn-explain-query');
         btn.disabled    = true;
         btn.textContent = '⏳ Running…';
-        _queryAbortController = new AbortController();
+        _queryAbortController  = new AbortController();
+        _runningQueryProfileId = State.activeProfileId;
         _showCancelBtn();
         _startMetaSpinner();
 
@@ -2331,7 +2342,8 @@ const App = (() => {
                 _notify('EXPLAIN failed — see results panel for details.', 'error');
             }
         } finally {
-            _queryAbortController = null;
+            _queryAbortController  = null;
+            _runningQueryProfileId = null;
             _hideCancelBtn();
             _stopMetaSpinner();
             btn.disabled    = false;
@@ -2486,7 +2498,8 @@ const App = (() => {
         const btn = document.getElementById('btn-run-custom-query');
         btn.disabled    = true;
         btn.textContent = '⏳ Running…';
-        _queryAbortController = new AbortController();
+        _queryAbortController  = new AbortController();
+        _runningQueryProfileId = State.activeProfileId;
         _showCancelBtn();
         _startMetaSpinner();
 
@@ -2503,7 +2516,8 @@ const App = (() => {
                 _notify('Query failed — see results panel for details.', 'error');
             }
         } finally {
-            _queryAbortController = null;
+            _queryAbortController  = null;
+            _runningQueryProfileId = null;
             _hideCancelBtn();
             _stopMetaSpinner();
             btn.disabled    = false;
@@ -3784,7 +3798,9 @@ const App = (() => {
                 State.whereMode = 'raw';
             }
 
-            if (typeof Results !== 'undefined') Results.clearDim?.();
+            // Wipe the previous context's results table / snapshots so stale data
+            // from the old context never lingers after switching.
+            if (typeof Results !== 'undefined') Results.clear?.();
 
             // Ensure every table has a join-order value (old contexts won't have it)
             State.tables.forEach((t, i) => { if (t.order == null) t.order = i + 1; });
@@ -4035,7 +4051,6 @@ const App = (() => {
             State.loadedContextId   = null;
             State.loadedContextName = null;
             _updateSaveContextButton();
-            Results.clear();
         });
 
         document.getElementById('topbar-notes-title').addEventListener('click', () => {

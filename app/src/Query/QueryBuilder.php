@@ -378,6 +378,30 @@ class QueryBuilder
             }
         }
 
+        // When the frontend's columnOrder has been drag-reordered away from the tables'
+        // natural declaration order but none of the special cases above already forced
+        // an explicit column list, still expand SELECT * to the reordered columns.
+        // Mirrors the client-side "isDefault" check in config.js buildSQL() — without
+        // this, a plain drag-reorder (no delimiter / sort-alpha / aliases) shows correctly
+        // in the SQL preview but silently runs as `SELECT *` on the server.
+        if (empty($select) && $selectMode !== 'raw' && !empty($columnOrder)) {
+            $defaultOrder = [];
+            foreach ($tables as $t) {
+                foreach ((array) ($t['columns'] ?? []) as $col) {
+                    $colName = is_array($col) ? ($col['name'] ?? '') : (string) $col;
+                    if ($colName !== '') {
+                        $defaultOrder[] = ($t['alias'] ?? '') . '.' . $colName;
+                    }
+                }
+            }
+            if (array_values($columnOrder) !== $defaultOrder) {
+                $select = array_values(array_filter(
+                    $columnOrder,
+                    fn($k) => preg_match('/^\w+\.\w+$/', (string) $k)
+                ));
+            }
+        }
+
         // Validate every table has a safe name, alias, and optional database.
         // Subquery tables skip the name validation (the name is a synthetic identifier
         // like "sq1"; the actual SQL comes from the subquery field which is user-trusted
