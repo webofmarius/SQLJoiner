@@ -220,7 +220,7 @@
                         Sort A→Z
                     </label>
                     <label title="Insert '|||' between each table's columns in the SELECT list">
-                        <input type="checkbox" id="select-delimiter-toggle">
+                        <input type="checkbox" id="select-delimiter-toggle" checked>
                         Table delimiter <code>'|||'</code>
                     </label>
                     <label id="label-table-name-toggle" title="Show the real table origin (db.table) below each result column header">

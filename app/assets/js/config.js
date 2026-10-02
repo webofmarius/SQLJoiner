@@ -1320,38 +1320,33 @@ const QueryPanel = (() => {
         const alias   = '_' + colName;
         const expr    = `FROM_UNIXTIME(${colKey})`;
 
-        if (typeof UndoRedo !== 'undefined') UndoRedo.snapshot();
         if (!Array.isArray(State.selectCustomExprs)) State.selectCustomExprs = [];
+
+        const exists = State.selectCustomExprs.some(
+            e => (e.alias || '').trim() === alias && (e.expr || '').trim() === expr
+        );
+        if (exists) {
+            App.notify(`${expr} AS ${alias} was already in Custom Expressions`, 'info');
+            return;
+        }
+
+        if (typeof UndoRedo !== 'undefined') UndoRedo.snapshot();
 
         if ((State.selectCustomExprsMode ?? 'exclude') === 'exclude') {
             State.selectCustomExprsMode = 'combined';
         }
 
-        let targetIdx = State.selectCustomExprs.findIndex(
-            e => (e.alias || '').trim() === alias && (e.expr || '').trim() === expr
-        );
-        if (targetIdx === -1) {
-            State.selectCustomExprs.push({
-                id: 'cx_' + Date.now(),
-                expr,
-                alias,
-                label: '',
-                enabled: true,
-            });
-            targetIdx = State.selectCustomExprs.length - 1;
-        }
+        State.selectCustomExprs.push({
+            id: 'cx_' + Date.now(),
+            expr,
+            alias,
+            label: '',
+            enabled: true,
+        });
 
         _refreshSelect();
         App.updateSQLPreview();
-
-        requestAnimationFrame(() => {
-            const rows = document.querySelectorAll('#select-columns .select-expr-row');
-            const el = rows[targetIdx];
-            if (!el) return;
-            el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-            el.classList.add('select-expr-flash');
-            setTimeout(() => el.classList.remove('select-expr-flash'), 2000);
-        });
+        App.notify(`Added ${expr} AS ${alias} to Custom Expressions`, 'success');
     }
 
     function _buildCustomExprRow(expr, idx) {

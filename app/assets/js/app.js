@@ -289,6 +289,9 @@ const App = (() => {
         if (typeof Timeline    !== 'undefined') Timeline.init();
         if (typeof Chain       !== 'undefined') Chain.init();
 
+        // Overview zoom is on by default
+        _applyOverviewZoom(true);
+
         // Capture the initial clean-slate baseline so dirty checks work from the start.
         // Use setTimeout so any non-awaited async init work (e.g. _activateProfile)
         // has settled before we snapshot, avoiding false "dirty" positives.
