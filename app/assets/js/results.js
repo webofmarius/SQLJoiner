@@ -9244,7 +9244,7 @@ async function _copyAsSqlSelect() {
 
     /**
      * Scroll to and briefly flash the results-table column whose data-col-key
-     * matches colKey (e.g. "u.id"). Falls back to bare column name comparison.
+     * matches colKey (e.g. "u.id"). Toasts if the column is not in the results.
      * Expands the results panel if it is collapsed.
      */
     function focusColumn(colKey) {
@@ -9253,16 +9253,10 @@ async function _copyAsSqlSelect() {
         // Exact key match
         let th = document.querySelector(`#results-table thead th[data-col-key="${colKey}"]`);
 
-        // Fallback: bare column name (handles table alias mismatch)
         if (!th) {
-            const bare = (colKey.includes('.') ? colKey.split('.')[1] : colKey).toLowerCase();
-            for (const el of document.querySelectorAll('#results-table thead th[data-col-key]')) {
-                const k = el.dataset.colKey || '';
-                const b = (k.includes('.') ? k.split('.')[1] : k).toLowerCase();
-                if (b === bare) { th = el; break; }
-            }
+            if (typeof App !== 'undefined') App.notify(`${colKey} is not in the results table, so it can't be highlighted`, 'warn');
+            return;
         }
-        if (!th) return;
 
         // Expand results panel if collapsed so the column is visible
         const panel = document.getElementById('results-panel');
