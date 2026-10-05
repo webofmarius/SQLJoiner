@@ -241,6 +241,38 @@ h3 {
     cursor: default;
 }
 
+/* Uniform height for topbar + bottombar buttons (matches the Contexts button) */
+#topbar > div > button,
+#topbar-menu > button,
+#undo-redo-bar > button,
+#bottom-actions > button {
+    box-sizing: border-box;
+    height: 26px;
+    padding-top: 0;
+    padding-bottom: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+}
+
+/* Single-character (icon) buttons: square, same size */
+#btn-menu-trigger,
+#btn-save-context,
+#btn-timestamp-conv,
+#btn-focus-tables,
+#btn-canvas-overview-zoom,
+#btn-undo,
+#btn-redo,
+#btn-minimap-badge {
+    box-sizing: border-box;
+    width: 26px;
+    min-width: 26px;
+    height: 26px;
+    padding: 0;
+    font-size: 14px;
+}
+
 /* Topbar dropdown menu */
 .topbar-menu { position: relative; }
 
@@ -3354,8 +3386,12 @@ body.is-resizing-results #resizer-results {
     user-select: none;
     border-right: 2px solid var(--border);
     padding: 2px 4px;
+    position: sticky;
+    left: 0;
+    z-index: 2;
 }
 #results-table th.th-row-num {
+    z-index: 4; /* above sticky header cells and sticky row numbers */
     font-weight: 600;
     text-align: center;
     padding: 3px 4px;

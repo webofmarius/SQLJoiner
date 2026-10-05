@@ -130,6 +130,7 @@ const Islands = (() => {
             _applyOpacity(State.selectedIslandKey, islands);
             _applyMinimizedVisibility(islands);
             _renderPinContainers(islands);
+            if (typeof Minimap !== 'undefined') Minimap.scheduleUpdate();
         } finally {
             _recomputing = false;
         }

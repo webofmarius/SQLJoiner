@@ -86,6 +86,10 @@ const Minimap = (() => {
         buf.fillRect(0, 0, MAP_SIZE, MAP_SIZE);
 
         const tables = (typeof State !== 'undefined' && State.tables) ? State.tables : [];
+        // Tables outside the selected island are dimmed so the joined group stands out
+        const selKey = (typeof State !== 'undefined') ? State.selectedIslandKey : null;
+        const selIds = selKey ? new Set(selKey.split('|')) : null;
+        const dimOthers = !!selIds && tables.some(t => !selIds.has(t.id));
         tables.forEach(t => {
             if (!t.position) return;
             const card = document.querySelector(`.table-card[data-table-id="${t.id}"]`);
@@ -99,6 +103,7 @@ const Minimap = (() => {
             const mw = Math.max(2, w * SCALE);
             const mh = Math.max(2, h * SCALE);
 
+            buf.globalAlpha = (dimOthers && !selIds.has(t.id)) ? 0.25 : 1;
             buf.fillStyle   = t.color || '#2d3748';
             buf.strokeStyle = t.color || '#4a9eff';
             buf.lineWidth   = 0.5;
@@ -111,6 +116,7 @@ const Minimap = (() => {
             buf.fill();
             buf.stroke();
         });
+        buf.globalAlpha = 1;
 
         // Flush buffer to main minimap canvas
         _ctx.clearRect(0, 0, MAP_SIZE, MAP_SIZE);
