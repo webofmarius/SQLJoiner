@@ -551,22 +551,8 @@ const App = (() => {
                 return;
             }
 
-            // F6 — Toggle results panel minimize / restore
+            // F6 — Toggle results panel fullscreen (maximize)
             if (e.code === 'F6' && !isMod) {
-                e.preventDefault();
-                Results.toggle?.();
-                return;
-            }
-
-            // F7 — Toggle results panel stretch height
-            if (e.code === 'F7' && !isMod) {
-                e.preventDefault();
-                Results.toggleTall?.();
-                return;
-            }
-
-            // F8 — Toggle results panel fullscreen (maximize)
-            if (e.code === 'F8' && !isMod) {
                 e.preventDefault();
                 Results.toggleFullscreen?.();
                 return;
