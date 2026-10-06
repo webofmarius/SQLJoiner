@@ -1281,7 +1281,7 @@ const Recordings = (() => {
         // REC button inside panel
         const recBtn = document.getElementById('btn-rec-record');
         if (recBtn) {
-            recBtn.textContent = active ? '■ Stop' : '● Record';
+            recBtn.innerHTML = '<span class="rec-dot"></span>' + (active ? 'Stop' : 'Record');
             recBtn.classList.toggle('is-recording', active);
             recBtn.title = active ? 'Recording active — click to stop' : 'Recording stopped — click to resume';
         }

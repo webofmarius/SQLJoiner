@@ -361,11 +361,11 @@
             <button id="btn-rec-dim" class="rec-filter-btn" title="DIM — show only selected (checked) recordings">☾ DIM</button>
             <button id="btn-rec-same-color" class="rec-filter-btn" title="Same color — show only recordings whose color matches a checked recording">◈ Same color</button>
             <button id="btn-rec-compare" class="rec-compare-btn" disabled title="Select exactly 2 recordings to compare their results using Diff Query">⊙ Compare</button>
-            <button id="btn-rec-delete-selected" class="rec-delete-sel-btn" disabled>⊗</button>
+            <button id="btn-rec-delete-selected" class="rec-delete-sel-btn" disabled>Delete</button>
             <span class="rec-header-sep"></span>
             <button id="btn-rec-add-group" class="rec-add-group-btn" title="Create a new recording group">⊞ Group</button>
             <span class="rec-header-sep"></span>
-            <button id="btn-rec-record" class="rec-record-btn" title="Recording active — click to stop">■ Stop</button>
+            <button id="btn-rec-record" class="rec-record-btn" title="Recording active — click to stop"><span class="rec-dot"></span>Stop</button>
             <button id="btn-rec-help" title="Shortcuts &amp; tips">?</button>
             <button id="btn-recordings-close" title="Close panel">✕</button>
         </div>

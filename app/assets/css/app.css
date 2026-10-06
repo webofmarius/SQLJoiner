@@ -7122,22 +7122,9 @@ textarea.sql-bd-active.scope-mode-on {
 .rec-record-btn {
     font-size: 11px;
     padding: 2px 7px;
-    border-radius: 4px;
-    border: 1px solid var(--border2);
-    background: var(--surface3, var(--surface2));
-    color: var(--text-muted);
-    cursor: pointer;
     white-space: nowrap;
-}
-.rec-record-btn.is-recording {
-    color: #f87171;
-    border-color: #f87171;
-    background: rgba(248, 113, 113, 0.1);
-    animation: rec-pulse 1.6s ease-in-out infinite;
-}
-@keyframes rec-pulse {
-    0%, 100% { box-shadow: 0 0 0 0 rgba(248,113,113,0.4); }
-    50%       { box-shadow: 0 0 0 4px rgba(248,113,113,0); }
+    display: inline-flex;
+    align-items: center;
 }
 #btn-recordings-close {
     font-size: 11px;
@@ -7576,7 +7563,11 @@ textarea.sql-bd-active.scope-mode-on {
     white-space: nowrap;
     padding: 4px 8px;
 }
-#btn-recordings-toggle .rec-dot {
+#btn-recordings-toggle .rec-toggle-count {
+    margin-left: 4px;
+}
+#btn-recordings-toggle .rec-dot,
+.rec-record-btn .rec-dot {
     display: inline-block;
     width: 7px;
     height: 7px;
@@ -7584,10 +7575,10 @@ textarea.sql-bd-active.scope-mode-on {
     background: var(--text-muted);
     margin-right: 4px;
     vertical-align: middle;
-    position: relative;
-    top: -1px;
+    flex-shrink: 0;
 }
-#btn-recordings-toggle.rec-is-recording .rec-dot {
+#btn-recordings-toggle.rec-is-recording .rec-dot,
+.rec-record-btn.is-recording .rec-dot {
     background: #f87171;
 }
 #btn-recordings-toggle.is-active {
@@ -7604,6 +7595,9 @@ textarea.sql-bd-active.scope-mode-on {
 #btn-timeline-toggle {
     white-space: nowrap;
     padding: 4px 8px;
+}
+#btn-timeline-toggle .tl-btn-badge {
+    margin-left: 4px;
 }
 #btn-timeline-toggle.is-active {
     color: var(--accent);
