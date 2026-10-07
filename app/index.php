@@ -247,6 +247,8 @@
         <!-- Pane toggle buttons — live in #layout so they float over the canvas, not pane content -->
         <button class="pane-toggle" id="btn-toggle-sidebar" title="Toggle sidebar">‹</button>
         <button class="pane-toggle" id="btn-toggle-config" title="Toggle config panel">›</button>
+        <button class="pane-pin" id="btn-pin-sidebar" title="Pinned: stays open when clicking outside (on)"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16 3l5 5-2 1-3.5 3.5.5 4.5-1.5 1.5-3.5-3.5L7 20l-1-1 4.5-4.5L7 11l1.5-1.5 4.5.5L16.5 6.5 16 3z"/></svg></button>
+        <button class="pane-pin" id="btn-pin-config" title="Pinned: stays open when clicking outside (on)"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16 3l5 5-2 1-3.5 3.5.5 4.5-1.5 1.5-3.5-3.5L7 20l-1-1 4.5-4.5L7 11l1.5-1.5 4.5.5L16.5 6.5 16 3z"/></svg></button>
 
     </main>
 
@@ -272,6 +274,7 @@
     </footer>
 
     <!-- ==================== RESULTS PANEL ==================== -->
+    <button class="pane-pin pane-pin--results" id="btn-pin-results" title="Pinned: stays open when clicking outside (on)"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16 3l5 5-2 1-3.5 3.5.5 4.5-1.5 1.5-3.5-3.5L7 20l-1-1 4.5-4.5L7 11l1.5-1.5 4.5.5L16.5 6.5 16 3z"/></svg></button>
     <div id="results-panel" class="hidden">
         <div id="resizer-results"></div>
         <div id="results-header">
@@ -314,7 +317,7 @@
                 <button id="btn-explain-graph" class="hidden" title="Toggle EXPLAIN graph view">⎇ Explain Graph</button>
                 <input id="chk-search-sql-mode" type="checkbox"  title="SQL operator mode: type expressions like > 5, = 'John', IS NULL">
                 <button id="btn-search-cols" title="Toggle column search inputs">⌕ Search</button>
-                <button id="btn-save-view-state" class="hidden" title="Save current visual state (Compare, Duplicates, colors, Dim, filters) to this recording">📌 Save</button>
+                <button id="btn-save-view-state" class="hidden" title="Save current visual state (Compare, Duplicates, colors, Dim, filters) to this recording"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16 3l5 5-2 1-3.5 3.5.5 4.5-1.5 1.5-3.5-3.5L7 20l-1-1 4.5-4.5L7 11l1.5-1.5 4.5.5L16.5 6.5 16 3z"/></svg> Save</button>
             </div>
             <span id="results-meta"></span>
             <div id="results-actions">
