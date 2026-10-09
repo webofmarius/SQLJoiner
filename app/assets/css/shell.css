@@ -1,0 +1,139 @@
+/* shell.css — tab bar for shell.php (tokens come from app.css) */
+:root { --tabbar-height: 30px; }
+
+#tabbar {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    height: var(--tabbar-height);
+    display: flex;
+    align-items: stretch;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+    z-index: 10;
+    user-select: none;
+}
+
+#tabs {
+    display: flex;
+    align-items: stretch;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.tab {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    /* Fixed default width (same as while renaming); an explicit width is needed so the
+       flex container sizes to it instead of to the label. Shrinks when many tabs are open. */
+    width: 188px;
+    flex: 0 1 188px;
+    min-width: 64px;
+    padding: 0 6px 0 12px;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    border-top: 2px solid transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: background 0.12s, color 0.12s;
+}
+.tab:hover { background: var(--surface2); color: var(--text); }
+.tab.is-active {
+    background: var(--surface3);
+    color: var(--text);
+    border-top-color: var(--accent);
+}
+.tab.is-dragging  { opacity: 0.45; }
+.tab.drop-before  { box-shadow: inset 2px 0 0 var(--accent); }
+.tab.drop-after   { box-shadow: inset -2px 0 0 var(--accent); }
+
+.tab-title {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 12px;
+}
+.tab-title-input {
+    flex: 1;
+    min-width: 0;
+    height: 20px;
+    padding: 0 4px;
+    font: inherit;
+    font-size: 12px;
+    color: var(--text);
+    background: var(--bg);
+    border: 1px solid var(--accent);
+    border-radius: 3px;
+    outline: none;
+}
+
+.tab-close {
+    flex: 0 0 auto;
+    width: 18px;
+    height: 18px;
+    padding: 0;
+    line-height: 16px;
+    font-size: 11px;
+    color: inherit;
+    background: transparent;
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+    opacity: 0;
+}
+.tab:hover .tab-close, .tab.is-active .tab-close { opacity: 0.7; }
+.tab-close:hover { opacity: 1; background: var(--error-dim); color: var(--error); }
+
+#tab-new, #tab-reopen {
+    flex: 0 0 auto;
+    width: 30px;
+    padding: 0;
+    font-size: 16px;
+    color: var(--text-muted);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+}
+#tab-new:hover, #tab-reopen:hover:not(:disabled) { color: var(--text); background: var(--surface2); }
+#tab-reopen:disabled { opacity: 0.3; cursor: default; }
+
+#tab-frames {
+    position: fixed;
+    top: var(--tabbar-height); left: 0; right: 0; bottom: 0;
+}
+/* Inactive tabs keep their full size (no layout thrash on switch) but are invisible and inert */
+.tab-frame {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border: 0;
+    background: var(--bg);
+    visibility: hidden;
+    pointer-events: none;
+}
+.tab-frame.is-active { visibility: visible; pointer-events: auto; }
+
+#tab-menu {
+    position: fixed;
+    z-index: 20;
+    min-width: 190px;
+    padding: 4px 0;
+    list-style: none;
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    border-radius: 5px;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+}
+#tab-menu li {
+    padding: 5px 14px;
+    font-size: 12px;
+    color: var(--text);
+    cursor: pointer;
+}
+#tab-menu li:hover:not(.is-disabled) { background: var(--accent-dim); }
+#tab-menu li.is-disabled { color: var(--text-muted); opacity: 0.5; cursor: default; }
+#tab-menu li.menu-sep { padding: 0; margin: 4px 0; border-top: 1px solid var(--border); cursor: default; }

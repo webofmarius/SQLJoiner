@@ -13,7 +13,8 @@ header('Content-Type: application/json');
 // (which already called session_write_close() before executing SQL).
 session_start(['read_and_close' => true]);
 
-$connId = $_SESSION['active_query_conn_id'] ?? null;
+$tabId  = substr(preg_replace('/[^\w-]/', '', (string) ($_SERVER['HTTP_X_TAB_ID'] ?? '')), 0, 40);
+$connId = $_SESSION['active_query_conn_ids'][$tabId] ?? $_SESSION['active_query_conn_id'] ?? null;
 
 if ($connId === null) {
     echo json_encode(['success' => false, 'message' => 'No active query found.']);

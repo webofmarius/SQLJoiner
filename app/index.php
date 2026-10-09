@@ -1,4 +1,12 @@
-<?php require_once(__DIR__ . '/bootstrap.php'); ?>
+<?php
+require_once(__DIR__ . '/bootstrap.php');
+
+// No ?tab= → serve the tab shell; each tab then loads this page again as index.php?tab=<id>.
+if (!isset($_GET['tab'])) {
+    require __DIR__ . '/shell.php';
+    exit;
+}
+?>
 
 <!DOCTYPE html>
 <html lang="en">
@@ -40,6 +48,10 @@
             <button type="button" id="btn-timestamp-conv" title="Timestamp converter">⧖</button>
             <button id="btn-focus-tables" title="Center view on tables">⊙</button>
             <button type="button" id="btn-canvas-overview-zoom" title="Overview zoom — shrink canvas only (toggle; recenters on tables)">⊟</button>
+            <button type="button" id="btn-fullscreen" title="Enter full screen (F11 / Cmd+Alt+F)" aria-label="Enter full screen">
+                <svg class="fs-icon fs-icon--enter" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+                <svg class="fs-icon fs-icon--exit" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg>
+            </button>
             <div id="undo-redo-bar">
                 <button id="btn-undo" title="Undo (Ctrl+Z)" disabled>↩</button>
                 <button id="btn-redo" title="Redo (Ctrl+Shift+Z)" disabled>↪</button>
@@ -1065,6 +1077,10 @@
                     <li><kbd>F6</kbd> / <kbd>Alt</kbd> + <kbd>Shift</kbd> + <kbd>2</kbd> <span>Toggle Results panel fullscreen (maximize)</span></li>
                     <li><kbd>F9</kbd> <span>Toggle Config (right) panel show / hide</span></li>
                     <li><kbd>Cmd/Ctrl</kbd> + <kbd>F9</kbd> <span>Open Run Custom Query</span></li>
+                    <li><kbd>F11</kbd> / <kbd>Cmd/Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>F</kbd> <span>Toggle full screen</span></li>
+                    <li><kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>T</kbd> <span>New tab (add <kbd>Shift</kbd> to reopen the last closed tab)</span></li>
+                    <li><kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>W</kbd> / <kbd>D</kbd> <span>Close / duplicate tab</span></li>
+                    <li><kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>←</kbd> / <kbd>→</kbd> / <kbd>1</kbd>–<kbd>9</kbd> <span>Previous / next / jump to tab</span></li>
                     <li><kbd>Cmd/Ctrl</kbd> + <kbd>F8</kbd> <span>Explain custom query (popup must be open)</span></li>
                     <li><kbd>Alt</kbd> + <kbd>1</kbd> <span>Toggle Table Browser</span></li>
                     <li><kbd>Alt</kbd> + <kbd>2</kbd> <span>Toggle Config Panel</span></li>
@@ -1235,6 +1251,7 @@
     <script src="assets/js/recordings.js"></script>
     <script src="assets/js/timeline.js"></script>
     <script src="assets/js/chain.js"></script>
+    <script src="assets/js/tab-bridge.js"></script>
 
     <!-- ==================== TABLE SEARCH MODAL ==================== -->
     <div id="modal-table-search" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modal-table-search-title">

@@ -565,6 +565,14 @@ const App = (() => {
                 return;
             }
 
+            // F11 — Toggle full screen (same as the top-bar full-screen button)
+            // Also Cmd/Ctrl+Alt+F: on macOS the OS claims F11 (Show Desktop / volume key) so it never reaches the page.
+            if ((e.code === 'F11' && !isMod) || (e.code === 'KeyF' && e.altKey && (e.metaKey || e.ctrlKey))) {
+                e.preventDefault();
+                document.getElementById('btn-fullscreen')?.click();
+                return;
+            }
+
             // F9 — Toggle config (right) panel show / hide
             if (e.code === 'F9' && !isMod) {
                 e.preventDefault();
@@ -1924,7 +1932,7 @@ const App = (() => {
                         .filter(([k]) => myAliases.has(k.split('.')[0]))
                 ),
                 selectNone:         source.selectNone         ?? false,
-                selectAddDelimiter: source.selectAddDelimiter ?? false,
+                selectAddDelimiter: true,   // islands created by a split always start with Table delimiter on
                 selectSortAlpha:    source.selectSortAlpha    ?? false,
                 selectDistinct:     source.selectDistinct     ?? false,
                 where:              filterObjArr(source.where),
@@ -2068,7 +2076,7 @@ const App = (() => {
         try {
             const res  = await fetch('cancel_query.php', {
                 method:  'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', 'X-Tab-Id': API.tabId },
                 body:    JSON.stringify({ profileId }),
             });
             const json = await res.json().catch(() => null);
@@ -3445,7 +3453,7 @@ const App = (() => {
             // selectNone=true when there are only custom exprs and no alias.col items,
             // so the query doesn't produce "SELECT *, custom_expr"
             selectNone:         !hasVisualSelect && hasCustomExprs,
-            selectAddDelimiter: false,
+            selectAddDelimiter: true,
             selectSortAlpha:    false,
             selectDistinct:     false,
 
@@ -3648,7 +3656,7 @@ const App = (() => {
             selectCustomExprsOrder: parsed.selectCustomExprsOrder ?? 'first',
             selectAliases:         (parsed.selectAliases && !Array.isArray(parsed.selectAliases)) ? parsed.selectAliases : {},
             selectNone:            !hasVisualSelect && hasCustomExprs,
-            selectAddDelimiter: false,
+            selectAddDelimiter: true,
             selectSortAlpha:    false,
             selectDistinct:     false,
             where:              parsed.whereConditions    ?? [],
@@ -3926,6 +3934,32 @@ const App = (() => {
                 _applyOverviewZoom(on);
             });
         }
+
+        // Full screen toggle. Inside the tab shell, fullscreen the shell page (keeps the tab bar);
+        // standalone, fullscreen this page.
+        (() => {
+            const btn = document.getElementById('btn-fullscreen');
+            if (!btn) return;
+            const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
+            const host = (() => { try { return window.top.document; } catch (_) { return document; } })();
+            const sync = () => {
+                const on = !!host.fullscreenElement;
+                btn.classList.toggle('is-fullscreen', on);
+                const label = (on ? 'Exit full screen' : 'Enter full screen') + ` (F11 / ${isMac ? 'Cmd' : 'Ctrl'}+Alt+F)`;
+                btn.title = label;
+                btn.setAttribute('aria-label', label);
+            };
+            host.addEventListener('fullscreenchange', sync);
+            btn.addEventListener('click', async () => {
+                try {
+                    if (host.fullscreenElement) await host.exitFullscreen();
+                    else await host.documentElement.requestFullscreen();
+                } catch (e) {
+                    _notify('Full screen unavailable: ' + e.message, 'warn');
+                }
+            });
+            sync();
+        })();
 
         // Timestamp converter popup
         (() => {
@@ -5063,6 +5097,42 @@ const App = (() => {
             : 'Save as a new context';
     }
 
+    // -------------------------------------------------------------------------
+    // Tab support (shell.js) — snapshot / restore this window's whole state
+    // -------------------------------------------------------------------------
+
+    /** Snapshot of everything needed to recreate this tab elsewhere. */
+    function exportTabState() {
+        return {
+            json:        _buildSaveJson(),
+            profileId:   State.activeProfileId ?? null,
+            contextId:   State.loadedContextId ?? null,
+            contextName: State.loadedContextName ?? '',
+        };
+    }
+
+    /**
+     * Restore a snapshot produced by exportTabState().
+     * keepIdentity=true  → same saved-context link and title (reopened tab)
+     * keepIdentity=false → detached copy: Save creates a new context (duplicated tab)
+     */
+    async function importTabState(snap, { keepIdentity = false } = {}) {
+        if (snap.profileId && snap.profileId !== State.activeProfileId) {
+            const sel = document.getElementById('profile-select');
+            if (sel) sel.value = snap.profileId;
+            await _activateProfile(snap.profileId);
+        }
+        const name = keepIdentity
+            ? (snap.contextName || '')
+            : (snap.contextName ? `${snap.contextName} (copy)` : '');
+        applyContext(snap.json, name);
+        if (keepIdentity && snap.contextId) {
+            State.loadedContextId   = snap.contextId;
+            State.loadedContextName = snap.contextName || '';
+            _updateSaveContextButton();
+        }
+    }
+
     /** Build the same JSON payload that gets persisted, for dirty-state comparison. */
     function _buildSaveJson() {
         _flushCurrentIslandConfig();
@@ -5413,6 +5483,8 @@ const App = (() => {
         applyContext,
         loadContextList: _loadContextList,
         showConfigPanel,
+        exportTabState,
+        importTabState,
         notify: _notify,   // exposed for use by canvas.js and future phase files
         openSqExpand,
         bindTablesMenu: _bindTablesMenu,
@@ -6728,7 +6800,10 @@ const Modals = {
 /* =============================================================================
    Boot
    ============================================================================= */
-document.addEventListener('DOMContentLoaded', () => App.init());
+document.addEventListener('DOMContentLoaded', () => {
+    // 'app-ready' lets the tab shell (tab-bridge.js) know it is safe to restore state into this window.
+    App.init().finally(() => { window.appReady = true; window.dispatchEvent(new Event('app-ready')); });
+});
 
 /* Warn before closing / reloading / navigating away.
    Set _intentionalUnload = true before a deliberate reload to skip the prompt. */

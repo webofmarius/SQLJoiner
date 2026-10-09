@@ -19,7 +19,8 @@ Then open `http://localhost:8080` in your browser. The Electron wrapper (in `../
 
 | File | Purpose |
 |------|---------|
-| `index.php` | Serves the full UI (HTML + JS includes) |
+| `index.php` | Serves the tab shell (`shell.php`) with no `?tab=`, or the full UI (HTML + JS includes) as `index.php?tab=<id>` |
+| `shell.php` | Tab shell — tab bar + one iframe per tab (`assets/js/shell.js`, `assets/js/tab-bridge.js`) |
 | `api.php` | JSON API dispatcher — routes `?action=` to handler classes |
 | `cancel_query.php` | Kills a running query via `KILL QUERY <id>` on a separate connection |
 | `about.php` | Static content rendered by `AboutManager` |

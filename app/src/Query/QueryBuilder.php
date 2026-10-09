@@ -802,7 +802,10 @@ class QueryBuilder
             return;
         }
         $connId = (int) $pdo->query('SELECT CONNECTION_ID()')->fetchColumn();
-        $_SESSION['active_query_conn_id'] = $connId;
+        // Keyed by shell tab so Cancel in one tab can't kill a query running in another
+        $tabId = preg_replace('/[^\w-]/', '', (string) ($_SERVER['HTTP_X_TAB_ID'] ?? ''));
+        $_SESSION['active_query_conn_ids'][substr($tabId, 0, 40)] = $connId;
+        $_SESSION['active_query_conn_id']  = $connId; // legacy fallback
         session_write_close(); // release lock before blocking query
     }
 

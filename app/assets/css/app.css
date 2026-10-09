@@ -262,6 +262,7 @@ h3 {
 #btn-timestamp-conv,
 #btn-focus-tables,
 #btn-canvas-overview-zoom,
+#btn-fullscreen,
 #btn-undo,
 #btn-redo,
 #btn-minimap-badge {
@@ -701,6 +702,16 @@ body.is-canvas-overview-zoom {
 }
 
 #btn-canvas-overview-zoom.is-active {
+    color: var(--accent);
+    border-color: var(--accent);
+    background: rgba(74, 158, 255, 0.12);
+}
+
+/* Full-screen toggle: swap the enter / exit icon with the state */
+#btn-fullscreen .fs-icon--exit,
+#btn-fullscreen.is-fullscreen .fs-icon--enter { display: none; }
+#btn-fullscreen.is-fullscreen .fs-icon--exit  { display: block; }
+#btn-fullscreen.is-fullscreen {
     color: var(--accent);
     border-color: var(--accent);
     background: rgba(74, 158, 255, 0.12);

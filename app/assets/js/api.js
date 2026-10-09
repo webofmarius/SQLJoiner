@@ -13,6 +13,10 @@ const API = (() => {
 
     const ENDPOINT = 'api.php';
 
+    // Which shell tab this window is (index.php?tab=<id>); lets the server keep
+    // per-tab state such as the running query's connection id for Cancel.
+    const TAB_ID = new URLSearchParams(location.search).get('tab') || '';
+
     /**
      * Core fetch helper.
      * @param {string} action  - matches a route key in api.php
@@ -25,7 +29,7 @@ const API = (() => {
         try {
             response = await fetch(`${ENDPOINT}?action=${encodeURIComponent(action)}`, {
                 method:  'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', 'X-Tab-Id': TAB_ID },
                 body:    JSON.stringify(data),
                 signal:  signal ?? undefined,
             });
@@ -56,6 +60,9 @@ const API = (() => {
     // Public API surface — mirrors the route map in api.php
     // -------------------------------------------------------------------------
     return {
+
+        /** This window's shell-tab id ('' when not embedded). */
+        tabId: TAB_ID,
 
         /** Connection profile CRUD */
         profiles: {
