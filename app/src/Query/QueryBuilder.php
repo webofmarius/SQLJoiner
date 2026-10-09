@@ -118,6 +118,14 @@ class QueryBuilder
             Response::error('sql is required.', 400);
         }
 
+        // Raw mode must only ever run a single read-only SELECT statement.
+        if (!preg_match('/^SELECT\s/i', $sql)) {
+            Response::error('Only SELECT statements are allowed in raw SQL mode.', 400);
+        }
+        if (strpos(rtrim($sql, "; \t\n\r\0\x0B"), ';') !== false) {
+            Response::error('Multiple statements are not allowed in raw SQL mode.', 400);
+        }
+
         $pm      = new ProfileManager();
         $profile = $pm->getProfileById($profileId);
         if ($profile === null) {
