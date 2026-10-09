@@ -382,13 +382,13 @@ h3 {
 /* Auto-hide toggle: small pin above each edge handle */
 .pane-pin {
     position: absolute;
-    top: calc(50% - 24px - 26px);
+    top: 0;
     width: var(--pane-toggle-w);
     height: 22px;
     padding: 0;
     background: var(--surface2);
     border: 1px solid var(--border2);
-    color: var(--accent);
+    color: var(--text-muted);
     font-size: 10px;
     line-height: 1;
     cursor: pointer;
@@ -399,27 +399,11 @@ h3 {
     transition: left 0.2s ease, right 0.2s ease, opacity 0.15s, color 0.15s, background 0.15s;
 }
 .pane-pin:hover { border-color: var(--accent); }
-/* is-active = auto-hide on → dimmed; off (panel stays open) → colored */
+/* is-active = auto-hide on (not pinned) → dimmed; off (pinned, panel stays open) → gray, full opacity */
 .pane-pin.is-active { opacity: 0.5; color: var(--text-muted); }
 .pane-pin.is-active:hover { opacity: 1; }
 #btn-pin-sidebar { left: var(--sidebar-width); border-left: none; border-radius: 0 4px 4px 0; }
 #btn-pin-config  { right: var(--config-width); border-right: none; border-radius: 4px 0 0 4px; }
-
-/* Results pin: floats above the panel's top edge (top set from JS), horizontally centered on screen */
-.pane-pin--results {
-    position: fixed;
-    top: auto;
-    bottom: var(--bottombar-height);
-    left: 50%;
-    right: auto;
-    transform: translateX(-50%);
-    width: 26px;
-    height: 20px;
-    border-bottom: none;
-    border-radius: 4px 4px 0 0;
-    z-index: 151;
-}
-.pane-pin--results.is-hidden { display: none; }
 
 /* Pane resize handles */
 .pane-resizer {

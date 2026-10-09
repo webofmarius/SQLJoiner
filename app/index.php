@@ -274,7 +274,6 @@
     </footer>
 
     <!-- ==================== RESULTS PANEL ==================== -->
-    <button class="pane-pin pane-pin--results" id="btn-pin-results" title="Pinned: stays open when clicking outside (on)"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16 3l5 5-2 1-3.5 3.5.5 4.5-1.5 1.5-3.5-3.5L7 20l-1-1 4.5-4.5L7 11l1.5-1.5 4.5.5L16.5 6.5 16 3z"/></svg></button>
     <div id="results-panel" class="hidden">
         <div id="resizer-results"></div>
         <div id="results-header">
@@ -1063,7 +1062,7 @@
                     <li><kbd>F3</kbd> <span>Toggle Timestamp Converter</span></li>
                     <li><kbd>F4</kbd> <span>Toggle Overview Zoom</span></li>
                     <li><kbd>F5</kbd> <span>Focus mode — hide all panels / press again to restore</span></li>
-                    <li><kbd>F6</kbd> <span>Toggle Results panel fullscreen (maximize)</span></li>
+                    <li><kbd>F6</kbd> / <kbd>Alt</kbd> + <kbd>Shift</kbd> + <kbd>2</kbd> <span>Toggle Results panel fullscreen (maximize)</span></li>
                     <li><kbd>F9</kbd> <span>Toggle Config (right) panel show / hide</span></li>
                     <li><kbd>Cmd/Ctrl</kbd> + <kbd>F9</kbd> <span>Open Run Custom Query</span></li>
                     <li><kbd>Cmd/Ctrl</kbd> + <kbd>F8</kbd> <span>Explain custom query (popup must be open)</span></li>

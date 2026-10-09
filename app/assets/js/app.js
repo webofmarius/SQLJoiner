@@ -648,7 +648,8 @@ const App = (() => {
 
                 } else if (e.code === 'Digit2' || e.code === 'Numpad2') {
                     e.preventDefault();
-                    Results.toggle();
+                    if (e.shiftKey) Results.toggleFullscreen?.(); // Alt+Shift+2 — same as F6
+                    else Results.toggle();
 
                 } else if (e.code === 'Digit3' || e.code === 'Numpad3') {
                     e.preventDefault();
@@ -5161,11 +5162,8 @@ const App = (() => {
     // Auto-hide: when enabled for a pane, any click outside it collapses it
     // (same as pressing Alt+1 / Alt+3 to close).
     function _initPaneAutoHide() {
-        const IGNORE = '.pane-toggle, .pane-pin, .modal, .ac-dropdown, .toast, [role="dialog"], [role="menu"]';
-        const resultsEl = document.getElementById('results-panel');
-        const results = { el: resultsEl, autoHide: false };
-        _PANE_DEFAULTS.results = results;
-        for (const key of ['sidebar', 'config', 'results']) {
+        const IGNORE = '.pane-toggle, .pane-pin, .table-card__col, .modal, .ac-dropdown, .toast, [role="dialog"], [role="menu"]';
+        for (const key of ['sidebar', 'config']) {
             const pane = _PANE_DEFAULTS[key];
             pane.pin = document.getElementById(`btn-pin-${key}`);
             const storeKey = `pane-${key}-autohide`;
@@ -5179,28 +5177,12 @@ const App = (() => {
             pane.pin.addEventListener('click', () => set(!pane.autoHide));
         }
 
-        // Keep the results pin glued to the panel's top edge (panel height animates / is resizable)
-        const rPin = results.pin;
-        const placeRPin = () => {
-            const r = resultsEl.getBoundingClientRect();
-            const gone = resultsEl.classList.contains('hidden') || resultsEl.classList.contains('is-fullscreen')
-                || resultsEl.classList.contains('is-tall');
-            rPin.classList.toggle('is-hidden', gone);
-            if (!gone) rPin.style.bottom = (window.innerHeight - r.top) + 'px';
-        };
-        new ResizeObserver(placeRPin).observe(resultsEl);
-        new MutationObserver(placeRPin).observe(resultsEl, { attributes: true, attributeFilter: ['class', 'style'] });
-        window.addEventListener('resize', placeRPin);
-        placeRPin();
-
         document.addEventListener('mousedown', e => {
-            for (const key of ['sidebar', 'config', 'results']) {
+            for (const key of ['sidebar', 'config']) {
                 const pane = _PANE_DEFAULTS[key];
                 if (!pane.autoHide || pane.el.classList.contains('is-collapsed')) continue;
-                if (key === 'results' && (pane.el.classList.contains('hidden') || pane.el.classList.contains('is-fullscreen'))) continue;
                 if (!e.target.isConnected || pane.el.contains(e.target) || e.target.closest(IGNORE)) continue;
-                if (key === 'results') Results.toggle();
-                else _togglePane(key);
+                _togglePane(key);
             }
         }, true);
     }
