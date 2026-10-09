@@ -728,6 +728,7 @@ const Canvas = (() => {
         li.addEventListener('dblclick', e => {
             e.stopPropagation();
             clearTimeout(_colClickTimer); // cancel any pending single-click color cycle
+            App.showConfigPanel?.();
 
             if (e.altKey) {
                 QueryPanel.toggleOrderByColumn(`${tableData.alias}.${col.name}`);
@@ -781,6 +782,7 @@ const Canvas = (() => {
             const globalIdx = State.columnOrder.indexOf(key);
             if (globalIdx === -1) return;
 
+            App.showConfigPanel?.();
             const selectRow = document.querySelector(`.select-col-row[data-idx="${globalIdx}"]`);
             if (!selectRow) return;
 
@@ -848,6 +850,7 @@ const Canvas = (() => {
 
         li.addEventListener('dblclick', e => {
             e.stopPropagation();
+            App.showConfigPanel?.();
             const zone = document.querySelector('.drop-zone[data-section="where"]');
             if (zone) {
                 QueryPanel.onColumnDrop(zone, tableData.id, col.name);

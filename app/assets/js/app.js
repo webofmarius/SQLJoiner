@@ -5238,6 +5238,13 @@ const App = (() => {
         Results.setFullscreen?.(true);
     }
 
+    /** Expand the config (right) panel if it is collapsed. */
+    function showConfigPanel() {
+        if (!_PANE_DEFAULTS.config.el?.classList.contains('is-collapsed')) return;
+        _applyPaneState('config', false);
+        localStorage.setItem('pane-config', 'expanded');
+    }
+
     function _togglePane(key) {
         const pane      = _PANE_DEFAULTS[key];
         const collapsed = pane.el.classList.contains('is-collapsed');
@@ -5405,6 +5412,7 @@ const App = (() => {
         updateSQLPreview,
         applyContext,
         loadContextList: _loadContextList,
+        showConfigPanel,
         notify: _notify,   // exposed for use by canvas.js and future phase files
         openSqExpand,
         bindTablesMenu: _bindTablesMenu,

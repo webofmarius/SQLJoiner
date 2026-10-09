@@ -2368,6 +2368,7 @@ const Results = (() => {
             th.addEventListener('contextmenu', e => {
                 e.preventDefault();
                 if (_distPreviewHandled) { _distPreviewHandled = false; return; }
+                App.showConfigPanel?.(); // reveal the SELECT box if the config panel is hidden
 
                 // Normal right-click: find the matching SELECT panel checkbox, toggle it,
                 // scroll the config panel to that row, and flash it.

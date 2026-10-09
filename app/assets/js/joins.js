@@ -24,6 +24,9 @@ const Joins = (() => {
         fromCol:     null,
         lineEl:      null,       // temporary <line> SVG element
         sourceColEl: null,       // source <li> for class cleanup
+        startX:      0,          // mousedown position, to detect a real drag vs. a click
+        startY:      0,
+        moved:       false,      // true once the pointer has travelled past the click threshold
     };
 
     // Join ID currently open in the editor modal
@@ -121,6 +124,9 @@ const Joins = (() => {
         _drag.fromCol     = colName;
         _drag.lineEl      = line;
         _drag.sourceColEl = colEl;
+        _drag.startX      = e.clientX;
+        _drag.startY      = e.clientY;
+        _drag.moved       = false;
 
         e.preventDefault();   // no text-selection during drag
         e.stopPropagation();  // prevent card-header drag from triggering
@@ -131,6 +137,13 @@ const Joins = (() => {
     // =========================================================================
     function _onDragMove(e) {
         if (!_drag.active) return;
+
+        // Once the pointer travels past a click-sized distance it's a real drag:
+        // reveal the config panel (if hidden) so its drop zones are reachable.
+        if (!_drag.moved && Math.hypot(e.clientX - _drag.startX, e.clientY - _drag.startY) > 4) {
+            _drag.moved = true;
+            App.showConfigPanel?.();
+        }
 
         const canvasRect = document.getElementById('canvas').getBoundingClientRect();
         _drag.lineEl.setAttribute('x2', _viewportDeltaToSvgUnits(e.clientX - canvasRect.left));
