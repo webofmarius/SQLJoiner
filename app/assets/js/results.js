@@ -1900,6 +1900,31 @@ const Results = (() => {
         return col; // fallback (custom expressions, derived columns)
     }
 
+    /**
+     * Find the Custom Expression behind a results column (one that is not a regular
+     * table column). Returns { idx, row } — idx into State.selectCustomExprs, row is the
+     * matching SELECT-box row (or null when the SELECT box isn't rendered) — or null.
+     */
+    function _customExprForCol(col, colKey) {
+        if (colKey && (State.columnOrder || []).includes(colKey)) return null;
+        const lc = String(col).trim().toLowerCase();
+        const idx = (State.selectCustomExprs || []).findIndex(e => {
+            const alias = (e.alias || '').trim();
+            const name  = alias || (e.expr || '').trim();
+            return name && name.toLowerCase() === lc;
+        });
+        if (idx === -1) return null;
+        return { idx, row: document.querySelector(`#select-columns .select-expr-row[data-expr-idx="${idx}"]`) };
+    }
+
+    function _flashSelectRow(row) {
+        row.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        row.classList.remove('is-highlighted');
+        void row.offsetWidth; // force reflow to restart animation
+        row.classList.add('is-highlighted');
+        setTimeout(() => row.classList.remove('is-highlighted'), 7000);
+    }
+
     /** Apply or remove the highlight class on a result column by its select key. */
     /** Apply or remove col-deselected styling on a result column by its select key. */
     function _applyColDeselected(key, isDeselected) {
@@ -2367,6 +2392,9 @@ const Results = (() => {
                 // Use fallback only when there's exactly one match (avoids ambiguity)
                 if (!targetRow && fallbackCount === 1) targetRow = fallbackRow;
                 if (!targetRow) {
+                    // Custom expression column → locate its row in the Custom Expressions section
+                    const cx = _customExprForCol(th.dataset.raw || '', colKey);
+                    if (cx?.row) { _flashSelectRow(cx.row); return; }
                     App.notify?.('Column not found in SELECT panel', 'warn');
                     return;
                 }
@@ -2438,6 +2466,21 @@ const Results = (() => {
                     // Use fallback only when there's exactly one match (avoids ambiguity)
                     if (!targetRow && fallbackCount === 1) targetRow = fallbackRow;
                     if (!targetRow) {
+                        // Custom expression column → toggle its enabled checkbox
+                        const cx = _customExprForCol(th.dataset.raw || '', colKey);
+                        const cxChk = cx?.row?.querySelector('input[type="checkbox"]:not(.col-highlight-chk)');
+                        if (cxChk) {
+                            cxChk.checked = !cxChk.checked;
+                            cxChk.dispatchEvent(new Event('change'));
+                            const cxOff = !cxChk.checked;
+                            th.classList.toggle('col-deselected', cxOff);
+                            const cxIdx = parseInt(th.dataset.colIdx, 10);
+                            tbody.querySelectorAll(`tr td:nth-child(${cxIdx + 2})`).forEach(td => {
+                                td.classList.toggle('col-deselected', cxOff);
+                            });
+                            _flashSelectRow(cx.row);
+                            return;
+                        }
                         App.notify?.('Column not found in SELECT panel', 'warn');
                         return;
                     }
@@ -2620,9 +2663,28 @@ const Results = (() => {
                     // Reorder State.columnOrder
                     const fromStateIdx = State.columnOrder.indexOf(srcKey);
                     const toStateIdx   = State.columnOrder.indexOf(dstKey);
-                    if (fromStateIdx === -1 || toStateIdx === -1) return;
-                    const [moved] = State.columnOrder.splice(fromStateIdx, 1);
-                    State.columnOrder.splice(toStateIdx, 0, moved);
+
+                    // Custom expression columns reorder State.selectCustomExprs instead
+                    const srcCx = fromStateIdx === -1 ? _customExprForCol(srcTh.dataset.raw || '', srcKey) : null;
+                    const dstCx = toStateIdx   === -1 ? _customExprForCol(th.dataset.raw    || '', dstKey) : null;
+                    if (srcCx || dstCx) {
+                        if (!srcCx || !dstCx) {
+                            App.notify?.('Custom expression columns can only be reordered among other custom expressions', 'warn');
+                            return;
+                        }
+                        if (State.selectSortAlpha) {
+                            App.notify?.('Turn off alphabetical sort to reorder custom expressions', 'warn');
+                            return;
+                        }
+                        if (srcCx.idx === dstCx.idx) return;
+                        if (typeof UndoRedo !== 'undefined') UndoRedo.snapshot();
+                        const [movedCx] = State.selectCustomExprs.splice(srcCx.idx, 1);
+                        State.selectCustomExprs.splice(dstCx.idx, 0, movedCx);
+                    } else {
+                        if (fromStateIdx === -1 || toStateIdx === -1) return;
+                        const [moved] = State.columnOrder.splice(fromStateIdx, 1);
+                        State.columnOrder.splice(toStateIdx, 0, moved);
+                    }
 
                     // Keep State.select sorted by new columnOrder
                     if (Array.isArray(State.select)) {

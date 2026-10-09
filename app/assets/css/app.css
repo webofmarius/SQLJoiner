@@ -2680,7 +2680,8 @@ body.is-cut-mode * { cursor: crosshair !important; }
     65%  { background: rgba(74, 158, 255, 0.28); box-shadow: 0 0 0 2px rgba(74,158,255,0.5); }
     100% { background: transparent;              box-shadow: none; }
 }
-.select-col-row.is-highlighted {
+.select-col-row.is-highlighted,
+.select-expr-row.is-highlighted {
     animation: select-col-flash 3s ease-out forwards;
     border-radius: 3px;
 }

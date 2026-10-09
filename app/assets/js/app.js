@@ -4638,7 +4638,7 @@ const App = (() => {
 
         // Save current context
         document.getElementById('btn-ctx-save')
-            .addEventListener('click', _saveContext);
+            .addEventListener('click', () => _saveContext());
         document.getElementById('ctx-name-input')
             .addEventListener('keydown', e => { if (e.key === 'Enter') _saveContext(); });
 
@@ -5166,14 +5166,12 @@ const App = (() => {
         for (const key of ['sidebar', 'config']) {
             const pane = _PANE_DEFAULTS[key];
             pane.pin = document.getElementById(`btn-pin-${key}`);
-            const storeKey = `pane-${key}-autohide`;
             const set = on => {
                 pane.autoHide = on;
                 pane.pin.classList.toggle('is-active', on);
                 pane.pin.title = `Pinned: stays open when clicking outside (${on ? 'off' : 'on'})`;
-                localStorage.setItem(storeKey, on ? '1' : '0');
             };
-            set(localStorage.getItem(storeKey) === '1');
+            set(false); // pinned (stays open) on every load
             pane.pin.addEventListener('click', () => set(!pane.autoHide));
         }
 
@@ -5182,6 +5180,8 @@ const App = (() => {
                 const pane = _PANE_DEFAULTS[key];
                 if (!pane.autoHide || pane.el.classList.contains('is-collapsed')) continue;
                 if (!e.target.isConnected || pane.el.contains(e.target) || e.target.closest(IGNORE)) continue;
+                // Right-clicking a results header locates its SELECT row — keep the panel open
+                if (e.button === 2 && e.target.closest('#results-table th')) continue;
                 _togglePane(key);
             }
         }, true);
