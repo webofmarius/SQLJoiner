@@ -169,6 +169,36 @@ const Results = (() => {
     // Public
     // -------------------------------------------------------------------------
 
+    // Reveal the right (config) panel while a result header is dragged: at once when
+    // pinned, only at the right window edge when unpinned (hidden again if dropped outside it).
+    const CONFIG_EDGE_PX = 40;
+    let _configRevealed  = false;
+
+    function _onHeaderDragOver(e) {
+        if (e.clientX >= window.innerWidth - CONFIG_EDGE_PX && App.showConfigPanel?.()) {
+            _configRevealed = true;
+        }
+    }
+
+    function _beginConfigReveal() {
+        _configRevealed = false;
+        if (App.isConfigUnpinned?.()) {
+            document.addEventListener('dragover', _onHeaderDragOver);
+        } else {
+            // Deferred: changing layout inside dragstart can cancel the native drag
+            setTimeout(() => App.showConfigPanel?.(), 0);
+        }
+    }
+
+    function _endConfigReveal(e) {
+        document.removeEventListener('dragover', _onHeaderDragOver);
+        if (_configRevealed && App.isConfigUnpinned?.()
+            && !document.elementFromPoint(e.clientX, e.clientY)?.closest('#config-panel')) {
+            App.hideConfigPanel?.();
+        }
+        _configRevealed = false;
+    }
+
     function init() {
         document.getElementById('chk-explain-colors')
             .addEventListener('change', e => {
@@ -1553,15 +1583,28 @@ const Results = (() => {
         if (!s) return null;
         if (/^is\s+null$/i.test(s))     return { op: 'IS NULL' };
         if (/^is\s+not\s+null$/i.test(s)) return { op: 'IS NOT NULL' };
-        const likeM = s.match(/^like\s+(.+)/i);
+        const unq = v => {
+            v = v.trim();
+            return (/^'.*'$/.test(v) || /^".*"$/.test(v)) ? v.slice(1, -1) : v;
+        };
+        const likeM = s.match(/^(not\s+)?like\s+(.+)/i);
         if (likeM) {
-            const likeVal = likeM[1].trim();
+            const likeVal = likeM[2].trim();
             // Require a quoted string ('…' / "…") or a %-wildcard pattern; bare words are invalid SQL
             const quoted = /^'.*'$/.test(likeVal) || /^".*"$/.test(likeVal);
             const hasWildcard = likeVal.includes('%');
             if (!quoted && !hasWildcard) return null;
-            return { op: 'LIKE', val: quoted ? likeVal.slice(1, -1) : likeVal };
+            return { op: likeM[1] ? 'NOT LIKE' : 'LIKE', val: quoted ? likeVal.slice(1, -1) : likeVal };
         }
+        const inM = s.match(/^(not\s+)?in\s*\((.*)\)$/i);
+        if (inM) {
+            const list = (inM[2].match(/'[^']*'|"[^"]*"|[^,]+/g) || [])
+                .map(unq).filter(v => v !== '');
+            if (!list.length) return null;
+            return { op: inM[1] ? 'NOT IN' : 'IN', list };
+        }
+        const btM = s.match(/^(not\s+)?between\s+('[^']*'|"[^"]*"|\S+)\s+and\s+('[^']*'|"[^"]*"|\S+)$/i);
+        if (btM) return { op: btM[1] ? 'NOT BETWEEN' : 'BETWEEN', lo: unq(btM[2]), hi: unq(btM[3]) };
         const m = s.match(/^(>=|<=|!=|<>|=|>|<)(.+)/);
         if (!m) return null;
         let val = m[2].trim();
@@ -1574,6 +1617,19 @@ const Results = (() => {
         if (!parsed) return false; // invalid/unrecognised expression → hide row
         const { op, val } = parsed;
         const cell = String(cellVal ?? '');
+        const isNum = v => v.trim() !== '' && !isNaN(parseFloat(v)) && isFinite(v);
+        const cmp = (x, y) => (isNum(x) && isNum(y))
+            ? parseFloat(x) - parseFloat(y)
+            : (x.toLowerCase() < y.toLowerCase() ? -1 : x.toLowerCase() > y.toLowerCase() ? 1 : 0);
+        if (op === 'IN' || op === 'NOT IN') {
+            const hit = parsed.list.some(v => cmp(cell, v) === 0);
+            return op === 'IN' ? hit : !hit;
+        }
+        if (op === 'BETWEEN' || op === 'NOT BETWEEN') {
+            const hit = cmp(cell, parsed.lo) >= 0 && cmp(cell, parsed.hi) <= 0;
+            return op === 'BETWEEN' ? hit : !hit;
+        }
+        if (op === 'NOT LIKE')    return !_likeToRegex(val).test(cell);
         if (op === 'IS NULL')     return cell === '' || /^null$/i.test(cell);
         if (op === 'IS NOT NULL') return cell !== '' && !/^null$/i.test(cell);
         if (op === 'LIKE')        return _likeToRegex(val).test(cell);
@@ -2627,8 +2683,10 @@ const Results = (() => {
                     e.dataTransfer.setData('text/x-col-key', th.dataset.colKey);
                     _dragReorderSrcIdx = parseInt(th.dataset.colIdx, 10);
                     th.classList.add('th-dragging');
+                    _beginConfigReveal();
                 });
-                th.addEventListener('dragend', () => {
+                th.addEventListener('dragend', e => {
+                    _endConfigReveal(e);
                     _dragReorderSrcIdx = -1;
                     th.classList.remove('th-dragging');
                     document.querySelectorAll('.drop-zone.is-drag-hover')
