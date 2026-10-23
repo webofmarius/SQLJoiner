@@ -3544,7 +3544,8 @@ const App = (() => {
         // Rebuild canvas and all config panels
         Canvas.rebuildFromState(State);
         _updateCanvasCount();
-        requestAnimationFrame(() => Canvas.focusTables());
+        // Arrange as binary tree (also scrolls the island into view)
+        requestAnimationFrame(() => Canvas.arrangeBinaryTree(State.tables.map(t => t.id)));
         if (typeof QueryPanel !== 'undefined') QueryPanel.refresh();
         updateSQLPreview();
 
@@ -3697,6 +3698,7 @@ const App = (() => {
         Canvas.rebuildFromState(State);
         _updateCanvasCount();
         requestAnimationFrame(() => {
+            Canvas.arrangeBinaryTree(parsed.tables.map(t => t.id));
             const newCards = parsed.tables
                 .map(t => document.querySelector(`.table-card[data-table-id="${t.id}"]`))
                 .filter(Boolean);
