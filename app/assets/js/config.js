@@ -135,9 +135,11 @@ const QueryPanel = (() => {
             if (typeof Results !== 'undefined') Results.focusColumn?.(key);
         });
 
-        // Alt+click a SELECT column row → add it to WHERE (capture phase to prevent checkbox toggle)
+        // Alt+click → add to WHERE and toast; Cmd/Ctrl+click → add to WHERE and scroll to it
+        // (capture phase to prevent checkbox toggle)
         document.getElementById('select-columns')?.addEventListener('click', e => {
-            if (!e.altKey) return;
+            const scrollTo = e.metaKey || e.ctrlKey;
+            if (!e.altKey && !scrollTo) return;
             const row = e.target.closest('.select-col-row');
             if (!row) return;
             if (e.target.closest('.col-alias-input') || e.target.closest('.col-highlight-chk')) return;
@@ -149,11 +151,14 @@ const QueryPanel = (() => {
             State.where.push({ col: key, op: '=', val: '', operator: 'AND' });
             QueryPanel.refresh();
             App.updateSQLPreview?.();
-            App.notify?.(`"${key}" added to WHERE`, 'success');
-            // Focus the new WHERE value input without scrolling
+            if (!scrollTo) App.notify?.(`"${key}" added to WHERE`, 'success');
+            // Focus the new WHERE value input; only scroll to it for Cmd/Ctrl+click
             requestAnimationFrame(() => {
                 const crows = document.querySelectorAll('#where-conditions .condition-row');
-                if (crows.length) crows[crows.length - 1].querySelector('input[type="text"]')?.focus({ preventScroll: true });
+                if (!crows.length) return;
+                const last = crows[crows.length - 1];
+                last.querySelector('input[type="text"]')?.focus({ preventScroll: true });
+                if (scrollTo) last.scrollIntoView({ behavior: 'smooth', block: 'center' });
             });
             // Flash the row — re-query after refresh since DOM was rebuilt
             const freshRow = document.querySelector(`#select-columns .select-col-row[data-idx="${row.dataset.idx}"]`);
@@ -736,6 +741,7 @@ const QueryPanel = (() => {
                 const row = document.createElement('div');
                 row.className = 'select-col-row is-draggable';
                 row.dataset.idx = globalIdx;
+                row.title = 'Cmd/Ctrl+click: add to WHERE and scroll to it\nAlt+click: add to WHERE and show a toast (no scroll)';
                 if (table?.color && !_colorDisabledGroups.has(group.alias)) {
                     const r = parseInt(table.color.slice(1, 3), 16);
                     const g = parseInt(table.color.slice(3, 5), 16);
