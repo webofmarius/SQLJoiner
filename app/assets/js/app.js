@@ -529,6 +529,13 @@ const App = (() => {
                 return;
             }
 
+            // F2 — Search SELECT columns (like Alt+G, but always shows the right panel); text-box rename handlers take priority
+            if (e.code === 'F2' && !isMod && !isAlt && !e.shiftKey && !e.defaultPrevented) {
+                e.preventDefault();
+                _focusSelectColSearch(true);
+                return;
+            }
+
             // F3 — Timestamp converter
             if (e.code === 'F3' && !isMod) {
                 e.preventDefault();
@@ -726,8 +733,7 @@ const App = (() => {
 
                 } else if (e.code === 'KeyG') {
                     e.preventDefault();
-                    const colSearch = document.getElementById('select-col-search');
-                    if (colSearch) { colSearch.focus(); colSearch.select(); }
+                    _focusSelectColSearch();
 
                 } else if (e.code === 'KeyE') {
                     e.preventDefault();
@@ -5328,6 +5334,14 @@ const App = (() => {
     /** True when the config panel is unpinned (auto-hides on outside click). */
     function isConfigUnpinned() {
         return !!_PANE_DEFAULTS.config.autoHide;
+    }
+
+    /** Focus the SELECT column search; reveal the config panel first if collapsed (and unpinned, unless alwaysShow). */
+    function _focusSelectColSearch(alwaysShow = false) {
+        const cfg = _PANE_DEFAULTS.config;
+        if ((alwaysShow || cfg.autoHide) && cfg.el.classList.contains('is-collapsed')) _togglePane('config');
+        const colSearch = document.getElementById('select-col-search');
+        if (colSearch) { colSearch.focus(); colSearch.select(); }
     }
 
     function _togglePane(key) {
