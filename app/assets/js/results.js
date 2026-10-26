@@ -2075,6 +2075,12 @@ const Results = (() => {
     /** Re-apply table colors to all result header cells (called after a table color changes). */
     function _applyResultHeaderColors() {
         document.querySelectorAll('#results-table thead th').forEach(th => {
+            if (th.classList.contains('th-custom-expr')) {
+                const c = _customExprColor(th.dataset.raw);
+                th.style.backgroundColor = c || '';
+                th.style.color = c ? _readableTextColor(c) : '';
+                return;
+            }
             const colKey = th.dataset.colKey || '';
             const alias  = colKey.includes('.') ? colKey.split('.')[0] : '';
             const tbl    = alias ? (State.tables || []).find(t => t.alias === alias) : null;
@@ -2091,6 +2097,18 @@ const Results = (() => {
     /** Returns true when the column is the '|||' table-delimiter sentinel. */
     function _isDelimiterColumn(colName) {
         return String(colName ?? '').trim() === '|||';
+    }
+
+    /** Color assigned to the custom expression that produces result column colName, or null. */
+    function _customExprColor(colName) {
+        const nameLc = String(colName ?? '').toLowerCase();
+        const e = (State.selectCustomExprs ?? []).find(e => {
+            if (e.enabled === false) return false;
+            const alias = (e.alias ?? '').trim();
+            const expr  = (e.expr  ?? '').trim();
+            return (alias ? alias : expr).toLowerCase() === nameLc;
+        });
+        return e?.color || null;
     }
 
     /** Returns true when the DB result column name comes from a custom expression. */
@@ -2374,6 +2392,11 @@ const Results = (() => {
             } else if (_isCustomExprColumn(col)) {
                 th.classList.add('th-custom-expr');
                 th.appendChild(document.createTextNode(displayLabel));
+                const exprColor = _customExprColor(col);
+                if (exprColor) {
+                    th.style.backgroundColor = exprColor;
+                    th.style.color = _readableTextColor(exprColor);
+                }
             } else if (_isColumnAlias(col)) {
                 th.classList.add('th-alias');
                 const em = document.createElement('em');

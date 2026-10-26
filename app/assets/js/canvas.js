@@ -773,8 +773,8 @@ const Canvas = (() => {
 
             const key = `${table.alias}.${col.name}`;
 
-            // Alt+right-click → focus matching column in the results table
-            if (e.altKey) {
+            // Cmd/Ctrl(+Alt)+right-click → scroll to and blink the matching column in the results table
+            if (e.altKey || e.metaKey || e.ctrlKey) {
                 if (typeof Results !== 'undefined') Results.focusColumn?.(key);
                 return;
             }

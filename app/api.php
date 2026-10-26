@@ -13,10 +13,7 @@ session_start();
 // Always respond with JSON
 header('Content-Type: application/json');
 
-// CORS for local dev (safe to remove in production)
-header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: POST, GET, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type');
+// No CORS headers: the API is same-origin only (cross-origin callers are rejected in bootstrap.php).
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(204);

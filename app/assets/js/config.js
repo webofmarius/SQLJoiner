@@ -1355,6 +1355,56 @@ const QueryPanel = (() => {
         App.notify(`Added ${expr} AS ${alias} to Custom Expressions`, 'success');
     }
 
+    let _exprColorPopup = null;
+    function _closeExprColorPopup() {
+        _exprColorPopup?.remove();
+        _exprColorPopup = null;
+    }
+
+    function _openExprColorPopup(anchorEl, idx, onChange) {
+        const wasOpenHere = _exprColorPopup?._anchor === anchorEl;
+        _closeExprColorPopup();
+        if (wasOpenHere) return;
+
+        const current = State.selectCustomExprs[idx]?.color ?? null;
+        const apply = color => {
+            if (typeof UndoRedo !== 'undefined') UndoRedo.snapshot();
+            if (color) State.selectCustomExprs[idx].color = color;
+            else       delete State.selectCustomExprs[idx].color;
+            onChange();
+            Results.refreshHeaderColors?.();
+            _closeExprColorPopup();
+        };
+
+        const pop = document.createElement('div');
+        pop.className = 'card-color-popup';
+        pop._anchor = anchorEl;
+        const wrap = document.createElement('div');
+        wrap.className = 'card-color-swatches';
+        (Canvas.CARD_COLORS ?? []).forEach(({ hex, label }) => {
+            const sw = document.createElement('button');
+            sw.className = 'card-color-swatch' + (current === hex ? ' is-active' : '');
+            sw.title = label;
+            sw.style.background = hex;
+            sw.addEventListener('click', e => { e.stopPropagation(); apply(hex); });
+            wrap.appendChild(sw);
+        });
+        const reset = document.createElement('button');
+        reset.className = 'card-color-reset';
+        reset.textContent = '✕ Reset color';
+        reset.addEventListener('click', e => { e.stopPropagation(); apply(null); });
+        pop.appendChild(wrap);
+        pop.appendChild(reset);
+        document.body.appendChild(pop);
+        _exprColorPopup = pop;
+
+        const rect = anchorEl.getBoundingClientRect();
+        const popW = 160;
+        pop.style.left = Math.max(8, Math.min(rect.left, window.innerWidth - popW - 8)) + 'px';
+        pop.style.top  = (rect.bottom + 6) + 'px';
+        setTimeout(() => document.addEventListener('click', _closeExprColorPopup, { once: true }), 0);
+    }
+
     function _buildCustomExprRow(expr, idx) {
         const row = document.createElement('div');
         row.className = 'select-expr-row is-draggable';
@@ -1433,6 +1483,25 @@ const QueryPanel = (() => {
             if (key) Results.highlightColumn?.(key, highlightChk.checked, true);
         });
         row.appendChild(highlightChk);
+
+        // Color button — tints this expression's header in the results table
+        const colorBtn = document.createElement('button');
+        colorBtn.className = 'table-card__color-btn btn-icon expr-color-btn';
+        colorBtn.textContent = '⬤';
+        colorBtn.title = 'Set column color';
+        const _paintColorBtn = () => {
+            const c = State.selectCustomExprs[idx]?.color;
+            colorBtn.style.color = c || '';
+            colorBtn.classList.toggle('has-color', !!c);
+        };
+        _paintColorBtn();
+        colorBtn.addEventListener('mousedown', e => e.stopPropagation());
+        colorBtn.addEventListener('dragstart', e => e.stopPropagation());
+        colorBtn.addEventListener('click', e => {
+            e.stopPropagation();
+            _openExprColorPopup(colorBtn, idx, _paintColorBtn);
+        });
+        row.appendChild(colorBtn);
 
         const rmBtn = document.createElement('button');
         rmBtn.className = 'btn-remove';
