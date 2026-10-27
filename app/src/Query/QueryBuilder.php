@@ -499,8 +499,11 @@ class QueryBuilder
                 if ($expr === '') continue;
                 if (preg_match('/^select\s/i', $expr)) $expr = "($expr)";
                 $alias = trim((string) ($e['alias'] ?? ''));
+                // Aliases with dots/special chars (e.g. tbl._name) must be backtick-quoted
+                $aliasSql = ($alias !== '' && !preg_match('/^\w+$/', $alias) && $alias[0] !== '`')
+                    ? '`' . str_replace('`', '``', $alias) . '`' : $alias;
                 $customParts[] = [
-                    'sql' => $alias !== '' ? "$expr AS $alias" : $expr,
+                    'sql' => $alias !== '' ? "$expr AS $aliasSql" : $expr,
                     'key' => strtolower($alias !== '' ? $alias : $expr),
                 ];
             }

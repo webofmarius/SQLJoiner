@@ -100,9 +100,6 @@ const Results = (() => {
     // { op, mode, output, colNames:string[], captured:{cols,rows,col_tables,col_types} } | null
     let _diffCols       = null;
 
-    // Column highlight (SELECT box ☆ checkbox)
-    const _highlightedCols = new Set();
-
     // Results-header column drag-to-reorder
     let _dragReorderSrcIdx = -1;
 
@@ -2012,59 +2009,6 @@ const Results = (() => {
         });
     }
 
-    function _applyColHighlight(colKey, on, scrollTo = false) {
-        const thead = document.querySelector('#results-table thead');
-        const tbody = document.querySelector('#results-table tbody');
-        if (!thead || !tbody) return;
-
-        const ths = thead.querySelectorAll('th');
-        if (!ths.length) return;
-
-        let colIdx = -1;
-
-        // Strategy 1: data-col-key exact match
-        ths.forEach((th, i) => {
-            if (th.dataset.colKey === colKey) colIdx = i;
-        });
-
-        // Strategy 2: scan _lastResult cols + col_tables with _computeColKey
-        // Use i + 1 so the index aligns with the ths array (ths[0] is the row-num th)
-        if (colIdx === -1 && _lastResult) {
-            const lcols   = _lastResult.cols       || [];
-            const ltables = _lastResult.col_tables || [];
-            lcols.forEach((col, i) => {
-                if (colIdx !== -1) return;
-                if (_computeColKey(col, ltables[i] || '', i, ltables) === colKey) colIdx = i + 1;
-            });
-        }
-
-        // Strategy 3: bare column name match (handles table-name mismatches)
-        if (colIdx === -1) {
-            const bare = colKey.includes('.') ? colKey.split('.')[1] : colKey;
-            ths.forEach((th, i) => {
-                if (colIdx !== -1) return;
-                const thBare = (th.dataset.colKey || '').split('.').pop();
-                if (thBare === bare) colIdx = i;
-            });
-        }
-
-        if (colIdx === -1) return;
-
-        ths[colIdx].classList.toggle('col-highlighted', on);
-        tbody.querySelectorAll(`tr td:nth-child(${colIdx + 1})`).forEach(td => {
-            td.classList.toggle('col-highlighted', on);
-        });
-
-        if (scrollTo) {
-            ths[colIdx].scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-        }
-    }
-
-    /** Re-apply all active highlights after the table is re-rendered. */
-    function _reapplyHighlights() {
-        _highlightedCols.forEach(key => _applyColHighlight(key, true, false));
-    }
-
     /** Returns true when the DB result column name is an explicit user-defined alias. */
     function _isColumnAlias(colName) {
         const nameLc = String(colName ?? '').toLowerCase();
@@ -2076,7 +2020,8 @@ const Results = (() => {
     function _applyResultHeaderColors() {
         document.querySelectorAll('#results-table thead th').forEach(th => {
             if (th.classList.contains('th-custom-expr')) {
-                const c = _customExprColor(th.dataset.raw);
+                const cx = (State.selectCustomExprs ?? []).find(x => x.id === th.dataset.exprId);
+                const c = cx ? _exprEffectiveColor(cx) : _customExprColor(th.dataset.raw);
                 th.style.backgroundColor = c || '';
                 th.style.color = c ? _readableTextColor(c) : '';
                 return;
@@ -2099,6 +2044,16 @@ const Results = (() => {
         return String(colName ?? '').trim() === '|||';
     }
 
+    /** Effective color of a custom expression: FROM_UNIXTIME ones (src) follow their table's color. */
+    function _exprEffectiveColor(e) {
+        if (!e) return null;
+        if (e.src) {
+            const a = String(e.src).split('.')[0];
+            return (State.tables || []).find(t => t.alias === a)?.color || null;
+        }
+        return e.color || null;
+    }
+
     /** Color assigned to the custom expression that produces result column colName, or null. */
     function _customExprColor(colName) {
         const nameLc = String(colName ?? '').toLowerCase();
@@ -2108,7 +2063,28 @@ const Results = (() => {
             const expr  = (e.expr  ?? '').trim();
             return (alias ? alias : expr).toLowerCase() === nameLc;
         });
-        return e?.color || null;
+        return _exprEffectiveColor(e);
+    }
+
+    /** The enabled custom expression that produces result column colName, or null. */
+    function _customExprFor(colName) {
+        const nameLc = String(colName ?? '').toLowerCase();
+        return (State.selectCustomExprs ?? []).find(e => {
+            if (e.enabled === false) return false;
+            const alias = (e.alias ?? '').trim();
+            const expr  = (e.expr  ?? '').trim();
+            return (alias ? alias : expr).toLowerCase() === nameLc;
+        }) ?? null;
+    }
+
+    /** Make custom-expression header text mirror the alias input in the SELECT box (live). */
+    function _syncCustomExprHeaders() {
+        document.querySelectorAll('#results-table thead th[data-expr-id]').forEach(th => {
+            const e = (State.selectCustomExprs ?? []).find(x => x.id === th.dataset.exprId);
+            const alias = (e?.alias ?? '').trim();
+            const em = th.querySelector('em');
+            if (alias && em && em.textContent !== alias) em.textContent = alias;
+        });
     }
 
     /** Returns true when the DB result column name comes from a custom expression. */
@@ -2391,7 +2367,11 @@ const Results = (() => {
                 th.appendChild(document.createTextNode('|||'));
             } else if (_isCustomExprColumn(col)) {
                 th.classList.add('th-custom-expr');
-                th.appendChild(document.createTextNode(displayLabel));
+                const cxEntry = _customExprFor(col);
+                if (cxEntry) th.dataset.exprId = cxEntry.id;
+                const em = document.createElement('em');
+                em.textContent = (cxEntry?.alias ?? '').trim() || displayLabel;
+                th.appendChild(em);
                 const exprColor = _customExprColor(col);
                 if (exprColor) {
                     th.style.backgroundColor = exprColor;
@@ -2471,6 +2451,10 @@ const Results = (() => {
                 });
                 // Use fallback only when there's exactly one match (avoids ambiguity)
                 if (!targetRow && fallbackCount === 1) targetRow = fallbackRow;
+                if (targetRow) {
+                    const rowKey = State.columnOrder?.[parseInt(targetRow.dataset.idx, 10)];
+                    if (rowKey) QueryPanel.revealGroup?.(rowKey.split('.')[0]);
+                }
                 if (!targetRow) {
                     // Custom expression column → locate its row in the Custom Expressions section
                     const cx = _customExprForCol(th.dataset.raw || '', colKey);
@@ -2548,7 +2532,7 @@ const Results = (() => {
                     if (!targetRow) {
                         // Custom expression column → toggle its enabled checkbox
                         const cx = _customExprForCol(th.dataset.raw || '', colKey);
-                        const cxChk = cx?.row?.querySelector('input[type="checkbox"]:not(.col-highlight-chk)');
+                        const cxChk = cx?.row?.querySelector('input[type="checkbox"]');
                         if (cxChk) {
                             cxChk.checked = !cxChk.checked;
                             cxChk.dispatchEvent(new Event('change'));
@@ -2566,7 +2550,7 @@ const Results = (() => {
                     }
 
                     const rowIdx = targetRow.dataset.idx; // save before potential re-render
-                    const chk = targetRow.querySelector('input[type="checkbox"]:not(.col-highlight-chk)');
+                    const chk = targetRow.querySelector('input[type="checkbox"]');
                     if (chk) {
                         chk.checked = !chk.checked;
                         // Suppress syncColDeselected inside the change handler — we apply
@@ -3111,7 +3095,6 @@ const Results = (() => {
         _sortOriginalRows = Array.from(tbody.querySelectorAll('tr'));
 
         // Re-apply any active column highlights after the table is rebuilt
-        _reapplyHighlights();
         // New query → reset row-mode dim state and marked rows
         _dimRowMode = false;
         _dimPinnedCols = new Set();
@@ -7699,7 +7682,9 @@ async function _copyAsSqlSelect() {
         th.title = headerInfo.label + (headerInfo.origin ? `\n${headerInfo.origin}` : '');
         if (headerInfo.isCustomExpr) {
             th.classList.add('th-custom-expr');
-            th.appendChild(document.createTextNode(headerInfo.label));
+            const em = document.createElement('em');
+            em.textContent = headerInfo.label;
+            th.appendChild(em);
         } else if (headerInfo.isAlias) {
             th.classList.add('th-alias');
             const em = document.createElement('em');
@@ -9391,14 +9376,16 @@ async function _copyAsSqlSelect() {
      * matches colKey (e.g. "u.id"). Toasts if the column is not in the results.
      * Expands the results panel if it is collapsed.
      */
-    function focusColumn(colKey) {
-        if (!colKey) return;
+    function focusColumn(colKey, exprId = null) {
+        if (!colKey && !exprId) return;
 
-        // Exact key match
-        let th = document.querySelector(`#results-table thead th[data-col-key="${colKey}"]`);
+        // Exact key match (custom expressions are matched by their id)
+        let th = exprId
+            ? document.querySelector(`#results-table thead th[data-expr-id="${CSS.escape(exprId)}"]`)
+            : document.querySelector(`#results-table thead th[data-col-key="${colKey}"]`);
 
         if (!th) {
-            if (typeof App !== 'undefined') App.notify(`${colKey} is not in the results table, so it can't be highlighted`, 'warn');
+            if (typeof App !== 'undefined') App.notify(`${colKey || 'Expression'} is not in the results table, so it can't be highlighted`, 'warn');
             return;
         }
 
@@ -9609,14 +9596,7 @@ async function _copyAsSqlSelect() {
         },
         /** Re-apply table colors to all result header cells (call after a table color changes). */
         refreshHeaderColors: _applyResultHeaderColors,
-        /** Toggle highlight on a result column. scrollTo=true scrolls to the column. */
-        highlightColumn(colKey, on, scrollTo = false) {
-            if (on) _highlightedCols.add(colKey);
-            else    _highlightedCols.delete(colKey);
-            _applyColHighlight(colKey, on, scrollTo);
-        },
-        /** Returns true if the given select key is currently highlighted. */
-        isHighlighted: key => _highlightedCols.has(key),
+        syncCustomExprHeaders: _syncCustomExprHeaders,
         /** Mark Calculus as out of sync with the current results (query re-run / table removed). */
         calcMarkOutOfSync: _calcMarkOutOfSync,
         /** Serialise current Calculus state for context persistence. */

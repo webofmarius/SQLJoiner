@@ -783,6 +783,7 @@ const Canvas = (() => {
             if (globalIdx === -1) return;
 
             App.showConfigPanel?.();
+            QueryPanel.revealGroup?.(table.alias);
             const selectRow = document.querySelector(`.select-col-row[data-idx="${globalIdx}"]`);
             if (!selectRow) return;
 

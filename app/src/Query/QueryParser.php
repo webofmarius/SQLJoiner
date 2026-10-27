@@ -440,7 +440,7 @@ class QueryParser
         if ($lastAs !== -1) {
             $expr  = trim(substr($text, 0, $lastAs));
             $alias = trim(str_replace('`', '', substr($text, $lastAsEnd)));
-            if (preg_match('/^\w+$/', $alias)) {
+            if (preg_match('/^\w+(?:\.\w+)?$/', $alias)) {
                 return [$expr, $alias];
             }
         }

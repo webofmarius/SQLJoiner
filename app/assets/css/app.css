@@ -1919,6 +1919,12 @@ body.is-cut-mode * { cursor: crosshair !important; }
     opacity: 1;
 }
 
+.table-card__color-btn.expr-color-btn {
+    border: 2px solid var(--border2);
+    border-radius: 50%;
+    padding: 1px;
+}
+
 /* Color picker popup */
 .card-color-popup {
     position: fixed;
@@ -2242,7 +2248,7 @@ body.is-cut-mode * { cursor: crosshair !important; }
 }
 .th-col-focus-flash,
 .td-col-focus-flash {
-    animation: col-focus-blink 0.4s steps(1, end) 5 !important;
+    animation: col-focus-blink 0.4s steps(1, end) 3 !important;
 }
 
 /* Valid drop-target column highlighted under cursor during drag */
@@ -2775,18 +2781,6 @@ body.is-cut-mode * { cursor: crosshair !important; }
 }
 .col-alias-input.has-value ~ .col-alias-clear { display: flex; }
 .col-alias-clear:hover { background: var(--accent); color: var(--bg); }
-.col-highlight-chk {
-    flex-shrink: 0;
-    width: auto !important;
-    margin-left: 4px;
-    cursor: pointer;
-    accent-color: #f0a500;
-}
-.col-highlighted,
-.col-highlighted * {
-    background-color: rgba(240, 165, 0, 0.22) !important;
-    font-weight: bold !important;
-}
 .select-separator {
     border: 0;
     border-top: 1px solid var(--border);

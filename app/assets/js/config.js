@@ -142,7 +142,7 @@ const QueryPanel = (() => {
             if (!e.altKey && !scrollTo) return;
             const row = e.target.closest('.select-col-row');
             if (!row) return;
-            if (e.target.closest('.col-alias-input') || e.target.closest('.col-highlight-chk')) return;
+            if (e.target.closest('.col-alias-input')) return;
             e.preventDefault();
             e.stopPropagation();
             const key = State.columnOrder[parseInt(row.dataset.idx, 10)];
@@ -828,7 +828,7 @@ const QueryPanel = (() => {
                 futBtn.type = 'button';
                 futBtn.className = 'select-col-fut-btn';
                 futBtn.textContent = 'FROM_UNIXTIME';
-                futBtn.title = `Add custom expression:  FROM_UNIXTIME(${key}) AS _${colName}`;
+                futBtn.title = `Add custom expression:  FROM_UNIXTIME(${key}) AS ${key.split('.')[0]}._${colName}`;
                 futBtn.addEventListener('mousedown', e => e.stopPropagation());
                 futBtn.addEventListener('dragstart', e => e.stopPropagation());
                 futBtn.addEventListener('click', e => {
@@ -887,24 +887,15 @@ const QueryPanel = (() => {
                 aliasWrap.appendChild(futBtn);
                 row.appendChild(aliasWrap);
 
-                // Highlight checkbox — lights up the matching results column
-                const highlightChk = document.createElement('input');
-                highlightChk.type      = 'checkbox';
-                highlightChk.className = 'col-highlight-chk';
-                highlightChk.title     = 'Highlight this column in results';
-                highlightChk.checked   = Results.isHighlighted?.(key) ?? false;
-                highlightChk.addEventListener('mousedown', e => e.stopPropagation());
-                highlightChk.addEventListener('dragstart', e => e.stopPropagation());
-                highlightChk.addEventListener('change', () => {
-                    // Scroll to the column whenever the highlight state changes
-                    // so the user can immediately see the affected data
-                    Results.highlightColumn?.(key, highlightChk.checked, true);
-                });
-                row.appendChild(highlightChk);
-
                 // Right-click → center canvas on this column's table and flash-highlight the column
                 row.addEventListener('contextmenu', e => {
                     e.preventDefault();
+                    // Cmd/Ctrl+right-click → scroll to and blink the column in the results table
+                    if (e.metaKey || e.ctrlKey) {
+                        e.stopPropagation();
+                        if (typeof Results !== 'undefined') Results.focusColumn?.(key);
+                        return;
+                    }
                     const [alias, colName] = key.split('.');
                     Canvas.focusColumn(alias, colName);
                 });
@@ -1291,6 +1282,12 @@ const QueryPanel = (() => {
             SqlBackdrop.attach(_exprPopupTA);
             SqlBackdrop.refresh(_exprPopupTA);
         }
+        // Read-only: black textarea background (the backdrop wrapper carries the visible bg)
+        const _bdWrap = _exprPopupTA.closest('.sql-bd-wrapper');
+        if (_bdWrap) {
+            if (_bdWrap.dataset.origBg === undefined) _bdWrap.dataset.origBg = _bdWrap.style.backgroundColor;
+            _bdWrap.style.backgroundColor = options.readOnly ? '#000' : _bdWrap.dataset.origBg;
+        }
         setTimeout(() => _exprPopupTA.focus(), 0);
 
         activeEl.oninput = () => {
@@ -1321,9 +1318,15 @@ const QueryPanel = (() => {
      * If INCLUSION is "Exclude" (custom expressions suppressed), bump it to
      * "Combined" so the new expression is actually emitted.
      */
+    /** Backtick-quote an alias that isn't a plain identifier (e.g. tbl._name). */
+    function _quoteAlias(a) {
+        return /^\w+$/.test(a) || a.startsWith('`') ? a : '`' + a.replace(/`/g, '``') + '`';
+    }
+
     function _addFromUnixtimeExpr(colKey) {
         const colName = colKey.includes('.') ? colKey.split('.')[1] : colKey;
-        const alias   = '_' + colName;
+        const tblAlias = colKey.includes('.') ? colKey.split('.')[0] : '';
+        const alias   = (tblAlias ? tblAlias + '.' : '') + '_' + colName;
         const expr    = `FROM_UNIXTIME(${colKey})`;
 
         if (!Array.isArray(State.selectCustomExprs)) State.selectCustomExprs = [];
@@ -1348,11 +1351,20 @@ const QueryPanel = (() => {
             alias,
             label: '',
             enabled: true,
+            src: colKey, // marks a FROM_UNIXTIME quick-add: SQL locked, color follows the source table
         });
 
         _refreshSelect();
         App.updateSQLPreview();
+        Results.refreshHeaderColors?.();
         App.notify(`Added ${expr} AS ${alias} to Custom Expressions`, 'success');
+    }
+
+    /** Effective color: FROM_UNIXTIME expressions (src) follow their table, manual ones use their own. */
+    function _exprEffectiveColor(e) {
+        if (!e) return null;
+        if (e.src) return State.tables.find(t => t.alias === String(e.src).split('.')[0])?.color || null;
+        return e.color || null;
     }
 
     let _exprColorPopup = null;
@@ -1442,47 +1454,40 @@ const QueryPanel = (() => {
         aliasInput.addEventListener('mousedown', e => e.stopPropagation());
         aliasInput.addEventListener('focus', () => { if (typeof UndoRedo !== 'undefined') UndoRedo.snapshot(); });
         aliasInput.addEventListener('dragstart', e => e.stopPropagation());
-        _bindExprPopupTrigger(
-            aliasInput,
-            () => `EDIT SELECT EXPRESSION ${idx + 1}` + (aliasInput.value.trim() ? ` - ${aliasInput.value.trim()}` : ''),
-            () => State.selectCustomExprs[idx].expr,
-            val => { State.selectCustomExprs[idx].expr = val; App.updateSQLPreview(); }
-        );
+        const isFut = !!expr.src;
+        if (isFut) {
+            const _openLocked = e => {
+                e.preventDefault(); e.stopPropagation();
+                _openExprPopup(
+                    () => State.selectCustomExprs[idx].expr,
+                    () => {},
+                    `${aliasInput.value.trim() || `Expression ${idx + 1}`} - READ ONLY`,
+                    false,
+                    () => aliasInput.focus(),
+                    { readOnly: true }
+                );
+            };
+            aliasInput.dataset.exprTrigger = '1';
+            aliasInput.addEventListener('contextmenu', _openLocked);
+            aliasInput.addEventListener('dblclick', e => { if (e.altKey) _openLocked(e); });
+            aliasInput.addEventListener('keydown', e => {
+                if ((e.shiftKey && e.key === 'Enter') || (e.altKey && e.code === 'KeyE')) _openLocked(e);
+            });
+        } else {
+            _bindExprPopupTrigger(
+                aliasInput,
+                () => aliasInput.value.trim() || `Expression ${idx + 1}`,
+                () => State.selectCustomExprs[idx].expr,
+                val => { State.selectCustomExprs[idx].expr = val; App.updateSQLPreview(); }
+            );
+        }
         aliasInput.addEventListener('input', () => {
-            const oldAlias = State.selectCustomExprs[idx]?.alias?.trim();
             const newAlias = aliasInput.value.trim();
-            // If alias changed while highlighted, remove the old highlight
-            if (oldAlias && highlightChk.checked && oldAlias !== newAlias) {
-                Results.highlightColumn?.(oldAlias, false, false);
-                highlightChk.checked = false;
-            }
             State.selectCustomExprs[idx].alias = newAlias;
             App.updateSQLPreview();
-            // Enable highlight checkbox only when an alias is set
-            highlightChk.disabled = !newAlias;
-            highlightChk.title    = newAlias
-                ? 'Highlight this column in results'
-                : 'Set an alias to enable column highlighting';
+            Results.syncCustomExprHeaders?.();
         });
         row.appendChild(aliasInput);
-
-        // Highlight checkbox — works only when an alias is set (alias = DB column name)
-        const hlKey = expr.alias?.trim() || null;
-        const highlightChk = document.createElement('input');
-        highlightChk.type      = 'checkbox';
-        highlightChk.className = 'col-highlight-chk';
-        highlightChk.disabled  = !hlKey;
-        highlightChk.title     = hlKey
-            ? 'Highlight this column in results'
-            : 'Set an alias to enable column highlighting';
-        highlightChk.checked   = hlKey ? (Results.isHighlighted?.(hlKey) ?? false) : false;
-        highlightChk.addEventListener('mousedown', e => e.stopPropagation());
-        highlightChk.addEventListener('dragstart', e => e.stopPropagation());
-        highlightChk.addEventListener('change', () => {
-            const key = State.selectCustomExprs[idx]?.alias?.trim();
-            if (key) Results.highlightColumn?.(key, highlightChk.checked, true);
-        });
-        row.appendChild(highlightChk);
 
         // Color button — tints this expression's header in the results table
         const colorBtn = document.createElement('button');
@@ -1490,15 +1495,23 @@ const QueryPanel = (() => {
         colorBtn.textContent = '⬤';
         colorBtn.title = 'Set column color';
         const _paintColorBtn = () => {
-            const c = State.selectCustomExprs[idx]?.color;
+            const c = _exprEffectiveColor(State.selectCustomExprs[idx]);
             colorBtn.style.color = c || '';
             colorBtn.classList.toggle('has-color', !!c);
+            const m = /^#([0-9a-f]{6})$/i.exec(c || '');
+            row.style.backgroundColor = m
+                ? `rgba(${parseInt(m[1].slice(0, 2), 16)}, ${parseInt(m[1].slice(2, 4), 16)}, ${parseInt(m[1].slice(4, 6), 16)}, 0.50)`
+                : '';
         };
         _paintColorBtn();
         colorBtn.addEventListener('mousedown', e => e.stopPropagation());
         colorBtn.addEventListener('dragstart', e => e.stopPropagation());
         colorBtn.addEventListener('click', e => {
             e.stopPropagation();
+            if (isFut) {
+                App.notify('This color follows the source table\u2019s color', 'info');
+                return;
+            }
             _openExprColorPopup(colorBtn, idx, _paintColorBtn);
         });
         row.appendChild(colorBtn);
@@ -1510,14 +1523,25 @@ const QueryPanel = (() => {
         rmBtn.addEventListener('click', async () => {
             if (!await Dialog.confirm('Remove this custom expression?')) return;
             if (typeof UndoRedo !== 'undefined') UndoRedo.snapshot();
-            // Clean up any active highlight before removing the row
-            const key = State.selectCustomExprs[idx]?.alias?.trim();
-            if (key && highlightChk.checked) Results.highlightColumn?.(key, false, false);
             State.selectCustomExprs.splice(idx, 1);
             _refreshSelect();
             App.updateSQLPreview();
         });
         row.appendChild(rmBtn);
+
+        // Cmd/Ctrl+right-click anywhere on the row → scroll to and blink its results column
+        // (capture phase so it also pre-empts the alias input's own context menu)
+        row.addEventListener('contextmenu', e => {
+            if (!(e.metaKey || e.ctrlKey)) return;
+            e.preventDefault();
+            e.stopPropagation();
+            const cx = State.selectCustomExprs[idx];
+            if (!isFut) {
+                App.notify('Manual expressions have no source table, so they cannot be traced back with Cmd/Ctrl+right-click', 'info');
+                return;
+            }
+            if (cx && typeof Results !== 'undefined') Results.focusColumn?.(cx.alias?.trim() || cx.expr?.trim() || 'Expression', cx.id);
+        }, true);
 
         // Drag-to-reorder events
         row.addEventListener('dragstart', e => {
@@ -2664,7 +2688,7 @@ const QueryPanel = (() => {
             .map(e => {
                 let ex = e.expr.trim();
                 if (/^select\s/i.test(ex)) ex = `(${ex})`;
-                const text = e.alias?.trim() ? `${ex} AS ${e.alias.trim()}` : ex;
+                const text = e.alias?.trim() ? `${ex} AS ${_quoteAlias(e.alias.trim())}` : ex;
                 return { text, key: (e.alias?.trim() || ex).toLowerCase() };
             });
         if (useSortAlpha && customParts.length > 0) {
@@ -3079,7 +3103,7 @@ const QueryPanel = (() => {
                 .map(e => {
                     let ex = e.expr.trim();
                     if (/^select\s/i.test(ex)) ex = `(${ex})`;
-                    const text = e.alias?.trim() ? `${ex} AS ${e.alias.trim()}` : ex;
+                    const text = e.alias?.trim() ? `${ex} AS ${_quoteAlias(e.alias.trim())}` : ex;
                     return { text, key: (e.alias?.trim() || ex).toLowerCase() };
                 });
             if (useSortAlpha && customParts.length > 0) {
@@ -3319,6 +3343,12 @@ const QueryPanel = (() => {
         setCheckedOnlySnapshot: (arr) => { _checkedOnlySnapshot = arr ? new Set(arr) : null; },
         openExprPopup: _openExprPopup,
         applyModeUI: _applyModeUI,
+        /** Expand a collapsed SELECT table group so its columns are visible. */
+        revealGroup: (alias) => {
+            if (!_minimizedGroups.has(alias)) return;
+            _minimizedGroups.delete(alias);
+            _filterSelectColumns();
+        },
         getAllMinimized: () => _allMinimized,
         setAllMinimized: (val) => {
             _allMinimized = !!val;

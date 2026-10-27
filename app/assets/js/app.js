@@ -1458,7 +1458,7 @@ const App = (() => {
         }
         if (Array.isArray(config.selectCustomExprs))
             config.selectCustomExprs = config.selectCustomExprs.map(e =>
-                ({ ...e, id: 'cx_' + (Date.now() + Math.random()), expr: _s(e.expr) }));
+                ({ ...e, id: 'cx_' + (Date.now() + Math.random()), expr: _s(e.expr), ...(e.src ? { src: _s(e.src) } : {}) }));
 
         if (Array.isArray(config.where))   config.where   = config.where.map(_cond);
         config.whereRaw   = _s(config.whereRaw);
