@@ -325,6 +325,8 @@ if (!isset($_GET['tab'])) {
                 <button id="btn-diff-query-exit" class="hidden is-active" title="Exit query diff">✕ Exit Diff Query</button>
                 <button id="btn-diff-cols" title="Set-diff chosen columns against the next query or a CSV (array_diff / intersect / union)" disabled>⊙± Diff cols</button>
                 <button id="btn-diff-cols-exit" class="hidden is-active" title="Exit columns diff">✕ Exit Diff cols</button>
+                <button id="btn-diff-rows" class="hidden" title="Diff the 2 selected (highlighted) rows against each other, like Diff Query">⊙ Compare 2 rows</button>
+                <button id="btn-diff-rows-exit" class="hidden is-active" title="Exit the 2-row compare and restore the previous result and selection">✕ Exit Compare 2 rows</button>
                 <button id="btn-explain-graph" class="hidden" title="Toggle EXPLAIN graph view">⎇ Explain Graph</button>
                 <input id="chk-search-sql-mode" type="checkbox"  title="SQL operator mode: type expressions like > 5, = 'John', IS NULL">
                 <button id="btn-search-cols" title="Toggle column search inputs">⌕ Search</button>
@@ -335,8 +337,8 @@ if (!isset($_GET['tab'])) {
 <input type="checkbox" id="chk-csv-to-file" title="Save CSV to file (unchecked = copy to clipboard)">
                 <button id="btn-export-csv">↓ CSV</button>
                 <input type="checkbox" id="chk-json-to-clipboard" title="Save JSON to file (unchecked = copy to clipboard)">
-                <button id="btn-export-json">↓ Heidi JSON</button>
-                <button id="btn-copy-sql-select" title="Copy results as SQL SELECT … UNION ALL (wrapped in parentheses)">↓ SQL SELECT</button>
+                <button id="btn-export-json">↓ JSON</button>
+                <button id="btn-copy-sql-select" title="Copy results as SQL SELECT … UNION ALL (wrapped in parentheses)">↓ SQL</button>
                 <button id="btn-results-tall" title="Stretch results height">↕</button>
                 <button id="btn-results-fullscreen" title="Maximize results">⤢</button>
                 <button id="btn-toggle-results" title="Minimize results">▼</button>
@@ -375,12 +377,17 @@ if (!isset($_GET['tab'])) {
             <button id="btn-rec-dim" class="rec-filter-btn" title="DIM — show only selected (checked) recordings">☾ DIM</button>
             <button id="btn-rec-same-color" class="rec-filter-btn" title="Same color — show only recordings whose color matches a checked recording">◈ Same color</button>
             <button id="btn-rec-compare" class="rec-compare-btn" disabled title="Select exactly 2 recordings to compare their results using Diff Query">⊙ Compare</button>
+            <input type="checkbox" id="chk-rec-ai-knowledge-queries" checked disabled title="Include the queries in the AI Knowledge file (unchecked = only the CREATE TABLE definitions)">
+            <button id="btn-rec-ai-knowledge" class="rec-compare-btn" disabled title="Save an AI Knowledge .sql file for the selected recordings: CREATE TABLE definitions of all tables involved (+ their queries if the checkbox is checked)">AI Knowledge</button>
+            <button id="btn-rec-zip-csv" class="rec-compare-btn" disabled title="Download the results of the selected recordings as .csv files inside a .zip">⇩ CSV</button>
+            <button id="btn-rec-zip-sql" class="rec-compare-btn" disabled title="Download the queries of the selected recordings as .sql files inside a .zip">⇩ SQL</button>
             <button id="btn-rec-delete-selected" class="rec-delete-sel-btn" disabled>Delete</button>
             <span class="rec-header-sep"></span>
             <button id="btn-rec-add-group" class="rec-add-group-btn" title="Create a new recording group">⊞ Group</button>
             <span class="rec-header-sep"></span>
             <button id="btn-rec-record" class="rec-record-btn" title="Recording active — click to stop"><span class="rec-dot"></span>Stop</button>
             <button id="btn-rec-help" title="Shortcuts &amp; tips">?</button>
+            <button id="btn-rec-maximize" title="Maximize">⤢</button>
             <button id="btn-recordings-close" title="Close panel">✕</button>
         </div>
         <!-- Help popup — appended to body in JS to escape overflow:hidden -->
@@ -1073,7 +1080,7 @@ if (!isset($_GET['tab'])) {
                     <li><kbd>F1</kbd> <span>Focus canvas table search (same as Alt+F)</span></li>
                     <li><kbd>F3</kbd> <span>Toggle Timestamp Converter</span></li>
                     <li><kbd>F4</kbd> <span>Toggle Overview Zoom</span></li>
-                    <li><kbd>F5</kbd> <span>Focus mode — hide all panels / press again to restore</span></li>
+                    <li><kbd>F5</kbd> / <kbd>Alt</kbd> + <kbd>`</kbd> <span>Focus mode — hide all panels / press again to restore</span></li>
                     <li><kbd>F6</kbd> / <kbd>Alt</kbd> + <kbd>Shift</kbd> + <kbd>2</kbd> <span>Toggle Results panel fullscreen (maximize)</span></li>
                     <li><kbd>F9</kbd> <span>Toggle Config (right) panel show / hide</span></li>
                     <li><kbd>Cmd/Ctrl</kbd> + <kbd>F9</kbd> <span>Open Run Custom Query</span></li>

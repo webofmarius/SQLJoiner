@@ -551,8 +551,8 @@ const App = (() => {
                 return;
             }
 
-            // F5 — Focus mode: hide all panels / restore previous visibility
-            if (e.code === 'F5' && !isMod) {
+            // F5 / Alt+` — Focus mode: hide all panels / restore previous visibility
+            if ((e.code === 'F5' || (e.code === 'Backquote' && e.altKey && !e.shiftKey)) && !isMod) {
                 e.preventDefault();
                 _toggleFocusMode();
                 return;
@@ -562,6 +562,13 @@ const App = (() => {
             if (e.code === 'F6' && !isMod) {
                 e.preventDefault();
                 Results.toggleFullscreen?.();
+                return;
+            }
+
+            // ` — switch the results between maximized and minimized (ignored while typing, so SQL backticks still work)
+            if (e.code === 'Backquote' && !isMod && !isAlt && !e.shiftKey && !e.target.closest?.('input, textarea, select, [contenteditable]')) {
+                e.preventDefault();
+                Results.toggleMaximizeMinimize?.();
                 return;
             }
 
@@ -664,7 +671,7 @@ const App = (() => {
                 } else if (e.code === 'Digit2' || e.code === 'Numpad2') {
                     e.preventDefault();
                     if (e.shiftKey) Results.toggleFullscreen?.(); // Alt+Shift+2 — same as F6
-                    else Results.toggle();
+                    else Results.toggleNormalMinimize?.(); // Alt+2 — normal ↔ minimized
 
                 } else if (e.code === 'Digit3' || e.code === 'Numpad3') {
                     e.preventDefault();
@@ -2283,6 +2290,73 @@ const App = (() => {
                 })
                 .catch(() => _notify('Clipboard write failed.', 'error'));
         }
+    }
+
+    /**
+     * AI Knowledge for several queries at once (Recordings popup): the queries followed by the
+     * CREATE TABLE statements of every table involved in any of them.
+     * items: [{name, sql}]; btn: the popup's own button; includeQueries: put the queries in the output.
+     * Always saved to disk.
+     */
+    async function aiKnowledgeForQueries(items, btn, includeQueries) {
+        if (!State.activeProfileId) { _notify('No connection profile selected.', 'error'); return; }
+
+        const queries = items.filter(i => i.sql && i.sql.trim());
+        const tables  = [...new Set(queries.flatMap(i => _extractTableNames(i.sql)))].sort();
+        if (!queries.length || tables.length === 0) { _notify('No table names found in the selected recordings.', 'warn'); return; }
+
+        const origLabel = btn.textContent;
+        btn.textContent = '⏳';
+        btn.disabled    = true;
+
+        const ddls   = [];
+        const failed = [];
+        for (const t of tables) {
+            const dotIdx = t.indexOf('.');
+            const schema = dotIdx !== -1 ? t.slice(0, dotIdx) : '';
+            const tName  = dotIdx !== -1 ? t.slice(dotIdx + 1) : t;
+            try {
+                const res = await API.schema.createStatement(State.activeProfileId, tName, schema);
+                if (res.ddl) {
+                    let ddl = res.ddl;
+                    if (schema) {
+                        const esc = tName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                        ddl = ddl.replace(
+                            new RegExp(`(CREATE\\s+TABLE\\s+(?:IF\\s+NOT\\s+EXISTS\\s+)?)\`?${esc}\`?`, 'i'),
+                            `$1\`${schema}\`.\`${tName}\``
+                        );
+                    }
+                    ddls.push(ddl);
+                }
+            } catch (e) {
+                failed.push(t);
+            }
+        }
+
+        btn.textContent = origLabel;
+        btn.disabled    = false;
+
+        if (ddls.length === 0) { _notify('Could not fetch any CREATE TABLE statements.', 'error'); return; }
+        if (failed.length > 0) {
+            _notify(`${failed.length} table${failed.length !== 1 ? 's' : ''} could not be fetched: ${failed.join(', ')}`, 'warn');
+        }
+
+        const queriesPart = includeQueries ? queries.map(i => {
+            const q = i.sql.trim();
+            const body = q.endsWith(';') ? q : q + ';';
+            return queries.length > 1 && i.name ? `-- ${String(i.name).replace(/[\r\n]+/g, ' ')}\n${body}` : body;
+        }).join('\n\n\n\n') + '\n\n\n\n' : '';
+        const combined = queriesPart + ddls.map(d => d.trimEnd() + ';').join('\n\n\n\n');
+
+        const now = new Date();
+        const pad = n => String(n).padStart(2, '0');
+        const ts  = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}_${pad(now.getHours())}-${pad(now.getMinutes())}`;
+        const url = URL.createObjectURL(new Blob([combined], { type: 'text/plain;charset=utf-8;' }));
+        const a   = document.createElement('a');
+        a.href = url; a.download = `ai-knowledge-${ts}.sql`;
+        a.click();
+        URL.revokeObjectURL(url);
+        _notify('AI Knowledge saved to file.', 'success');
     }
 
     // -------------------------------------------------------------------------
@@ -5516,6 +5590,7 @@ const App = (() => {
         isConfigUnpinned,
         exportTabState,
         importTabState,
+        aiKnowledgeForQueries,
         notify: _notify,   // exposed for use by canvas.js and future phase files
         openSqExpand,
         bindTablesMenu: _bindTablesMenu,

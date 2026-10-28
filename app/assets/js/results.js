@@ -166,9 +166,9 @@ const Results = (() => {
     // Public
     // -------------------------------------------------------------------------
 
-    // Reveal the right (config) panel while a result header is dragged: at once when
-    // pinned, only at the right window edge when unpinned (hidden again if dropped outside it).
-    const CONFIG_EDGE_PX = 40;
+    // Reveal the closed right (config) panel only when a dragged result header reaches the
+    // right window edge (hidden again if it was unpinned and the drop lands outside it).
+    const CONFIG_EDGE_PX = 50;
     let _configRevealed  = false;
 
     function _onHeaderDragOver(e) {
@@ -179,12 +179,7 @@ const Results = (() => {
 
     function _beginConfigReveal() {
         _configRevealed = false;
-        if (App.isConfigUnpinned?.()) {
-            document.addEventListener('dragover', _onHeaderDragOver);
-        } else {
-            // Deferred: changing layout inside dragstart can cancel the native drag
-            setTimeout(() => App.showConfigPanel?.(), 0);
-        }
+        document.addEventListener('dragover', _onHeaderDragOver);
     }
 
     function _endConfigReveal(e) {
@@ -266,6 +261,16 @@ const Results = (() => {
 
         document.getElementById('btn-diff-query').addEventListener('click', _captureDiffQuery);
         document.getElementById('btn-diff-query-exit').addEventListener('click', _clearDiffQuery);
+        document.getElementById('btn-diff-rows').addEventListener('click', _compareSelectedRows);
+        document.getElementById('btn-diff-rows-exit').addEventListener('click', _exitRowCompare);
+
+        // Offer "Compare 2 rows" whenever exactly two rows are highlighted
+        let _diffRowsRaf = 0;
+        new MutationObserver(() => {
+            cancelAnimationFrame(_diffRowsRaf);
+            _diffRowsRaf = requestAnimationFrame(_updateDiffRowsBtn);
+        }).observe(document.getElementById('results-table'),
+            { subtree: true, childList: true, attributes: true, attributeFilter: ['class'] });
 
         // Close floating popups (dist, lineage) whenever any modal becomes visible
         new MutationObserver(mutations => {
@@ -1020,6 +1025,7 @@ const Results = (() => {
             _diffQueryBtn.classList.toggle('hidden', !!_diffQuery);
         }
         document.getElementById('btn-diff-query-exit')?.classList.toggle('hidden', !_diffQuery);
+        _syncRowCompareBtns();
 
         // Enable Diff cols button; update active state
         const _diffColsBtn = document.getElementById('btn-diff-cols');
@@ -1060,6 +1066,8 @@ const Results = (() => {
         }
         if (_diffQuery) {
             _diffQuery          = null;
+            _rowCompareOrig     = null;
+            document.getElementById('btn-diff-rows-exit')?.classList.add('hidden');
             _diffChangedColIdxs = null;
             document.getElementById('btn-diff-query-exit')?.classList.add('hidden');
             document.getElementById('btn-diff-query')?.classList.remove('hidden');
@@ -1211,6 +1219,33 @@ const Results = (() => {
         _setFullscreen(!isFull);
     }
 
+    /** Alt+2: minimized → normal size; anything else → minimized. */
+    function _toggleNormalMinimize() {
+        const panel = document.getElementById('results-panel');
+        if (!panel) return;
+        if (panel.classList.contains('is-collapsed')) {
+            _preCollapseState = 'normal';
+            _setCollapsed(false);
+        } else {
+            _preCollapseState = 'normal';
+            _setFullscreen(false);
+            _setTall(false);
+            _setCollapsed(true);
+        }
+    }
+
+    /** ` key: maximized → minimize; anything else (minimized / normal / tall) → maximize. */
+    function _toggleMaximizeMinimize() {
+        const panel = document.getElementById('results-panel');
+        if (!panel) return;
+        if (panel.classList.contains('is-fullscreen')) {
+            _setFullscreen(false);
+            _setCollapsed(true);
+        } else {
+            _setFullscreen(true);
+        }
+    }
+
     function _setFullscreen(full) {
         _closeFloatingPopups();
         const panel = document.getElementById('results-panel');
@@ -1304,6 +1339,20 @@ const Results = (() => {
     // When true, Dim hides/fades rows (row-mode); when false it hides columns (col-mode).
     let _dimRowMode = false;
 
+    /** Columns Dim keeps in column mode: colored ones (manual / compare / diff cells) + the diff's changed columns. */
+    function _dimSeedPinnedCols(tbody) {
+        const pinned = new Set(_diffChangedColIdxs || []);
+        if (_lastResult) {
+            _lastResult.cols.forEach((_col, colIdx) => {
+                if (_colThemes[colIdx] || _cmdColHighlights.has(colIdx)) { pinned.add(colIdx); return; }
+                const nth = colIdx + 2;
+                if (tbody && [...THEMES, ...FEATURE_COLOR_CLASSES].some(t => tbody.querySelector(`tr td:nth-child(${nth}).${t}`)))
+                    pinned.add(colIdx);
+            });
+        }
+        return pinned;
+    }
+
     function _setDimmed(dimmed) {
         const table = document.getElementById('results-table');
         const btn   = document.getElementById('btn-toggle-dim');
@@ -1313,28 +1362,9 @@ const Results = (() => {
         if (dimmed) {
             const tbody = table.querySelector('tbody');
 
-            // Diff mode: show only columns that have changes
-            if (_diffChangedColIdxs) {
-                _dimRowMode    = false;
-                _dimPinnedCols = new Set(_diffChangedColIdxs);
-            } else {
-                _dimRowMode = _dimWantRowMode(tbody);
-
-                if (!_dimRowMode) {
-                    // Column mode: seed pinned set with already-colored columns
-                    _dimPinnedCols = new Set();
-                    if (_lastResult) {
-                        _lastResult.cols.forEach((_col, colIdx) => {
-                            if (_colThemes[colIdx] || _cmdColHighlights.has(colIdx)) { _dimPinnedCols.add(colIdx); return; }
-                            const nth = colIdx + 2;
-                            if (tbody && [...THEMES, ...FEATURE_COLOR_CLASSES].some(t => tbody.querySelector(`tr td:nth-child(${nth}).${t}`)))
-                                _dimPinnedCols.add(colIdx);
-                        });
-                    }
-                } else {
-                    _dimPinnedCols = new Set();
-                }
-            }
+            // Rows marked → row mode; otherwise column mode on the colored / diff-changed columns
+            _dimRowMode    = _dimWantRowMode(tbody);
+            _dimPinnedCols = _dimRowMode ? new Set() : _dimSeedPinnedCols(tbody);
         } else {
             // Turning Dim off: remove row-mode classes; keep row-highlighted state intact
             _dimRowMode = false;
@@ -1386,7 +1416,7 @@ const Results = (() => {
             const isHighlighted   = tr.classList.contains('row-highlighted');
             const isFaded         = tr.classList.contains('row-hl-faded');
             const isCalculusHl    = tr.classList.contains('calculus-hl');
-            const isDiffCsvBanner = tr.classList.contains('diff-csv-banner-row');
+            const isDiffCsvBanner = tr.classList.contains('diff-csv-banner-row') || tr.classList.contains('diff-banner-tr');
             const hasRowColor     = THEMES.some(t => tr.querySelector('.td-row-num')?.classList.contains(t));
             if (isHighlighted || isFaded || isCalculusHl || isDiffCsvBanner || hasRowColor) {
                 tr.classList.remove('dim-row-hidden');
@@ -1509,8 +1539,6 @@ const Results = (() => {
     function _dimRefreshModeIfDimmed() {
         const table = document.getElementById('results-table');
         if (!table?.classList.contains('is-dimmed')) return;
-        // In diff-col-mode, pinned cols are driven by the diff — ignore row marks
-        if (_diffChangedColIdxs) { _applyDimVisibility(); return; }
         const tbody = table.querySelector('tbody');
         const wantRowMode = _dimWantRowMode(tbody);
         if (wantRowMode !== _dimRowMode) {
@@ -1518,15 +1546,7 @@ const Results = (() => {
             if (_dimRowMode) {
                 _dimPinnedCols = new Set();
             } else {
-                _dimPinnedCols = new Set();
-                if (_lastResult) {
-                    _lastResult.cols.forEach((_col, colIdx) => {
-                        if (_colThemes[colIdx] || _cmdColHighlights.has(colIdx)) { _dimPinnedCols.add(colIdx); return; }
-                        const nth = colIdx + 2;
-                        if (tbody && [...THEMES, ...FEATURE_COLOR_CLASSES].some(t => tbody.querySelector(`tr td:nth-child(${nth}).${t}`)))
-                            _dimPinnedCols.add(colIdx);
-                    });
-                }
+                _dimPinnedCols = _dimSeedPinnedCols(tbody);
                 if (tbody) {
                     tbody.querySelectorAll('tr.dim-row-hidden')
                         .forEach(tr => tr.classList.remove('dim-row-hidden'));
@@ -1566,6 +1586,111 @@ const Results = (() => {
             }
         }
         if (table?.classList.contains('is-dimmed')) _dimRefreshModeIfDimmed();
+    }
+
+    /** Wire a # cell: click = mark row, right-click = cycle color, Cmd/Ctrl+right-click = copy-row popup. */
+    function _wireRowNumCell(tdRowNum, tr) {
+        tdRowNum.addEventListener('click', () => _altRightClickRow(tr));
+        // mousedown catches Cmd/Ctrl+right-click reliably on Windows (contextmenu may lack the modifier)
+        let modHandled = false;
+        tdRowNum.addEventListener('mousedown', e => {
+            if (e.button === 2 && (e.metaKey || e.ctrlKey)) {
+                e.stopPropagation(); // don't let the outside-click closer dismiss the popup it opens
+                modHandled = true;
+                _showRowCopyPopup(tdRowNum, () => _rowVisibleValues(tr), 'Copy CSV row');
+            }
+        });
+        tdRowNum.addEventListener('contextmenu', e => {
+            if (modHandled || e.metaKey || e.ctrlKey) {
+                e.preventDefault();
+                e.stopPropagation();
+                if (!modHandled) _showRowCopyPopup(tdRowNum, () => _rowVisibleValues(tr), 'Copy CSV row');
+                modHandled = false;
+                return;
+            }
+            _cycleRowColor(e, tr, tdRowNum);
+        });
+    }
+
+    let _rowCopyPopup = null;
+    function _closeRowCopyPopup() { _rowCopyPopup?.classList.add('hidden'); }
+
+    /** Values of a row's visible data cells (Dim / hidden columns are display:none), in displayed order. */
+    function _rowVisibleValues(tr) {
+        return Array.from(tr.querySelectorAll('td:not(.td-row-num)'))
+            .filter(td => td.style.display !== 'none')
+            .map(td => td.classList.contains('is-null') ? null : String(td.dataset.raw ?? td.textContent));
+    }
+
+    /**
+     * Small popup on a # cell / the # header: copy one row of values (a data row, or the header labels)
+     * as one value per line, or as a SQL value list.
+     */
+    function _showRowCopyPopup(anchorTd, getVals, label, tip) {
+        if (!_rowCopyPopup) {
+            _rowCopyPopup = document.createElement('div');
+            _rowCopyPopup.className = 'dist-popup row-copy-popup hidden';
+            document.body.appendChild(_rowCopyPopup);
+            document.addEventListener('mousedown', e => {
+                if (!_rowCopyPopup.classList.contains('hidden') && !_rowCopyPopup.contains(e.target)) _closeRowCopyPopup();
+            });
+            document.addEventListener('keydown', e => {
+                if (e.key === 'Escape' && !_rowCopyPopup.classList.contains('hidden')) _closeRowCopyPopup();
+            });
+        }
+        _rowCopyPopup.innerHTML = '';
+
+        const row = document.createElement('div');
+        row.className = 'dist-popup-copy-col-row';
+
+        const vertLabel = document.createElement('label');
+        vertLabel.className = 'dist-popup-copy-col-vert-label';
+        vertLabel.title = 'When checked, copy one value per line, unquoted (paste into Excel as a column)';
+        const vertChk = document.createElement('input');
+        vertChk.type = 'checkbox';
+        vertChk.checked = false;
+        vertLabel.appendChild(vertChk);
+        row.appendChild(vertLabel);
+
+        const btn = document.createElement('button');
+        btn.className   = 'dist-popup-copy-col-btn';
+        btn.textContent = label;
+        btn.title       = tip || 'Copy the values of this row (visible columns) as a SQL value list';
+        btn.addEventListener('click', () => {
+            const vals = getVals();
+            const text = vertChk.checked
+                ? vals.map(v => v ?? '').join('\n')
+                : vals.map(v => v === null ? 'NULL' : (v.trim() !== '' && !isNaN(v) ? v : `'${v.replace(/'/g, "''")}'`)).join(', ');
+            navigator.clipboard.writeText(text)
+                .then(() => App.notify?.(`${vals.length} value${vals.length === 1 ? '' : 's'} copied`, 'success'));
+            _closeRowCopyPopup();
+        });
+        row.appendChild(btn);
+        _rowCopyPopup.appendChild(row);
+
+        _rowCopyPopup.classList.remove('hidden');
+        _rowCopyPopup.style.minWidth = '0';
+        const rect = anchorTd.getBoundingClientRect();
+        const pw = _rowCopyPopup.offsetWidth, ph = _rowCopyPopup.offsetHeight;
+        _rowCopyPopup.style.left = Math.max(8, Math.min(rect.right + 4, window.innerWidth - pw - 8)) + 'px';
+        _rowCopyPopup.style.top  = Math.max(8, Math.min(rect.top, window.innerHeight - ph - 8)) + 'px';
+    }
+
+    /** Right-click on a # cell: cycle the whole row through the cell-color themes. */
+    function _cycleRowColor(e, tr, tdRowNum) {
+        e.preventDefault();
+        e.stopPropagation();
+        const allTds   = Array.from(tr.querySelectorAll('td'));
+        const current  = THEMES.find(t => tdRowNum.classList.contains(t));
+        const nextIdx  = (THEMES.indexOf(current) + 1) % (THEMES.length + 1);
+        THEMES.forEach(t => allTds.forEach(td => td.classList.remove(t)));
+        if (nextIdx < THEMES.length) {
+            allTds.forEach(td => td.classList.add(THEMES[nextIdx]));
+            // Register all data columns as pinned (consistent with cell right-click).
+            _lastResult?.cols.forEach((_, ci) => _dimPinCol(ci));
+        }
+        _applyDimVisibility();
+        _applyDimRowVisibility();
     }
 
     function _likeToRegex(pattern) {
@@ -2310,6 +2435,28 @@ const Results = (() => {
         const thRowNum = document.createElement('th');
         thRowNum.className = 'th-row-num';
         thRowNum.textContent = '#';
+        // Cmd/Ctrl+right-click: copy popup for the (visible) column headers
+        const _visibleHeaders = () => {
+            const labels = _getRenderedHeaders();
+            return Array.from(document.querySelectorAll('#results-table thead th:not(.th-row-num)'))
+                .map((th, i) => th.style.display === 'none' ? null : labels[i])
+                .filter(v => v !== null && v !== undefined);
+        };
+        let _thModHandled = false;
+        thRowNum.addEventListener('mousedown', e => {
+            if (e.button === 2 && (e.metaKey || e.ctrlKey)) {
+                e.stopPropagation();
+                _thModHandled = true;
+                _showRowCopyPopup(thRowNum, _visibleHeaders, 'Copy CSV header', 'Copy the column headers (visible columns)');
+            }
+        });
+        thRowNum.addEventListener('contextmenu', e => {
+            if (!_thModHandled && !(e.metaKey || e.ctrlKey)) return;
+            e.preventDefault();
+            e.stopPropagation();
+            if (!_thModHandled) _showRowCopyPopup(thRowNum, _visibleHeaders, 'Copy CSV header', 'Copy the column headers (visible columns)');
+            _thModHandled = false;
+        });
         trHead.appendChild(thRowNum);
         cols.forEach((col, colIdx) => {
             const th  = document.createElement('th');
@@ -2821,25 +2968,8 @@ const Results = (() => {
             tdRowNum.textContent = String(rowIdx + 1);
             tr.appendChild(tdRowNum);
 
-            // Left-click #: toggle row highlight (identical to Alt+click on a data cell).
-            tdRowNum.addEventListener('click', () => _altRightClickRow(tr));
-
-            // Right-click #: cycle the whole row through cell-color themes.
-            tdRowNum.addEventListener('contextmenu', e => {
-                e.preventDefault();
-                e.stopPropagation();
-                const allTds   = Array.from(tr.querySelectorAll('td'));
-                const current  = THEMES.find(t => tdRowNum.classList.contains(t));
-                const nextIdx  = (THEMES.indexOf(current) + 1) % (THEMES.length + 1);
-                THEMES.forEach(t => allTds.forEach(td => td.classList.remove(t)));
-                if (nextIdx < THEMES.length) {
-                    allTds.forEach(td => td.classList.add(THEMES[nextIdx]));
-                    // Register all data columns as pinned (consistent with cell right-click).
-                    _lastResult?.cols.forEach((_, ci) => _dimPinCol(ci));
-                }
-                _applyDimVisibility();
-                _applyDimRowVisibility();
-            });
+            // # click: toggle row highlight · # right-click: cycle row color · Cmd/Ctrl+right-click: copy row
+            _wireRowNumCell(tdRowNum, tr);
 
             cols.forEach((col, colIdx) => {
                 const td = document.createElement('td');
@@ -3208,6 +3338,7 @@ const Results = (() => {
     function _captureDiffQuery() {
         if (!_lastResult) return;
         _disarmDiffCols(); // mutually exclusive with Diff cols
+        _rowCompareOrig = null;
         _diffQuery = {
             cols:       _lastResult.cols.slice(),
             rows:       _lastResult.rows.map(r => r.slice()),
@@ -3219,8 +3350,78 @@ const Results = (() => {
         App.notify?.('Query captured — re-run the query to see the diff', 'success');
     }
 
+    /** Full result that was on screen before "Compare 2 rows" narrowed it to the 2 rows. */
+    let _rowCompareOrig  = null;
+    let _rowCompareMarks = []; // row numbers that were highlighted before the compare
+
+    /** While a 2-row compare is active its own exit button replaces the Diff Query one. */
+    function _syncRowCompareBtns() {
+        const on = !!_rowCompareOrig;
+        document.getElementById('btn-diff-rows-exit')?.classList.toggle('hidden', !on);
+        if (on) {
+            document.getElementById('btn-diff-query-exit')?.classList.add('hidden');
+            document.getElementById('btn-diff-query')?.classList.remove('hidden');
+        }
+    }
+
+    function _markedDiffRows() {
+        if (_diffQuery || _diffCols || !_lastResult?.rows) return [];
+        return Array.from(document.querySelectorAll('#results-table tbody tr.row-highlighted'))
+            .filter(tr => /^\d+$/.test(tr.querySelector('.td-row-num')?.textContent || ''));
+    }
+
+    function _updateDiffRowsBtn() {
+        document.getElementById('btn-diff-rows')
+            ?.classList.toggle('hidden', _markedDiffRows().length !== 2);
+    }
+
+    /** Diff the 2 highlighted rows (earlier row = baseline) using the Diff Query machinery. */
+    function _compareSelectedRows() {
+        const trs = _markedDiffRows();
+        if (trs.length !== 2) return;
+        const full = _lastResult;
+        const nums = trs.map(tr => parseInt(tr.querySelector('.td-row-num').textContent, 10)).sort((a, b) => a - b);
+        const [a, b] = nums.map(n => full.rows[n - 1]);
+        if (!a || !b) return;
+        _disarmDiffCols();
+        _rowCompareOrig  = full;
+        _rowCompareMarks = Array.from(document.querySelectorAll('#results-table tbody tr.row-highlighted'))
+            .map(tr => parseInt(tr.querySelector('.td-row-num')?.textContent, 10));
+        _diffQuery = {
+            cols:       full.cols.slice(),
+            rows:       [a.slice()],
+            col_tables: (full.col_tables || []).slice(),
+            col_types:  (full.col_types  || []).slice(),
+        };
+        document.getElementById('btn-diff-query')?.classList.add('hidden');
+        document.getElementById('btn-diff-query-exit')?.classList.remove('hidden');
+        render({ ...full, rows: [b.slice()], count: 1, _fromRecording: true });
+        _syncRowCompareBtns();
+    }
+
+    /** Leave the 2-row compare: full result back, same rows highlighted as before. */
+    function _exitRowCompare() {
+        const orig  = _rowCompareOrig;
+        const marks = new Set(_rowCompareMarks);
+        _rowCompareOrig  = null;
+        _rowCompareMarks = [];
+        _diffQuery          = null;
+        _diffChangedColIdxs = null;
+        document.getElementById('btn-diff-query')?.classList.remove('hidden');
+        document.getElementById('btn-diff-query-exit')?.classList.add('hidden');
+        document.getElementById('btn-diff-rows-exit')?.classList.add('hidden');
+        if (!orig) return;
+        render({ ...orig, _fromRecording: true });
+        document.querySelectorAll('#results-table tbody tr').forEach(tr => {
+            const n = parseInt(tr.querySelector('.td-row-num')?.textContent, 10);
+            if (marks.has(n)) tr.classList.add('row-highlighted');
+        });
+        _updateDiffRowsBtn();
+    }
+
     function _clearDiffQuery() {
         const base          = _diffQuery;
+        _rowCompareOrig     = null;
         _diffQuery          = null;
         _diffChangedColIdxs = null;
         document.getElementById('btn-diff-query')?.classList.remove('hidden');
@@ -3438,7 +3639,9 @@ const Results = (() => {
 
         const tdNum = document.createElement('td');
         tdNum.className   = 'td-row-num';
-        tdNum.textContent = type === 'removed' ? '−' : type === 'added' ? '+' : String(rowNum);
+        tdNum.textContent = (type === 'removed' ? '−' : type === 'added' ? '+' : '') + String(rowNum);
+        // Same row selection as the normal results table (# click / right-click, feeds DIM row-mode)
+        _wireRowNumCell(tdNum, tr);
         tr.appendChild(tdNum);
 
         cols.forEach((col, colIdx) => {
@@ -3459,7 +3662,7 @@ const Results = (() => {
             }
 
             if (changedCols.has(colIdx)) {
-                td.classList.add('td-diff-changed');
+                td.classList.add('td-diff-changed', 'col-highlight-4'); // same as right-clicking the cell to red
             }
 
             // Preserve the raw value so Compare / Duplicates match on the true value
@@ -3481,7 +3684,13 @@ const Results = (() => {
 
     /** Attach Compare / Duplicates / select + right-click colour handlers to a diff cell. */
     function _wireDiffFeatureCell(td, colIdx) {
-        td.addEventListener('click', () => {
+        td.addEventListener('click', e => {
+            if (e.altKey) { // Alt+click: highlight / unhighlight the entire row (as in the normal table)
+                e.preventDefault();
+                e.stopPropagation();
+                _altRightClickRow(td.closest('tr'));
+                return;
+            }
             if (_compareMode)        { _compareCell(td);   _selectedCell = td; }
             else if (_duplicateMode) { _duplicateCell(td); _selectedCell = td; }
             else                     { _selectCell(td); }
@@ -5605,7 +5814,8 @@ async function _copyAsSqlSelect() {
             return;
         }
 
-        const { cols, rows } = _lastResult;
+        const cols = _lastResult.cols;
+        const rows = _exportRows();
         const { visibleRowIndices, visibleColIndices } = _getVisibleIndices();
 
         const visibleRows = visibleRowIndices.map(i => rows[i]);
@@ -5677,6 +5887,19 @@ async function _copyAsSqlSelect() {
     }
 
     /**
+     * Rows the exports index into. Normally _lastResult.rows; in the Diff Query / Compare view the
+     * table holds extra removed / added rows, so read the displayed values back from the DOM.
+     */
+    function _exportRows() {
+        const tbody = document.querySelector('#results-table tbody');
+        if (!_diffQuery || !tbody?.querySelector('tr.tr-diff-added, tr.tr-diff-removed')) return _lastResult.rows;
+        return Array.from(tbody.querySelectorAll('tr'))
+            .filter(tr => !tr.classList.contains('diff-banner-tr') && !tr.querySelector('.results-empty'))
+            .map(tr => Array.from(tr.querySelectorAll('td:not(.td-row-num)'))
+                .map(td => td.classList.contains('is-null') ? null : (td.dataset.raw ?? td.textContent)));
+    }
+
+    /**
      * Returns the indices of rows and columns that are currently visible in the
      * results table, accounting for column filters (row-col-filter-hidden) and Dim
      * (inline display:none on cells). Exports use this so they only include
@@ -5718,7 +5941,8 @@ async function _copyAsSqlSelect() {
     function _exportCsv() {
         if (!_lastResult) return;
 
-        const { cols, rows } = _lastResult;
+        const cols = _lastResult.cols;
+        const rows = _exportRows();
         const { visibleRowIndices, visibleColIndices } = _getVisibleIndices();
 
         // Use the rendered header labels (respect DB Schema Alias toggle),
@@ -5769,7 +5993,7 @@ async function _copyAsSqlSelect() {
 
     function _exportJson() {
         if (!_lastResult) return;
-        const { rows } = _lastResult;
+        const rows = _exportRows();
         const { visibleRowIndices, visibleColIndices } = _getVisibleIndices();
 
         const allKeys     = _buildJsonKeys();
@@ -9590,6 +9814,8 @@ async function _copyAsSqlSelect() {
         toggle:           _toggleCollapsed,
         toggleTall:       _toggleTall,
         toggleFullscreen: _toggleFullscreen,
+        toggleMaximizeMinimize: _toggleMaximizeMinimize,
+        toggleNormalMinimize: _toggleNormalMinimize,
         setFullscreen:    _setFullscreen,
         /** Apply or remove col-deselected styling on a result column by its select key.
          *  Skipped if _suppressNextColDeselectedSync is set (the results-table header click
