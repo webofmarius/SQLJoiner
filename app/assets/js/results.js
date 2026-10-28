@@ -1885,6 +1885,11 @@ const Results = (() => {
         return L > 0.179 ? '#1a1a1a' : '#ffffff';
     }
 
+    /** Solid equivalent of the SELECT box's 50% custom-expression tint (so scrolled rows can't show through the sticky header). */
+    function _fadedExprBg(hex) {
+        return /^#[0-9a-f]{6}$/i.test(hex || '') ? `color-mix(in srgb, ${hex} 50%, var(--surface))` : (hex || '');
+    }
+
     /**
      * Reconstruct the SELECT state key (e.g. "u.age") for a result column.
      * Used to tag <th> elements so the highlight feature can locate them.
@@ -2022,8 +2027,8 @@ const Results = (() => {
             if (th.classList.contains('th-custom-expr')) {
                 const cx = (State.selectCustomExprs ?? []).find(x => x.id === th.dataset.exprId);
                 const c = cx ? _exprEffectiveColor(cx) : _customExprColor(th.dataset.raw);
-                th.style.backgroundColor = c || '';
-                th.style.color = c ? _readableTextColor(c) : '';
+                th.style.backgroundColor = c ? _fadedExprBg(c) : '';
+                th.style.color = c ? '#ffffff' : '';
                 return;
             }
             const colKey = th.dataset.colKey || '';
@@ -2374,8 +2379,8 @@ const Results = (() => {
                 th.appendChild(em);
                 const exprColor = _customExprColor(col);
                 if (exprColor) {
-                    th.style.backgroundColor = exprColor;
-                    th.style.color = _readableTextColor(exprColor);
+                    th.style.backgroundColor = _fadedExprBg(exprColor);
+                    th.style.color = '#ffffff';
                 }
             } else if (_isColumnAlias(col)) {
                 th.classList.add('th-alias');
