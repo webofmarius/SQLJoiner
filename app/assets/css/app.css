@@ -6384,6 +6384,72 @@ kbd {
     font-size: 11px;
 }
 
+/* Context groups */
+.ctx-group {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    margin-bottom: 8px;
+    padding: 5px;
+    background: color-mix(in srgb, var(--surface) 60%, transparent);
+}
+.ctx-group__head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 3px 5px 5px;
+    cursor: pointer;
+    user-select: none;
+}
+.ctx-group__caret { width: 10px; font-size: 11px; color: var(--text-muted); }
+.ctx-group__name  { flex: 1; font-size: 12px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ctx-group__count { font-size: 11px; color: var(--text-muted); }
+.ctx-group__body  { padding-left: 14px; }
+.ctx-group__body .ctx-row:last-child { margin-bottom: 0; }
+.ctx-group.is-collapsed:not(.is-searching) .ctx-group__body { display: none; }
+.ctx-group__empty { margin: 4px 0; font-size: 11px; }
+.ctx-group.is-drop-target,
+#ctx-saved-list.is-drop-target {
+    border-color: var(--accent, #4a9eff);
+    background: color-mix(in srgb, var(--accent, #4a9eff) 12%, transparent);
+}
+.ctx-row.is-dragging { opacity: .45; }
+.ctx-row.is-cut { opacity: .5; border-style: dashed; }
+.ctx-cut-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 10px;
+    margin-bottom: 8px;
+    font-size: 11px;
+    border: 1px dashed var(--accent, #4a9eff);
+    border-radius: 5px;
+}
+.ctx-cut-bar span { flex: 1; }
+.ctx-cut-bar button { padding: 3px 8px; font-size: 11px; }
+
+.ctx-move-menu {
+    position: fixed;
+    z-index: 100000;
+    min-width: 150px;
+    max-height: 60vh;
+    overflow-y: auto;
+    padding: 4px;
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    border-radius: 5px;
+    box-shadow: 0 6px 18px rgba(0,0,0,.35);
+}
+.ctx-move-menu__item {
+    padding: 5px 10px;
+    font-size: 12px;
+    border-radius: 3px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.ctx-move-menu__item:hover { background: color-mix(in srgb, var(--accent, #4a9eff) 22%, var(--surface2)); }
+.ctx-move-menu__item.is-active { font-weight: 700; }
+.ctx-move-menu__sep { height: 1px; margin: 4px 0; background: var(--border); }
+
 /* =============================================================================
    14. Toast Notifications
    ============================================================================= */

@@ -4244,6 +4244,9 @@ const App = (() => {
         document.getElementById('btn-load-context')
             .addEventListener('click', () => Modals.openContext());
 
+        document.getElementById('btn-ctx-new-group')
+            .addEventListener('click', () => _createCtxGroup());
+
         const _ctxSearchEl = document.getElementById('ctx-search-input');
         _ctxSearchEl.addEventListener('input', _filterContextList);
         Autocomplete.attach(_ctxSearchEl, {
@@ -4946,20 +4949,112 @@ const App = (() => {
     // Context modal — saved contexts list
     // -------------------------------------------------------------------------
 
-    /** Filter the visible ctx-rows by the current search term (case-insensitive). */
+    /** Filter the visible ctx-rows by the current search term (case-insensitive). A group whose own name matches shows all its contexts. */
     function _filterContextList() {
         const term = (document.getElementById('ctx-search-input')?.value ?? '').trim().toLowerCase();
-        document.querySelectorAll('#ctx-saved-list .ctx-row').forEach(row => {
-            const name = (row.querySelector('.ctx-row__name')?.textContent ?? '').toLowerCase();
-            row.classList.toggle('hidden', term !== '' && !name.includes(term));
+        const rowMatches = row => (row.querySelector('.ctx-row__name')?.textContent ?? '').toLowerCase().includes(term);
+        document.querySelectorAll('#ctx-saved-list > .ctx-row').forEach(row => {
+            row.classList.toggle('hidden', term !== '' && !rowMatches(row));
         });
+        document.querySelectorAll('#ctx-saved-list .ctx-group').forEach(group => {
+            const nameHit = (group.querySelector('.ctx-group__name')?.textContent ?? '').toLowerCase().includes(term);
+            let visible = 0;
+            group.querySelectorAll('.ctx-row').forEach(row => {
+                const show = term === '' || nameHit || rowMatches(row);
+                row.classList.toggle('hidden', !show);
+                if (show) visible++;
+            });
+            group.classList.toggle('is-searching', term !== '');
+            group.classList.toggle('hidden', term !== '' && !nameHit && visible === 0);
+        });
+    }
+
+    // ---- Context groups --------------------------------------------------
+    let _ctxGroups = { groups: [], groupMap: {} };
+    let _ctxCutId  = null;   // context id waiting to be pasted into a group
+
+    function _normCtxGroups(doc) {
+        const groups   = Array.isArray(doc?.groups) ? doc.groups : [];
+        const groupMap = doc?.groupMap && !Array.isArray(doc.groupMap) ? doc.groupMap : {};
+        return { groups, groupMap };
+    }
+
+    async function _saveCtxGroups() {
+        _ctxGroups = _normCtxGroups(await API.context.groups.save(_ctxGroups.groups, _ctxGroups.groupMap));
+    }
+
+    /** Persist the groups doc then re-render; reloads from the server if saving fails. */
+    async function _commitCtxGroups(mutate) {
+        try {
+            mutate();
+            await _saveCtxGroups();
+        } catch (e) {
+            _notify('Group update failed: ' + e.message, 'error');
+        }
+        _loadContextList();
+    }
+
+    async function _createCtxGroup() {
+        const name = await Dialog.prompt('Name for the new group:', '');
+        if (name === null || name.trim() === '') return null;
+        const id = 'g' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+        await _commitCtxGroups(() => _ctxGroups.groups.push({ id, name: name.trim(), collapsed: false }));
+        return id;
+    }
+
+    function _moveCtxToGroup(ctxId, groupId) {
+        if (ctxId === _ctxCutId) _ctxCutId = null;
+        return _commitCtxGroups(() => {
+            if (groupId) _ctxGroups.groupMap[ctxId] = groupId;
+            else delete _ctxGroups.groupMap[ctxId];
+        });
+    }
+
+    /** Small popup listing the groups a context can be moved to. */
+    function _openCtxMoveMenu(anchor, ctxId) {
+        document.querySelector('.ctx-move-menu')?.remove();
+        const menu = document.createElement('div');
+        menu.className = 'ctx-move-menu';
+        const current = _ctxGroups.groupMap[ctxId] || null;
+        const add = (label, active, fn) => {
+            const it = document.createElement('div');
+            it.className = 'ctx-move-menu__item' + (active ? ' is-active' : '');
+            it.textContent = (active ? '✓ ' : '') + label;
+            it.addEventListener('click', () => { close(); fn(); });
+            menu.appendChild(it);
+        };
+        _ctxGroups.groups.forEach(g => add(g.name, g.id === current, () => _moveCtxToGroup(ctxId, g.id)));
+        if (_ctxGroups.groups.length) {
+            const sep = document.createElement('div');
+            sep.className = 'ctx-move-menu__sep';
+            menu.appendChild(sep);
+        }
+        add('No group', !current, () => _moveCtxToGroup(ctxId, null));
+        add('+ New group…', false, async () => {
+            const gid = await _createCtxGroup();
+            if (gid) _moveCtxToGroup(ctxId, gid);
+        });
+        document.body.appendChild(menu);
+        const r = anchor.getBoundingClientRect();
+        menu.style.top  = Math.min(r.bottom + 2, window.innerHeight - menu.offsetHeight - 8) + 'px';
+        menu.style.left = Math.max(8, Math.min(r.right - menu.offsetWidth, window.innerWidth - menu.offsetWidth - 8)) + 'px';
+        function close() {
+            menu.remove();
+            document.removeEventListener('mousedown', onOutside, true);
+        }
+        function onOutside(e) { if (!menu.contains(e.target)) close(); }
+        setTimeout(() => document.addEventListener('mousedown', onOutside, true), 0);
     }
 
     async function _loadContextList() {
         const list = document.getElementById('ctx-saved-list');
         list.innerHTML = '<p class="config-empty">Loading…</p>';
         try {
-            const items = await API.context.list();
+            const [items, groups] = await Promise.all([
+                API.context.list(),
+                API.context.groups.get().catch(() => null),
+            ]);
+            _ctxGroups = _normCtxGroups(groups);
             _renderContextList(items);
         } catch {
             list.innerHTML = '<p class="config-empty">Could not load saved contexts.</p>';
@@ -4968,7 +5063,7 @@ const App = (() => {
 
     function _renderContextList(items) {
         const list = document.getElementById('ctx-saved-list');
-        if (!items.length) {
+        if (!items.length && !_ctxGroups.groups.length) {
             list.innerHTML = '<p class="config-empty">No saved contexts yet.</p>';
             return;
         }
@@ -4986,16 +5081,28 @@ const App = (() => {
         const _buildRow = item => {
             const date = item.savedAt ? new Date(item.savedAt).toLocaleString() : '';
             const row  = document.createElement('div');
-            row.className = 'ctx-row' + (item.id === State.loadedContextId ? ' is-loaded' : '');
+            row.className = 'ctx-row' + (item.id === State.loadedContextId ? ' is-loaded' : '') + (item.id === _ctxCutId ? ' is-cut' : '');
             row.innerHTML =
                 `<span class="ctx-row__name">${_escHtml(item.name)}</span>` +
                 `<span class="ctx-row__date">${_escHtml(date)}</span>` +
                 `<div class="ctx-row__btns">` +
+                    `<button class="btn-ctx-cut" data-id="${_escAttr(item.id)}" title="Cut — then Paste into a group">✂ Cut</button>` +
+                    `<button class="btn-ctx-move" data-id="${_escAttr(item.id)}" title="Move to a group">📁 Move</button>` +
                     `<button class="btn-ctx-rename" data-id="${_escAttr(item.id)}" data-name="${_escAttr(item.name)}" title="Rename context">Rename</button>` +
                     `<button class="btn-ctx-duplicate" data-id="${_escAttr(item.id)}" data-name="${_escAttr(item.name)}" title="Duplicate context">⧉ Duplicate</button>` +
                     `<button class="btn-ctx-disk" data-id="${_escAttr(item.id)}" data-name="${_escAttr(item.name)}" title="Save to disk">⬇ Save</button>` +
                     `<button class="btn-ctx-delete btn-danger" data-id="${_escAttr(item.id)}">✕</button>` +
                 `</div>`;
+            row.draggable = true;
+            row.addEventListener('dragstart', e => {
+                e.dataTransfer.setData('text/plain', item.id);
+                e.dataTransfer.effectAllowed = 'move';
+                row.classList.add('is-dragging');
+            });
+            row.addEventListener('dragend', () => {
+                row.classList.remove('is-dragging');
+                document.querySelectorAll('#ctx-saved-list .is-drop-target').forEach(el => el.classList.remove('is-drop-target'));
+            });
             row.addEventListener('click', async e => {
                 if (e.target.closest('button')) return;
                 if (!await _confirmIfDirty()) return;
@@ -5014,14 +5121,127 @@ const App = (() => {
             return row;
         };
 
-        if (loadedItem) {
-            list.appendChild(_buildRow(loadedItem));
+        const groupIds   = new Set(_ctxGroups.groups.map(g => g.id));
+        const groupOf    = id => (groupIds.has(_ctxGroups.groupMap[id]) ? _ctxGroups.groupMap[id] : null);
+
+        /** Make `el` accept dragged context rows; dropping assigns them to `groupId` (null = no group). */
+        const _dropTarget = (el, groupId) => {
+            el.addEventListener('dragover', e => {
+                e.preventDefault();
+                e.stopPropagation();
+                e.dataTransfer.dropEffect = 'move';
+                el.classList.add('is-drop-target');
+            });
+            el.addEventListener('dragleave', e => {
+                if (!el.contains(e.relatedTarget)) el.classList.remove('is-drop-target');
+            });
+            el.addEventListener('drop', e => {
+                e.preventDefault();
+                e.stopPropagation();
+                el.classList.remove('is-drop-target');
+                const id = e.dataTransfer.getData('text/plain');
+                if (id && (groupOf(id) || null) !== groupId) _moveCtxToGroup(id, groupId);
+            });
+        };
+
+        const cutItem = _ctxCutId ? items.find(i => i.id === _ctxCutId) : null;
+        if (!cutItem) _ctxCutId = null;
+        if (cutItem) {
+            const bar = document.createElement('div');
+            bar.className = 'ctx-cut-bar';
+            bar.innerHTML =
+                `<span>✂ Cut: <b>${_escHtml(cutItem.name)}</b> — press Paste on a group</span>` +
+                (groupOf(cutItem.id) ? `<button class="btn-ctx-paste-none">Paste outside groups</button>` : '') +
+                `<button class="btn-ctx-cut-cancel">Cancel</button>`;
+            bar.querySelector('.btn-ctx-paste-none')?.addEventListener('click', () => _moveCtxToGroup(cutItem.id, null));
+            bar.querySelector('.btn-ctx-cut-cancel').addEventListener('click', () => { _ctxCutId = null; _loadContextList(); });
+            list.appendChild(bar);
+        }
+
+        const pinned = loadedItem && !groupOf(loadedItem.id) ? loadedItem : null;
+        if (pinned) {
+            list.appendChild(_buildRow(pinned));
             const divider = document.createElement('hr');
             divider.className = 'ctx-list-divider';
             list.appendChild(divider);
         }
 
-        rest.forEach(item => list.appendChild(_buildRow(item)));
+        _ctxGroups.groups.forEach(g => {
+            const members = items.filter(i => groupOf(i.id) === g.id);
+            const box = document.createElement('div');
+            box.className = 'ctx-group' + (g.collapsed ? ' is-collapsed' : '');
+            box.innerHTML =
+                `<div class="ctx-group__head">` +
+                    `<span class="ctx-group__caret">${g.collapsed ? '▸' : '▾'}</span>` +
+                    `<span class="ctx-group__name">${_escHtml(g.name)}</span>` +
+                    `<span class="ctx-group__count">${members.length}</span>` +
+                    `<div class="ctx-row__btns">` +
+                        (cutItem && groupOf(cutItem.id) !== g.id ? `<button class="btn-ctxg-paste" title="Paste the cut context here">📋 Paste</button>` : '') +
+                        `<button class="btn-ctxg-rename" title="Rename group">Rename</button>` +
+                        `<button class="btn-ctxg-disband" title="Remove the group but keep its contexts">Disband</button>` +
+                        `<button class="btn-ctxg-delete btn-danger" title="Delete the group and all its contexts">✕</button>` +
+                    `</div>` +
+                `</div>`;
+            const body = document.createElement('div');
+            body.className = 'ctx-group__body';
+            if (members.length) members.forEach(m => body.appendChild(_buildRow(m)));
+            else body.innerHTML = '<p class="config-empty ctx-group__empty">Drop contexts here</p>';
+            box.appendChild(body);
+
+            const head = box.querySelector('.ctx-group__head');
+            head.addEventListener('click', e => {
+                if (e.target.closest('button')) return;
+                g.collapsed = !g.collapsed;
+                box.classList.toggle('is-collapsed', g.collapsed);
+                head.querySelector('.ctx-group__caret').textContent = g.collapsed ? '▸' : '▾';
+                _saveCtxGroups().catch(() => {});
+            });
+            head.querySelector('.btn-ctxg-paste')?.addEventListener('click', () => _moveCtxToGroup(cutItem.id, g.id));
+            head.querySelector('.btn-ctxg-rename').addEventListener('click', async () => {
+                const name = await Dialog.prompt('New name for this group:', g.name);
+                if (name === null || name.trim() === '') return;
+                _commitCtxGroups(() => { g.name = name.trim(); });
+            });
+            head.querySelector('.btn-ctxg-disband').addEventListener('click', async () => {
+                if (!await Dialog.confirm(`Disband group "${g.name}"? Its ${members.length} context(s) will be kept.`)) return;
+                _commitCtxGroups(() => {
+                    _ctxGroups.groups = _ctxGroups.groups.filter(x => x.id !== g.id);
+                    members.forEach(m => delete _ctxGroups.groupMap[m.id]);
+                });
+            });
+            head.querySelector('.btn-ctxg-delete').addEventListener('click', async () => {
+                if (!await Dialog.confirm(`Delete group "${g.name}" and its ${members.length} context(s)? This cannot be undone.`)) return;
+                try {
+                    _ctxGroups = _normCtxGroups(await API.context.groups.delete(g.id));
+                    if (members.some(m => m.id === State.loadedContextId)) {
+                        State.loadedContextId   = null;
+                        State.loadedContextName = null;
+                        _updateContextTitle('');
+                        _updateSaveContextButton();
+                    }
+                    _notify('Group deleted.', 'success');
+                } catch (e) {
+                    _notify('Delete failed: ' + e.message, 'error');
+                }
+                _loadContextList();
+            });
+            _dropTarget(box, g.id);
+            list.appendChild(box);
+        });
+
+        rest.filter(i => !groupOf(i.id)).forEach(item => list.appendChild(_buildRow(item)));
+        if (_ctxGroups.groups.length) _dropTarget(list, null);
+
+        list.querySelectorAll('.btn-ctx-cut').forEach(btn => {
+            btn.addEventListener('click', () => {
+                _ctxCutId = _ctxCutId === btn.dataset.id ? null : btn.dataset.id;
+                _loadContextList();
+            });
+        });
+
+        list.querySelectorAll('.btn-ctx-move').forEach(btn => {
+            btn.addEventListener('click', () => _openCtxMoveMenu(btn, btn.dataset.id));
+        });
 
         list.querySelectorAll('.btn-ctx-rename').forEach(btn => {
             btn.addEventListener('click', async () => {
@@ -5046,6 +5266,11 @@ const App = (() => {
                 if (!await Dialog.confirm('Delete this saved context?')) return;
                 try {
                     await API.context.delete(btn.dataset.id);
+                    if (_ctxCutId === btn.dataset.id) _ctxCutId = null;
+                    if (_ctxGroups.groupMap[btn.dataset.id]) {
+                        delete _ctxGroups.groupMap[btn.dataset.id];
+                        _saveCtxGroups().catch(() => {});
+                    }
                     if (State.loadedContextId === btn.dataset.id) {
                         State.loadedContextId   = null;
                         State.loadedContextName = null;
@@ -5064,7 +5289,12 @@ const App = (() => {
                 const dupName = (btn.dataset.name || 'Context') + ' - duplicate';
                 try {
                     const context = await API.context.load(btn.dataset.id);
-                    await API.context.save({ name: dupName, context });
+                    const saved = await API.context.save({ name: dupName, context });
+                    const gid   = _ctxGroups.groupMap[btn.dataset.id];
+                    if (gid && saved?.id) {
+                        _ctxGroups.groupMap[saved.id] = gid;
+                        await _saveCtxGroups().catch(() => {});
+                    }
                     _loadContextList();
                     _notify(`Duplicated as "${dupName}".`, 'success');
                 } catch (e) {

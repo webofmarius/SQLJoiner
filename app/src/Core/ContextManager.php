@@ -24,6 +24,13 @@ namespace Core;
  *   context.delete  delete($request)   { id }             → null
  *   context.rename  rename($request)   { id, name }       → { id, name, savedAt }
  *   context.update  update($request)   { id, name, context } → { id, name, savedAt }
+ *   context.groups.get    groupsGet($request)    (no body)               → { groups, groupMap }
+ *   context.groups.save   groupsSave($request)   { groups, groupMap }    → { groups, groupMap }
+ *   context.groups.delete groupsDelete($request) { id }                  → { groups, groupMap }
+ *     (deletes the group AND every context in it; disbanding is a client-side groups.save)
+ *
+ * Groups live in storage/context_groups.json:
+ *   { groups: [{ id, name, collapsed }], groupMap: { contextId: groupId } }
  *
  * Security:
  *   - File names are derived only from a strict slug + uniqid() — no user input reaches
@@ -227,6 +234,106 @@ class ContextManager
             'name'    => $payload['name'],
             'savedAt' => $payload['savedAt'],
         ], 'Context updated.');
+    }
+
+    // =========================================================================
+    // Groups
+    // =========================================================================
+
+    public function groupsGet(Request $request): void
+    {
+        Response::success($this->readGroups());
+    }
+
+    /**
+     * Replace the whole groups document (create / rename / disband / move are all client-side edits).
+     *
+     * Request body: { groups: [{ id, name, collapsed }], groupMap: { contextId: groupId } }
+     */
+    public function groupsSave(Request $request): void
+    {
+        $doc = $this->sanitiseGroups([
+            'groups'   => $request->get('groups', []),
+            'groupMap' => $request->get('groupMap', []),
+        ]);
+        $this->writeGroups($doc);
+        Response::success($doc, 'Groups saved.');
+    }
+
+    /**
+     * Delete a group together with all contexts assigned to it.
+     *
+     * Request body: { id: string }
+     */
+    public function groupsDelete(Request $request): void
+    {
+        $gid = preg_replace('/[^\w\-]/', '', (string) $request->get('id', ''));
+        $doc = $this->readGroups();
+
+        foreach ($doc['groupMap'] as $ctxId => $groupId) {
+            if ($groupId !== $gid) {
+                continue;
+            }
+            $file = $this->filePath((string) $ctxId);
+            if (is_file($file)) {
+                unlink($file);
+            }
+            unset($doc['groupMap'][$ctxId]);
+        }
+        $doc['groups'] = array_values(array_filter($doc['groups'], fn($g) => $g['id'] !== $gid));
+
+        $this->writeGroups($doc);
+        Response::success($doc, 'Group deleted.');
+    }
+
+    private function groupsPath(): string
+    {
+        return STORAGE_PATH . '/context_groups.json';
+    }
+
+    private function readGroups(): array
+    {
+        $raw = is_file($this->groupsPath()) ? json_decode((string) file_get_contents($this->groupsPath()), true) : null;
+        return $this->sanitiseGroups(is_array($raw) ? $raw : []);
+    }
+
+    private function writeGroups(array $doc): void
+    {
+        $doc['groupMap'] = (object) $doc['groupMap']; // keep {} (not []) when empty
+        file_put_contents(
+            $this->groupsPath(),
+            json_encode($doc, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE),
+            LOCK_EX
+        );
+    }
+
+    /** Normalise to { groups: [{id,name,collapsed}], groupMap: {ctxId: existingGroupId} }. */
+    private function sanitiseGroups(array $raw): array
+    {
+        $groups = [];
+        $seen   = [];
+        foreach (is_array($raw['groups'] ?? null) ? $raw['groups'] : [] as $g) {
+            if (!is_array($g)) {
+                continue;
+            }
+            $id   = preg_replace('/[^\w\-]/', '', (string) ($g['id'] ?? ''));
+            $name = trim((string) ($g['name'] ?? ''));
+            if ($id === '' || $name === '' || isset($seen[$id])) {
+                continue;
+            }
+            $seen[$id] = true;
+            $groups[]  = ['id' => $id, 'name' => $name, 'collapsed' => !empty($g['collapsed'])];
+        }
+
+        $map = [];
+        foreach (is_array($raw['groupMap'] ?? null) ? $raw['groupMap'] : [] as $ctxId => $gid) {
+            $ctxId = preg_replace('/[^\w\-]/', '', (string) $ctxId);
+            if ($ctxId !== '' && is_string($gid) && isset($seen[$gid])) {
+                $map[$ctxId] = $gid;
+            }
+        }
+
+        return ['groups' => $groups, 'groupMap' => $map];
     }
 
     // =========================================================================

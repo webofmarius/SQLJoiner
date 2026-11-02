@@ -97,6 +97,11 @@ const API = (() => {
             delete:    (id)          => call('context.delete',    { id }),
             rename:    (id, name)    => call('context.rename',   { id, name }),
             update:    (id, data)   => call('context.update',   { id, ...data }),
+            groups: {
+                get:    ()                    => call('context.groups.get'),
+                save:   (groups, groupMap)    => call('context.groups.save',   { groups, groupMap }),
+                delete: (id)                  => call('context.groups.delete', { id }),
+            },
         },
 
         /** About text */

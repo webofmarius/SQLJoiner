@@ -59,6 +59,9 @@ $routes = [
     'context.delete'    => ['Core\ContextManager', 'delete'],
     'context.rename'    => ['Core\ContextManager', 'rename'],
     'context.update'    => ['Core\ContextManager', 'update'],
+    'context.groups.get'    => ['Core\ContextManager', 'groupsGet'],
+    'context.groups.save'   => ['Core\ContextManager', 'groupsSave'],
+    'context.groups.delete' => ['Core\ContextManager', 'groupsDelete'],
 
     // --- About ---
     'about.read' => ['Core\AboutManager', 'read'],
