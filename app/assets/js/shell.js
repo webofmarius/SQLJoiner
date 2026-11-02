@@ -27,6 +27,7 @@
     const closed = [];   // most recent last: { snap, customTitle }
     let activeId = null;
     let seq      = 0;
+    let ctxColors = {};   // saved-context id → '#rrggbb' (set by the Contexts modal; colours the tab)
 
     // ── helpers ─────────────────────────────────────────────────────────────
     const byId     = id => tabs.find(t => t.id === id) ?? null;
@@ -53,6 +54,12 @@
         if (t.id === activeId) document.title = t.autoTitle ? `${BASE_TITLE} - ${t.autoTitle}` : BASE_TITLE;
     }
 
+    function applyTabColor(t) {
+        const c = t.ctxId ? ctxColors[t.ctxId] : '';
+        t.el.classList.toggle('has-color', !!c);
+        if (c) t.el.style.setProperty('--tab-color', c); else t.el.style.removeProperty('--tab-color');
+    }
+
     function refreshReopen() {
         reopenEl.disabled = closed.length === 0;
     }
@@ -70,7 +77,7 @@
         if (tabs.length >= MAX_TABS) { notify(`Tab limit reached (${MAX_TABS}).`); return null; }
 
         const id = 't' + Date.now().toString(36) + (seq++);
-        const t  = { id, autoTitle: '', customTitle: opts.customTitle || '', loaded: false, snapshot: opts.snapshot ?? null, keepIdentity: !!opts.keepIdentity };
+        const t  = { id, ctxId: opts.contextId || null, autoTitle: opts.autoTitle || '', customTitle: opts.customTitle || '', loaded: false, snapshot: opts.snapshot ?? null, keepIdentity: !!opts.keepIdentity };
 
         const el = document.createElement('div');
         el.className = 'tab';
@@ -104,6 +111,7 @@
         }
         framesEl.appendChild(frame);
         refreshLabel(t);
+        applyTabColor(t);
         bindTabEvents(t, closeEl);
 
         if (!opts.lazy) loadFrame(t);
@@ -386,11 +394,42 @@
             const title = String(e.data.title || '');
             const prefix = BASE_TITLE + ' - ';
             t.autoTitle = title.startsWith(prefix) ? title.slice(prefix.length) : '';
+            if ('ctx' in e.data) { t.ctxId = e.data.ctx || null; applyTabColor(t); }
             if (!t.titleEl.querySelector('input')) refreshLabel(t);
         } else if (e.data.type === 'key' && t.id === activeId) {
             handleKey(String(e.data.code), !!e.data.shift);
         }
     });
+
+    // API for the app inside the iframes (same origin): window.parent.__shell
+    window.__shell = {
+        /** list: [{ contextId, contextName, json, profileId }] → opens each in a new tab (first activates, rest load lazily). Returns how many opened. */
+        openContexts(list) {
+            let n = 0;
+            for (const c of list) {
+                const t = createTab({
+                    snapshot:     { json: c.json, profileId: c.profileId ?? null, contextId: c.contextId, contextName: c.contextName },
+                    keepIdentity: true,
+                    contextId:    c.contextId,
+                    autoTitle:    c.contextName,
+                    lazy:         n > 0,
+                    activate:     n === 0,
+                });
+                if (!t) break;
+                n++;
+            }
+            return n;
+        },
+        setContextColors(map) {
+            ctxColors = map && typeof map === 'object' ? map : {};
+            tabs.forEach(applyTabColor);
+        },
+    };
+    // Load the saved colours so tabs are coloured even before the Contexts modal is opened
+    fetch('api.php?action=context.groups.get', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+        .then(r => r.json())
+        .then(r => { if (r?.data?.colors) window.__shell.setContextColors(r.data.colors); })
+        .catch(() => {});
 
     document.getElementById('tab-new').addEventListener('click', () => createTab());
     reopenEl.addEventListener('click', reopenClosed);

@@ -2653,6 +2653,7 @@ body.is-cut-mode * { cursor: crosshair !important; }
     padding: 3px 0 3px 18px; /* Indent columns under table header */
     font-size: 11px;
 }
+.select-col-row:hover { background: var(--surface2); border-radius: 3px; }
 .select-col-row input[type="checkbox"] { width: auto; flex-shrink: 0; }
 .select-col-row label {
     display: flex;
@@ -2699,13 +2700,20 @@ body.is-cut-mode * { cursor: crosshair !important; }
 /* FROM_UNIXTIME quick-add — lives inside .col-alias-wrap and floats just off
    its left edge, revealed on row hover. Absolutely positioned so it never
    reflows the row; it briefly overlays the column name while hovering. */
-.select-col-fut-btn {
+.select-col-float {
     position: absolute;
     right: 100%;
     margin-right: 4px;
     top: 50%;
     transform: translateY(-50%);
     z-index: 3;
+    display: flex;
+    gap: 8px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.12s;
+}
+.select-col-fut-btn {
     white-space: nowrap;
     background: var(--surface3);
     border: 1px solid var(--border);
@@ -2716,17 +2724,47 @@ body.is-cut-mode * { cursor: crosshair !important; }
     letter-spacing: 0.3px;
     padding: 2px 5px;
     cursor: pointer;
-    opacity: 0;
-    pointer-events: none;
     box-shadow: -7px 0 7px 3px var(--surface);
-    transition: opacity 0.12s, color 0.12s, border-color 0.12s;
+    transition: color 0.12s, border-color 0.12s;
 }
-.select-col-row:hover .select-col-fut-btn {
+.select-col-copy-btn {
+    flex-shrink: 0;
+    background: transparent;
+    border: none;
+    color: var(--text-faint);
+    font-size: 11px;
+    padding: 0 4px;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.15s, color 0.15s;
+    line-height: 1;
+}
+.select-col-row:hover .select-col-copy-btn { opacity: 0.45; }
+.select-col-copy-btn:hover { opacity: 1 !important; color: var(--accent); }
+.select-col-more-btn { display: none; }
+.select-col-row.actions-collapsed .select-col-float > :not(.select-col-more-btn),
+.select-col-row.actions-collapsed .select-col-copy-btn { display: none; }
+.select-col-row.actions-collapsed .select-col-more-btn { display: block; }
+.select-col-actions-popup {
+    position: fixed;
+    z-index: 10000;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    max-width: 260px;
+    padding: 6px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.35);
+}
+.select-col-actions-popup .select-col-fut-btn { box-shadow: none; }
+.select-col-row:hover .select-col-float {
     opacity: 0.95;
     pointer-events: auto;
 }
+.select-col-float:hover { opacity: 1; }
 .select-col-fut-btn:hover {
-    opacity: 1;
     color: var(--accent);
     border-color: var(--accent);
 }
@@ -6413,6 +6451,23 @@ kbd {
     background: color-mix(in srgb, var(--accent, #4a9eff) 12%, transparent);
 }
 .ctx-row.is-dragging { opacity: .45; }
+.ctx-row.has-color,
+.ctx-row.has-color:hover { background: color-mix(in srgb, var(--ctx-color) 24%, var(--surface2)); border-left: 5px solid var(--ctx-color); }
+.ctx-row.has-color:hover { background: color-mix(in srgb, var(--ctx-color) 34%, var(--surface2)); }
+.ctx-group.has-color { background: color-mix(in srgb, var(--grp-color) 16%, transparent); border-color: var(--grp-color); }
+.btn-ctx-color { padding: 2px 4px; background: transparent; border: none; display: inline-flex; align-items: center; flex-shrink: 0; }
+.ctx-dot { width: 12px; height: 12px; border-radius: 50%; border: 1.5px solid var(--text-muted); background: var(--ctx-color, transparent); display: inline-block; }
+.ctx-color-grid { display: grid; grid-template-columns: repeat(4, 22px); gap: 6px; padding: 6px; }
+.ctx-color-swatch { width: 22px; height: 22px; padding: 0; border-radius: 50%; border: 2px solid transparent; cursor: pointer; }
+.ctx-color-swatch.is-active { border-color: var(--text); }
+.ctx-color-apply { display: flex; align-items: center; gap: 6px; padding: 6px 8px; font-size: 11px; cursor: pointer; border-bottom: 1px solid var(--border); }
+.ctx-color-menu input[type=color] { vertical-align: middle; width: 28px; height: 18px; padding: 0; border: none; background: none; cursor: pointer; }
+#ctx-saved-list.has-focus > .ctx-row,
+#ctx-saved-list.has-focus > .ctx-list-divider,
+#ctx-saved-list.has-focus > .ctx-group:not(.is-focused) { opacity: .2; transition: opacity .15s; }
+.btn-ctxg-pin { color: var(--text-muted); display: inline-flex; align-items: center; }
+.btn-ctxg-pin:hover { color: var(--text); }
+.btn-ctxg-pin.is-on, .btn-ctxg-pin.is-on:hover { color: #1f6feb; }
 .ctx-row__chk, .ctx-group__chk { flex-shrink: 0; margin: 0; cursor: pointer; }
 .btn-ctxg-fav { padding: 0 4px; font-size: 14px; line-height: 1; background: transparent; border: none; color: var(--text-muted); }
 .btn-ctxg-fav:hover, .btn-ctxg-fav.is-fav { color: #f5b301; background: transparent; }

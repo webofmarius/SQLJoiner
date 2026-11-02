@@ -1107,6 +1107,18 @@ class QueryParser
         $clean = trim($this->stripOuterParens(trim($expr)));
         $clean = str_replace('`', '', $clean);
 
+        // EXISTS (subquery) / NOT EXISTS (subquery) → visual condition whose value
+        // is the subquery body. Must come before the generic subquery→raw fallback.
+        $trimmed = trim($this->stripOuterParens(trim($expr)));
+        if (preg_match('/^(NOT\s+)?EXISTS\s*(\(.*\))$/is', $trimmed, $m)
+            && $this->stripOuterParens($m[2]) !== $m[2]) {
+            return [
+                'col' => '',
+                'op'  => $m[1] !== '' ? 'NOT EXISTS' : 'EXISTS',
+                'val' => trim(substr($m[2], 1, -1)),
+            ];
+        }
+
         // Conditions containing a subquery cannot be represented by the visual
         // col/op/val builder — the column dropdown only lists table columns, and
         // the operator regexes below would match keywords inside the subquery

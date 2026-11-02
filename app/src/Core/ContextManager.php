@@ -29,8 +29,13 @@ namespace Core;
  *   context.groups.delete groupsDelete($request) { id }                  → { groups, groupMap }
  *     (deletes the group AND every context in it; disbanding is a client-side groups.save)
  *
+ *   context.groups.export { id }                  → { filename, data(base64 zip) }  (one <name>.json per context)
+ *   context.groups.import { name, data(base64) }  → { group, count }
+ *     The zip is fully validated (flat *.json entries only, every one a valid context) BEFORE anything
+ *     is read out of it; the uploaded temp copy is deleted afterwards. Nothing is extracted to disk.
+ *
  * Groups live in storage/context_groups.json:
- *   { groups: [{ id, name, collapsed, favorite }], groupMap: { contextId: groupId } }
+ *   { groups: [{ id, name, collapsed, favorite, color }], groupMap: { contextId: groupId }, colors: { contextId: '#rrggbb' } }
  *
  * Security:
  *   - File names are derived only from a strict slug + uniqid() — no user input reaches
@@ -70,28 +75,7 @@ class ContextManager
             Response::error('Context payload is required.', 400);
         }
 
-        $this->ensureDir();
-
-        $id      = $this->makeId($name);
-        $savedAt = (new \DateTimeImmutable())->format(\DateTimeInterface::ATOM);
-
-        $payload = [
-            'id'      => $id,
-            'name'    => $name,
-            'savedAt' => $savedAt,
-            'context' => $context,
-        ];
-
-        file_put_contents(
-            $this->filePath($id),
-            json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE),
-            LOCK_EX
-        );
-
-        Response::success(
-            ['id' => $id, 'name' => $name, 'savedAt' => $savedAt],
-            'Context saved.'
-        );
+        Response::success($this->writeContext($name, $context), 'Context saved.');
     }
 
     /**
@@ -248,13 +232,14 @@ class ContextManager
     /**
      * Replace the whole groups document (create / rename / disband / move are all client-side edits).
      *
-     * Request body: { groups: [{ id, name, collapsed, favorite }], groupMap: { contextId: groupId } }
+     * Request body: { groups: [{ id, name, collapsed, favorite, color }], groupMap: { contextId: groupId }, colors: { contextId: '#rrggbb' } }
      */
     public function groupsSave(Request $request): void
     {
         $doc = $this->sanitiseGroups([
             'groups'   => $request->get('groups', []),
             'groupMap' => $request->get('groupMap', []),
+            'colors'   => $request->get('colors', []),
         ]);
         $this->writeGroups($doc);
         Response::success($doc, 'Groups saved.');
@@ -278,12 +263,189 @@ class ContextManager
             if (is_file($file)) {
                 unlink($file);
             }
-            unset($doc['groupMap'][$ctxId]);
+            unset($doc['groupMap'][$ctxId], $doc['colors'][$ctxId]);
         }
         $doc['groups'] = array_values(array_filter($doc['groups'], fn($g) => $g['id'] !== $gid));
 
         $this->writeGroups($doc);
         Response::success($doc, 'Group deleted.');
+    }
+
+    /**
+     * Export every context of a group as <name>.json files inside one zip.
+     *
+     * Request body: { id: string }
+     * Response:     { filename, data }   data = base64 zip
+     */
+    public function groupsExport(Request $request): void
+    {
+        $gid   = preg_replace('/[^\w\-]/', '', (string) $request->get('id', ''));
+        $doc   = $this->readGroups();
+        $group = null;
+        foreach ($doc['groups'] as $g) {
+            if ($g['id'] === $gid) { $group = $g; }
+        }
+        if ($group === null) {
+            Response::error('Group not found.', 404);
+        }
+        if (!class_exists(\ZipArchive::class)) {
+            Response::error('The PHP zip extension is not available.', 501);
+        }
+
+        $tmp = tempnam(sys_get_temp_dir(), 'ctxzip');
+        try {
+            $zip = new \ZipArchive();
+            if ($zip->open($tmp, \ZipArchive::OVERWRITE) !== true) {
+                Response::error('Could not create the zip file.', 500);
+            }
+            $used  = [];
+            $count = 0;
+            foreach ($doc['groupMap'] as $ctxId => $groupId) {
+                if ($groupId !== $gid) { continue; }
+                $file = $this->filePath((string) $ctxId);
+                if (!is_file($file)) { continue; }
+                $payload = json_decode((string) file_get_contents($file), true);
+                if (!is_array($payload) || !is_array($payload['context'] ?? null)) { continue; }
+
+                $base = trim((string) preg_replace('/[\x00-\x1f\x7f\\\\\/:*?"<>|]+/u', '_', (string) ($payload['name'] ?? $ctxId)), " ._");
+                $base = $base !== '' ? mb_substr($base, 0, 120) : 'context';
+                $name = $base;
+                for ($n = 2; isset($used[mb_strtolower($name)]); $n++) { $name = $base . '_' . $n; }
+                $used[mb_strtolower($name)] = true;
+
+                $zip->addFromString($name . '.json', json_encode($payload['context'], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+                $count++;
+            }
+            if ($count === 0) {
+                $zip->close();
+                Response::error('This group has no contexts to export.', 400);
+            }
+            $zip->close();
+
+            $safe = trim((string) preg_replace('/[^\w\- ]+/u', '_', $group['name']), ' _') ?: 'group';
+            Response::success(['filename' => $safe . '.zip', 'data' => base64_encode((string) file_get_contents($tmp))]);
+        } finally {
+            if (is_file($tmp)) { unlink($tmp); }
+        }
+    }
+
+    /**
+     * Import a zip of contexts as a new group. The archive is validated completely first;
+     * if anything is wrong nothing is imported.
+     *
+     * Request body: { name: string (group name), data: string (base64 zip) }
+     * Response:     { group: {id,name}, count }
+     */
+    public function groupsImport(Request $request): void
+    {
+        $name = trim((string) $request->get('name', ''));
+        $raw  = base64_decode((string) $request->get('data', ''), true);
+        if ($name === '') { $name = 'Imported group'; }
+        if ($raw === false || $raw === '') {
+            Response::error('No zip data received.', 400);
+        }
+        if (strlen($raw) > self::ZIP_MAX_BYTES) {
+            Response::error('Zip file is too large.', 400);
+        }
+        if (!class_exists(\ZipArchive::class)) {
+            Response::error('The PHP zip extension is not available.', 501);
+        }
+
+        $tmp = tempnam(sys_get_temp_dir(), 'ctxzip');
+        try {
+            file_put_contents($tmp, $raw);
+            $contexts = $this->readValidatedZip($tmp); // [ [name, context], ... ] or error()
+        } finally {
+            if (is_file($tmp)) { unlink($tmp); } // uploaded copy is always removed
+        }
+
+        // Validation passed — only now write anything.
+        $doc   = $this->readGroups();
+        $names = array_map(fn($g) => mb_strtolower($g['name']), $doc['groups']);
+        $final = $name;
+        for ($n = 2; in_array(mb_strtolower($final), $names, true); $n++) { $final = $name . ' (' . $n . ')'; }
+
+        $gid = 'g' . substr(md5(uniqid('', true)), 0, 12);
+        $doc['groups'][] = ['id' => $gid, 'name' => $final, 'collapsed' => false, 'favorite' => false, 'color' => ''];
+        foreach ($contexts as [$ctxName, $context]) {
+            $saved = $this->writeContext($ctxName, $context);
+            $doc['groupMap'][$saved['id']] = $gid;
+        }
+        $this->writeGroups($doc);
+
+        Response::success(['group' => ['id' => $gid, 'name' => $final], 'count' => count($contexts)], 'Group imported.');
+    }
+
+    private const ZIP_MAX_BYTES   = 6 * 1024 * 1024;    // uploaded archive
+    private const ZIP_MAX_ENTRIES = 500;
+    private const ZIP_MAX_ENTRY   = 10 * 1024 * 1024;   // one uncompressed context
+    private const ZIP_MAX_TOTAL   = 50 * 1024 * 1024;   // all contexts uncompressed
+
+    /**
+     * Strictly validate a zip: flat, non-empty, only *.json files, sane sizes, each a context
+     * (a JSON object with a "tables" array). Reads entries in memory only. Emits an error and
+     * exits on the first problem.
+     *
+     * @return array<int, array{0:string,1:array}>  [contextName, context]
+     */
+    private function readValidatedZip(string $path): array
+    {
+        $zip = new \ZipArchive();
+        if ($zip->open($path, \ZipArchive::CHECKCONS) !== true) {
+            Response::error('Not a valid .zip file.', 400);
+        }
+        $count = $zip->numFiles;
+        if ($count < 1) {
+            Response::error('The zip is empty.', 400);
+        }
+        if ($count > self::ZIP_MAX_ENTRIES) {
+            Response::error('The zip has too many files (max ' . self::ZIP_MAX_ENTRIES . ').', 400);
+        }
+
+        // Pass 1 — names and declared sizes only (nothing decompressed yet).
+        $total = 0;
+        $seen  = [];
+        for ($i = 0; $i < $count; $i++) {
+            $st = $zip->statIndex($i);
+            $entry = $st['name'] ?? '';
+            if ($entry === '' || str_ends_with($entry, '/')
+                || preg_match('/[\x00-\x1f\x7f\\\\\/]/', $entry) || str_contains($entry, '..')) {
+                Response::error("Rejected: \"{$entry}\" is not a plain file at the top level of the zip.", 400);
+            }
+            if (!preg_match('/\.json$/i', $entry) || strlen($entry) <= 5) {
+                Response::error("Rejected: \"{$entry}\" is not a .json context file.", 400);
+            }
+            $key = mb_strtolower($entry);
+            if (isset($seen[$key])) {
+                Response::error("Rejected: duplicate entry \"{$entry}\".", 400);
+            }
+            $seen[$key] = true;
+            $size = (int) ($st['size'] ?? 0);
+            if ($size > self::ZIP_MAX_ENTRY) {
+                Response::error("Rejected: \"{$entry}\" is too large.", 400);
+            }
+            $total += $size;
+            if ($total > self::ZIP_MAX_TOTAL) {
+                Response::error('Rejected: the zip expands to too much data.', 400);
+            }
+        }
+
+        // Pass 2 — content: every entry must be a valid context.
+        $out = [];
+        for ($i = 0; $i < $count; $i++) {
+            $entry = $zip->getNameIndex($i);
+            $body  = $zip->getFromIndex($i, self::ZIP_MAX_ENTRY + 1);
+            if ($body === false || strlen($body) > self::ZIP_MAX_ENTRY) {
+                Response::error("Rejected: could not read \"{$entry}\".", 400);
+            }
+            $ctx = json_decode($body, true);
+            if (!is_array($ctx) || array_is_list($ctx) || !isset($ctx['tables']) || !is_array($ctx['tables'])) {
+                Response::error("Rejected: \"{$entry}\" is not a valid context (missing tables array).", 400);
+            }
+            $out[] = [substr($entry, 0, -5), $ctx];
+        }
+        $zip->close();
+        return $out;
     }
 
     private function groupsPath(): string
@@ -300,11 +462,18 @@ class ContextManager
     private function writeGroups(array $doc): void
     {
         $doc['groupMap'] = (object) $doc['groupMap']; // keep {} (not []) when empty
+        $doc['colors']   = (object) $doc['colors'];
         file_put_contents(
             $this->groupsPath(),
             json_encode($doc, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE),
             LOCK_EX
         );
+    }
+
+    /** '#rrggbb' (lower-cased) or '' when not a valid hex colour. */
+    private function cleanColor(mixed $v): string
+    {
+        return is_string($v) && preg_match('/^#[0-9a-fA-F]{6}$/', $v) ? strtolower($v) : '';
     }
 
     /** Normalise to { groups: [{id,name,collapsed}], groupMap: {ctxId: existingGroupId} }. */
@@ -322,7 +491,7 @@ class ContextManager
                 continue;
             }
             $seen[$id] = true;
-            $groups[]  = ['id' => $id, 'name' => $name, 'collapsed' => !empty($g['collapsed']), 'favorite' => !empty($g['favorite'])];
+            $groups[]  = ['id' => $id, 'name' => $name, 'collapsed' => !empty($g['collapsed']), 'favorite' => !empty($g['favorite']), 'color' => $this->cleanColor($g['color'] ?? '')];
         }
 
         $map = [];
@@ -333,7 +502,16 @@ class ContextManager
             }
         }
 
-        return ['groups' => $groups, 'groupMap' => $map];
+        $colors = [];
+        foreach (is_array($raw['colors'] ?? null) ? $raw['colors'] : [] as $ctxId => $hex) {
+            $ctxId = preg_replace('/[^\w\-]/', '', (string) $ctxId);
+            $hex   = $this->cleanColor($hex);
+            if ($ctxId !== '' && $hex !== '') {
+                $colors[$ctxId] = $hex;
+            }
+        }
+
+        return ['groups' => $groups, 'groupMap' => $map, 'colors' => $colors];
     }
 
     // =========================================================================
@@ -365,6 +543,23 @@ class ContextManager
         }
 
         return $file;
+    }
+
+    /** Write a new context file; returns { id, name, savedAt }. */
+    private function writeContext(string $name, array $context): array
+    {
+        $this->ensureDir();
+
+        $id      = $this->makeId($name);
+        $savedAt = (new \DateTimeImmutable())->format(\DateTimeInterface::ATOM);
+
+        file_put_contents(
+            $this->filePath($id),
+            json_encode(['id' => $id, 'name' => $name, 'savedAt' => $savedAt, 'context' => $context], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE),
+            LOCK_EX
+        );
+
+        return ['id' => $id, 'name' => $name, 'savedAt' => $savedAt];
     }
 
     /**

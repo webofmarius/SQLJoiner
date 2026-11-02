@@ -670,6 +670,7 @@ if (!isset($_GET['tab'])) {
                     <div class="ctx-section-title-group">
                         <button type="button" id="btn-ctx-new" style="font-size:11px;padding:3px 8px;" title="Clear everything and start fresh">+ New</button>
                         <button type="button" id="btn-ctx-new-group" style="font-size:11px;padding:3px 8px;" title="Create a group; drag contexts into it or use Move">📁 + Group</button>
+                        <button type="button" id="btn-ctx-import-group" style="font-size:11px;padding:3px 8px;" title="Import a .zip of contexts as a new group (every file is validated first)">📦 Import group</button>
                         <button type="button" id="btn-ctx-move-selected" style="font-size:11px;padding:3px 8px;" title="Move the ticked contexts to a group" disabled>Move selected</button>
                     </div>
                     <div class="ctx-section-actions">

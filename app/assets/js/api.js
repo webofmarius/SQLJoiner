@@ -99,8 +99,10 @@ const API = (() => {
             update:    (id, data)   => call('context.update',   { id, ...data }),
             groups: {
                 get:    ()                    => call('context.groups.get'),
-                save:   (groups, groupMap)    => call('context.groups.save',   { groups, groupMap }),
+                save:   (groups, groupMap, colors) => call('context.groups.save', { groups, groupMap, colors }),
                 delete: (id)                  => call('context.groups.delete', { id }),
+                export: (id)                  => call('context.groups.export', { id }),
+                import: (name, data)          => call('context.groups.import', { name, data }),
             },
         },
 

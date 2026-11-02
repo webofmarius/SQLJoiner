@@ -33,6 +33,7 @@ class WhereClause
         'IS NULL', 'IS NOT NULL',
         'IN', 'NOT IN',
         'BETWEEN', 'NOT BETWEEN',
+        'EXISTS', 'NOT EXISTS',
     ];
 
     /**
@@ -91,9 +92,16 @@ class WhereClause
                     $val = (string) ($cond['val'] ?? '');
 
                     if (!in_array($op, self::ALLOWED_OPS, true)) continue;
-                    if (!preg_match('/^\w+(\.\w+)?$/', $col)) continue;
 
-                    if ($op === 'IS NULL' || $op === 'IS NOT NULL') {
+                    if ($op === 'EXISTS' || $op === 'NOT EXISTS') {
+                        // Subquery condition — no column; the value is the subquery SQL
+                        $sub = trim($val);
+                        if ($sub === '') continue;
+                        if (!$this->isWrapped($sub)) $sub = "($sub)";
+                        $part = "$op $sub";
+                    } elseif (!preg_match('/^\w+(\.\w+)?$/', $col)) {
+                        continue;
+                    } elseif ($op === 'IS NULL' || $op === 'IS NOT NULL') {
                         $part = "$col $op";
                     } elseif ($op === 'IN' || $op === 'NOT IN') {
                         $vals = array_map('trim', explode(',', $val));
@@ -127,5 +135,18 @@ class WhereClause
         }
 
         return implode("\n", $parts);
+    }
+
+    /** True when the whole string is one parenthesised group, e.g. "(SELECT 1)". */
+    private function isWrapped(string $text): bool
+    {
+        $len = strlen($text);
+        if ($len < 2 || $text[0] !== '(' || $text[$len - 1] !== ')') return false;
+        $depth = 0;
+        for ($i = 0; $i < $len; $i++) {
+            if ($text[$i] === '(') $depth++;
+            elseif ($text[$i] === ')' && --$depth === 0 && $i < $len - 1) return false;
+        }
+        return $depth === 0;
     }
 }

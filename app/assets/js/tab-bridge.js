@@ -12,15 +12,16 @@
     window.__tabApp = App;
 
     const TAB_ID = new URLSearchParams(location.search).get('tab') || '';
+    const ctxId = () => { try { return App.getLoadedContextId?.() ?? null; } catch (_) { return null; } };
     const send = msg => window.parent.postMessage({ source: 'sqlj-tab', tab: TAB_ID, ...msg }, location.origin);
 
     // ── Title → tab label ───────────────────────────────────────────────────
     const titleEl = document.querySelector('title');
     if (titleEl) {
-        new MutationObserver(() => send({ type: 'title', title: document.title }))
+        new MutationObserver(() => send({ type: 'title', title: document.title, ctx: ctxId() }))
             .observe(titleEl, { childList: true, characterData: true, subtree: true });
     }
-    send({ type: 'title', title: document.title });
+    send({ type: 'title', title: document.title, ctx: ctxId() });
 
     // ── Tab shortcuts ───────────────────────────────────────────────────────
     // Capture phase on window: runs before the app's own (Alt-heavy) handlers.

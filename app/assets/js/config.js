@@ -822,18 +822,86 @@ const QueryPanel = (() => {
 
                 row.appendChild(lbl);
 
-                // FROM_UNIXTIME quick-add — hover-revealed, floats just left of
-                // the alias input. Adds a Custom Expression wrapping this column.
-                const futBtn = document.createElement('button');
-                futBtn.type = 'button';
-                futBtn.className = 'select-col-fut-btn';
-                futBtn.textContent = 'FROM_UNIXTIME';
-                futBtn.title = `Add custom expression:  FROM_UNIXTIME(${key}) AS ${key.split('.')[0]}._${colName}`;
-                futBtn.addEventListener('mousedown', e => e.stopPropagation());
-                futBtn.addEventListener('dragstart', e => e.stopPropagation());
-                futBtn.addEventListener('click', e => {
+                // Per-column quick actions. Shown inline (hover-revealed) when the row
+                // has room; otherwise collapsed behind a single "⋯" button + popup.
+                const tblAlias = key.split('.')[0];
+                const _copyKey = async () => {
+                    try {
+                        await navigator.clipboard.writeText(key);
+                    } catch (_) {
+                        const ta = document.createElement('textarea');
+                        ta.value = key;
+                        ta.style.cssText = 'position:fixed;opacity:0';
+                        document.body.appendChild(ta);
+                        ta.select();
+                        document.execCommand('copy');
+                        ta.remove();
+                    }
+                    App.notify?.(`Copied "${key}"`, 'success');
+                };
+                const _fnTitle = (fn, a) => `Add custom expression:  ${fn}(${key}) AS ${tblAlias}.${a}${colName}`;
+                const _inlineActions = [
+                    ...['DISTINCT', 'MIN', 'MAX', 'SUM'].map(fn => ({
+                        label: fn === 'DISTINCT' ? 'D.' : fn,
+                        title: _fnTitle(fn, '_' + fn.toLowerCase() + '_'),
+                        run:   () => _addFromUnixtimeExpr(key, fn),
+                    })),
+                    { label: 'FROM_U-T', title: _fnTitle('FROM_UNIXTIME', '_'), run: () => _addFromUnixtimeExpr(key) },
+                ];
+                const _mkBtn = (act, cls) => {
+                    const b = document.createElement('button');
+                    b.type = 'button';
+                    b.className = cls;
+                    b.textContent = act.label;
+                    b.title = act.title;
+                    b.addEventListener('mousedown', e => e.stopPropagation());
+                    b.addEventListener('dragstart', e => e.stopPropagation());
+                    b.addEventListener('click', e => { e.stopPropagation(); act.run(); });
+                    return b;
+                };
+
+                // Copy "<alias>.<column>" to the clipboard (inline, next to the name)
+                const copyBtn = _mkBtn({
+                    label: '⎘', // ⎘ same glyph as the canvas column copy button
+                    title: `Copy ${key} to clipboard`,
+                    run:   _copyKey,
+                }, 'select-col-copy-btn');
+
+                row.appendChild(copyBtn);
+
+                const floatWrap = document.createElement('div');
+                floatWrap.className = 'select-col-float';
+                _inlineActions.forEach(act => floatWrap.appendChild(_mkBtn(act, 'select-col-fut-btn')));
+
+                const moreBtn = document.createElement('button');
+                moreBtn.type = 'button';
+                moreBtn.className = 'select-col-fut-btn select-col-more-btn';
+                moreBtn.textContent = '⋯'; // ⋯
+                moreBtn.title = 'Column actions';
+                moreBtn.addEventListener('mousedown', e => e.stopPropagation());
+                moreBtn.addEventListener('dragstart', e => e.stopPropagation());
+                moreBtn.addEventListener('click', e => {
                     e.stopPropagation();
-                    _addFromUnixtimeExpr(key);
+                    _toggleColActionsPopup(row);
+                });
+                row._colActions = {
+                    anchor:  floatWrap,
+                    mkBtn:   _mkBtn,
+                    actions: [
+                        { label: '⎘', title: `Copy ${key} to clipboard`, run: _copyKey },
+                        ..._inlineActions,
+                    ],
+                };
+                floatWrap.appendChild(moreBtn);
+
+                // Collapse behind "⋯" when the name + copy button + inline buttons don't fit.
+                row.addEventListener('mouseenter', () => {
+                    _retargetColActionsPopup(row);
+                    row.classList.remove('actions-collapsed'); // measure the expanded layout
+                    const need  = floatWrap.offsetWidth + 4;
+                    const used  = lbl.getBoundingClientRect().left + lbl.scrollWidth + copyBtn.offsetWidth + 6;
+                    const room  = aliasWrap.getBoundingClientRect().left - used;
+                    row.classList.toggle('actions-collapsed', need > room);
                 });
 
                 // Alias input (visual mode only)
@@ -884,7 +952,7 @@ const QueryPanel = (() => {
 
                 aliasWrap.appendChild(aliasInput);
                 aliasWrap.appendChild(aliasClearBtn);
-                aliasWrap.appendChild(futBtn);
+                aliasWrap.appendChild(floatWrap);
                 row.appendChild(aliasWrap);
 
                 // Right-click → center canvas on this column's table and flash-highlight the column
@@ -1311,7 +1379,7 @@ const QueryPanel = (() => {
     }
 
     /**
-     * Quick-add a FROM_UNIXTIME() custom expression for a column, triggered by
+     * Quick-add a FROM_UNIXTIME() (or DISTINCT/MIN/MAX/SUM) custom expression for a column, triggered by
      * the hover button on each SELECT column row.
      *   alias:  _<column name, table prefix stripped>
      *   expr:   FROM_UNIXTIME(<table alias>.<column>)
@@ -1323,11 +1391,79 @@ const QueryPanel = (() => {
         return /^\w+$/.test(a) || a.startsWith('`') ? a : '`' + a.replace(/`/g, '``') + '`';
     }
 
-    function _addFromUnixtimeExpr(colKey) {
+    // Quick-actions popup: a single persistent container. It stays open until
+    // dismissed, retargets to whichever SELECT column row is hovered, and is
+    // positioned from that row's rect (re-computed on scroll) so it stays with
+    // its column instead of the viewport.
+    let _colActionsPopup = null;
+    let _colActionsRow   = null;
+
+    function _closeColActionsPopup() {
+        if (!_colActionsPopup) return;
+        _colActionsPopup.remove();
+        _colActionsPopup = null;
+        _colActionsRow   = null;
+        document.removeEventListener('mousedown', _colActionsOutside, true);
+        document.removeEventListener('keydown', _colActionsKey, true);
+        window.removeEventListener('scroll', _positionColActionsPopup, true);
+        window.removeEventListener('resize', _positionColActionsPopup);
+    }
+    function _colActionsOutside(e) {
+        if (_colActionsPopup && !_colActionsPopup.contains(e.target) && !e.target.closest?.('.select-col-more-btn')) {
+            _closeColActionsPopup();
+        }
+    }
+    function _colActionsKey(e) { if (e.key === 'Escape') _closeColActionsPopup(); }
+
+    /** Sit directly under the target row, right-aligned with its floating buttons. */
+    function _positionColActionsPopup() {
+        const pop = _colActionsPopup, row = _colActionsRow;
+        if (!pop || !row) return;
+        if (!row.isConnected) { _closeColActionsPopup(); return; }
+        const rr = row.getBoundingClientRect();
+        const ar = (row._colActions?.anchor || row).getBoundingClientRect();
+        // The row scrolled out of view → hide the popup until it comes back.
+        pop.style.visibility = (rr.bottom < 0 || rr.top > window.innerHeight) ? 'hidden' : '';
+        pop.style.top  = Math.min(rr.bottom, window.innerHeight - pop.offsetHeight - 8) + 'px';
+        pop.style.left = Math.max(8, Math.min(ar.right - pop.offsetWidth, window.innerWidth - pop.offsetWidth - 8)) + 'px';
+    }
+
+    function _fillColActionsPopup(row) {
+        const { actions, mkBtn } = row._colActions;
+        _colActionsPopup.replaceChildren();
+        actions.forEach(act => _colActionsPopup.appendChild(mkBtn(
+            { ...act, run: () => { _closeColActionsPopup(); act.run(); } },
+            'select-col-fut-btn'
+        )));
+        _colActionsRow = row;
+        _positionColActionsPopup();
+    }
+
+    /** Toggle the popup for `row` (the "⋯" button). */
+    function _toggleColActionsPopup(row) {
+        if (_colActionsPopup && _colActionsRow === row) { _closeColActionsPopup(); return; }
+        _closeColActionsPopup();
+        _colActionsPopup = document.createElement('div');
+        _colActionsPopup.className = 'select-col-actions-popup';
+        document.body.appendChild(_colActionsPopup);
+        document.addEventListener('mousedown', _colActionsOutside, true);
+        document.addEventListener('keydown', _colActionsKey, true);
+        window.addEventListener('scroll', _positionColActionsPopup, true);
+        window.addEventListener('resize', _positionColActionsPopup);
+        _fillColActionsPopup(row);
+    }
+
+    /** Hovering another column while the popup is open → show that column's buttons. */
+    function _retargetColActionsPopup(row) {
+        if (_colActionsPopup && _colActionsRow !== row) _fillColActionsPopup(row);
+    }
+
+    function _addFromUnixtimeExpr(colKey, fn = 'FROM_UNIXTIME') {
         const colName = colKey.includes('.') ? colKey.split('.')[1] : colKey;
         const tblAlias = colKey.includes('.') ? colKey.split('.')[0] : '';
-        const alias   = (tblAlias ? tblAlias + '.' : '') + '_' + colName;
-        const expr    = `FROM_UNIXTIME(${colKey})`;
+        const prefix  = fn === 'FROM_UNIXTIME' ? '_' : '_' + fn.toLowerCase() + '_';
+        const alias   = (tblAlias ? tblAlias + '.' : '') + prefix + colName;
+        const expr    = `${fn}(${colKey})`;
 
         if (!Array.isArray(State.selectCustomExprs)) State.selectCustomExprs = [];
 
@@ -1820,11 +1956,30 @@ const QueryPanel = (() => {
         Canvas.refreshWhereHighlights();
     }
 
+    /** True when the whole string is a single parenthesised group, e.g. "(SELECT 1)". */
+    function _isWrappedInParens(t) {
+        if (t[0] !== '(' || t[t.length - 1] !== ')') return false;
+        let depth = 0;
+        for (let i = 0; i < t.length; i++) {
+            if (t[i] === '(') depth++;
+            else if (t[i] === ')' && --depth === 0 && i < t.length - 1) return false;
+        }
+        return depth === 0;
+    }
+
+    /** "EXISTS (subquery)" / "NOT EXISTS (subquery)" for a visual WHERE condition; '' when empty. */
+    function _existsSql(c) {
+        const v = String(c.val ?? '').trim();
+        if (!v) return '';
+        return `${c.op} ${_isWrappedInParens(v) ? v : `(${v})`}`;
+    }
+
     function _buildConditionRow(cond, idx) {
         if (cond.type === 'raw') return _buildRawConditionRow(cond, idx);
 
-        const OPS = ['=', '!=', '<', '>', '<=', '>=', 'LIKE', 'NOT LIKE', 'IS NULL', 'IS NOT NULL', 'IN', 'NOT IN', 'BETWEEN', 'NOT BETWEEN'];
+        const OPS = ['=', '!=', '<', '>', '<=', '>=', 'LIKE', 'NOT LIKE', 'IS NULL', 'IS NOT NULL', 'IN', 'NOT IN', 'BETWEEN', 'NOT BETWEEN', 'EXISTS', 'NOT EXISTS'];
         const noVal    = cond.op === 'IS NULL' || cond.op === 'IS NOT NULL';
+        const isExists = cond.op === 'EXISTS' || cond.op === 'NOT EXISTS';
         const isBetween = cond.op === 'BETWEEN' || cond.op === 'NOT BETWEEN';
 
         const row = document.createElement('div');
@@ -1893,6 +2048,7 @@ const QueryPanel = (() => {
         row.appendChild(startParen);
 
         // Column name badge
+        const _colElsStart = row.children.length;
         const colSpan = document.createElement('span');
         colSpan.className = 'col-name';
         colSpan.textContent = cond.col;
@@ -1973,6 +2129,11 @@ const QueryPanel = (() => {
             if (_isEnumCol(colData)) row.appendChild(_makeEnumBadge(colData));
         }
 
+        // EXISTS / NOT EXISTS take a subquery, not a column — hide the column elements
+        if (isExists) {
+            Array.from(row.children).slice(_colElsStart).forEach(el => { el.style.display = 'none'; });
+        }
+
         // Operator select
         const opSel = document.createElement('select');
         OPS.forEach(op => {
@@ -1983,7 +2144,10 @@ const QueryPanel = (() => {
         });
         opSel.addEventListener('change', () => {
             if (typeof UndoRedo !== 'undefined') UndoRedo.snapshot();
+            const wasExists = State.where[idx].op === 'EXISTS' || State.where[idx].op === 'NOT EXISTS';
             State.where[idx].op = opSel.value;
+            const nowExists = opSel.value === 'EXISTS' || opSel.value === 'NOT EXISTS';
+            if (wasExists !== nowExists) { _refreshWhere(); App.updateSQLPreview(); return; }
             const noV  = opSel.value === 'IS NULL' || opSel.value === 'IS NOT NULL';
             const isBtw = opSel.value === 'BETWEEN' || opSel.value === 'NOT BETWEEN';
             valInput.style.display  = noV ? 'none' : '';
@@ -1996,7 +2160,7 @@ const QueryPanel = (() => {
         // Value input
         const valInput = document.createElement('input');
         valInput.type        = 'text';
-        valInput.placeholder = isBetween ? 'from' : 'value';
+        valInput.placeholder = isExists ? 'SELECT 1 FROM … WHERE …' : (isBetween ? 'from' : 'value');
         valInput.value       = cond.val ?? '';
         valInput.style.display = noVal ? 'none' : '';
         valInput.addEventListener('focus', () => { if (typeof UndoRedo !== 'undefined') UndoRedo.snapshot(); });
@@ -2726,6 +2890,9 @@ const QueryPanel = (() => {
                 const expr = (c.expr ?? '').trim();
                 if (!expr) return;
                 part = /^select\s/i.test(expr) ? `(${expr})` : expr;
+            } else if (c.op === 'EXISTS' || c.op === 'NOT EXISTS') {
+                part = _existsSql(c);
+                if (!part) return;
             } else if (c.op === 'IS NULL')          { part = `${c.col} IS NULL`; }
             else if (c.op === 'IS NOT NULL') { part = `${c.col} IS NOT NULL`; }
             else if (c.op === 'IN' || c.op === 'NOT IN') {
@@ -3223,6 +3390,9 @@ const QueryPanel = (() => {
                         const expr = (c.expr ?? '').trim();
                         if (!expr) return;
                         part = /^select\s/i.test(expr) ? `(${expr})` : expr;
+                    } else if (c.op === 'EXISTS' || c.op === 'NOT EXISTS') {
+                        part = _existsSql(c);
+                        if (!part) return;
                     } else if (c.op === 'IS NULL')     { part = `${c.col} IS NULL`; }
                     else if (c.op === 'IS NOT NULL')   { part = `${c.col} IS NOT NULL`; }
                     else if (c.op === 'IN' || c.op === 'NOT IN') {

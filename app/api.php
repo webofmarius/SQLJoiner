@@ -62,6 +62,8 @@ $routes = [
     'context.groups.get'    => ['Core\ContextManager', 'groupsGet'],
     'context.groups.save'   => ['Core\ContextManager', 'groupsSave'],
     'context.groups.delete' => ['Core\ContextManager', 'groupsDelete'],
+    'context.groups.export' => ['Core\ContextManager', 'groupsExport'],
+    'context.groups.import' => ['Core\ContextManager', 'groupsImport'],
 
     // --- About ---
     'about.read' => ['Core\AboutManager', 'read'],

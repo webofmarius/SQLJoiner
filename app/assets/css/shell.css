@@ -44,6 +44,8 @@
     color: var(--text);
     border-top-color: var(--accent);
 }
+.tab.has-color { border-top-color: var(--tab-color); background: color-mix(in srgb, var(--tab-color) 18%, var(--surface)); }
+.tab.has-color.is-active { border-top-color: var(--tab-color); background: color-mix(in srgb, var(--tab-color) 30%, var(--surface3)); box-shadow: inset 0 -3px 0 var(--tab-color); }
 .tab.is-dragging  { opacity: 0.45; }
 .tab.drop-before  { box-shadow: inset 2px 0 0 var(--accent); }
 .tab.drop-after   { box-shadow: inset -2px 0 0 var(--accent); }

@@ -4246,6 +4246,28 @@ const App = (() => {
 
         document.getElementById('btn-ctx-new-group')
             .addEventListener('click', () => _createCtxGroup());
+        document.getElementById('btn-ctx-import-group')
+            .addEventListener('click', () => {
+                const input  = document.createElement('input');
+                input.type   = 'file';
+                input.accept = '.zip,application/zip';
+                input.addEventListener('change', async () => {
+                    const file = input.files[0];
+                    if (!file) return;
+                    if (!/\.zip$/i.test(file.name)) { _notify('Please choose a .zip file.', 'error'); return; }
+                    try {
+                        const buf = new Uint8Array(await file.arrayBuffer());
+                        let bin = '';
+                        for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode(...buf.subarray(i, i + 0x8000));
+                        const res = await API.context.groups.import(file.name.replace(/\.zip$/i, ''), btoa(bin));
+                        _notify(`Imported ${res.count} context(s) into group "${res.group.name}".`, 'success');
+                        _loadContextList();
+                    } catch (e) {
+                        _notify('Import failed: ' + e.message, 'error');
+                    }
+                });
+                input.click();
+            });
         document.getElementById('btn-ctx-move-selected')
             .addEventListener('click', e => {
                 // only contexts currently visible (not filtered out by the search box)
@@ -4978,10 +5000,23 @@ const App = (() => {
     }
 
     // ---- Context groups --------------------------------------------------
-    let _ctxGroups = { groups: [], groupMap: {} };
+    let _ctxGroups = { groups: [], groupMap: {}, colors: {} };
     let _ctxCutId  = null;   // context id waiting to be pasted into a group
     const _ctxSel  = new Set();   // ids ticked for "Move selected"
     let _ctxDragGroupId = null;   // favourite group currently being dragged (reorder)
+    let _ctxFocusGroupId = null;  // pinned (focused) group: everything else is dimmed
+
+    function _applyCtxFocus() {
+        const list = document.getElementById('ctx-saved-list');
+        if (!list) return;
+        if (_ctxFocusGroupId && !list.querySelector(`.ctx-group[data-gid="${_ctxFocusGroupId}"]`)) _ctxFocusGroupId = null;
+        list.classList.toggle('has-focus', !!_ctxFocusGroupId);
+        list.querySelectorAll('.ctx-group').forEach(box => {
+            const on = box.dataset.gid === _ctxFocusGroupId;
+            box.classList.toggle('is-focused', on);
+            box.querySelector('.btn-ctxg-pin')?.classList.toggle('is-on', on);
+        });
+    }
 
     /** Favourites first (in their saved order), then the rest sorted by name. */
     function _orderedCtxGroups() {
@@ -5011,11 +5046,72 @@ const App = (() => {
     function _normCtxGroups(doc) {
         const groups   = Array.isArray(doc?.groups) ? doc.groups : [];
         const groupMap = doc?.groupMap && !Array.isArray(doc.groupMap) ? doc.groupMap : {};
-        return { groups, groupMap };
+        const colors   = doc?.colors && !Array.isArray(doc.colors) ? doc.colors : {};
+        return { groups, groupMap, colors };
+    }
+
+    /** Let the tab shell (parent window) recolor tabs after any colour change. */
+    function _syncShellColors() {
+        try { if (window.parent !== window) window.parent.__shell?.setContextColors?.(_ctxGroups.colors); } catch (_) { /* cross-origin / standalone */ }
+    }
+
+    const _CTX_SWATCHES = ['#1f6feb','#2da44e','#d4a72c','#e5534b','#8957e5','#e16f24','#0aa5a5','#8b949e'];
+
+    /** Popup with preset swatches, a custom colour input and "No color"; calls onPick('#rrggbb' | ''). */
+    function _openCtxColorMenu(anchor, current, onPick, opts = {}) {
+        document.querySelector('.ctx-move-menu')?.remove();
+        const menu = document.createElement('div');
+        menu.className = 'ctx-move-menu ctx-color-menu';
+        let applyChk = null;
+        if (opts.applyToggle) {
+            const lbl = document.createElement('label');
+            lbl.className = 'ctx-color-apply';
+            applyChk = document.createElement('input');
+            applyChk.type = 'checkbox';
+            applyChk.checked = true;
+            lbl.appendChild(applyChk);
+            lbl.append('Apply to selected contexts');
+            lbl.title = 'Checked: color the ticked contexts too. Unchecked: color only the group background.';
+            menu.appendChild(lbl);
+        }
+        const pick = hex => onPick(hex, applyChk ? applyChk.checked : true);
+        const grid = document.createElement('div');
+        grid.className = 'ctx-color-grid';
+        _CTX_SWATCHES.forEach(hex => {
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.className = 'ctx-color-swatch' + (hex === current ? ' is-active' : '');
+            b.style.background = hex;
+            b.title = hex;
+            b.addEventListener('click', () => { close(); pick(hex); });
+            grid.appendChild(b);
+        });
+        menu.appendChild(grid);
+        const custom = document.createElement('label');
+        custom.className = 'ctx-move-menu__item';
+        custom.textContent = 'Custom… ';
+        const input = document.createElement('input');
+        input.type  = 'color';
+        input.value = /^#[0-9a-f]{6}$/i.test(current) ? current : '#1f6feb';
+        input.addEventListener('change', () => { close(); pick(input.value.toLowerCase()); });
+        custom.appendChild(input);
+        menu.appendChild(custom);
+        const none = document.createElement('div');
+        none.className = 'ctx-move-menu__item';
+        none.textContent = 'No color';
+        none.addEventListener('click', () => { close(); pick(''); });
+        menu.appendChild(none);
+        document.body.appendChild(menu);
+        const r = anchor.getBoundingClientRect();
+        menu.style.top  = Math.min(r.bottom + 2, window.innerHeight - menu.offsetHeight - 8) + 'px';
+        menu.style.left = Math.max(8, Math.min(r.left, window.innerWidth - menu.offsetWidth - 8)) + 'px';
+        function close() { menu.remove(); document.removeEventListener('mousedown', onOutside, true); }
+        function onOutside(e) { if (!menu.contains(e.target)) close(); }
+        setTimeout(() => document.addEventListener('mousedown', onOutside, true), 0);
     }
 
     async function _saveCtxGroups() {
-        _ctxGroups = _normCtxGroups(await API.context.groups.save(_ctxGroups.groups, _ctxGroups.groupMap));
+        _ctxGroups = _normCtxGroups(await API.context.groups.save(_ctxGroups.groups, _ctxGroups.groupMap, _ctxGroups.colors));
     }
 
     /** Persist the groups doc then re-render; reloads from the server if saving fails. */
@@ -5033,7 +5129,7 @@ const App = (() => {
         const name = await Dialog.prompt('Name for the new group:', '');
         if (name === null || name.trim() === '') return null;
         const id = 'g' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-        await _commitCtxGroups(() => _ctxGroups.groups.push({ id, name: name.trim(), collapsed: false }));
+        await _commitCtxGroups(() => _ctxGroups.groups.push({ id, name: name.trim(), collapsed: false, favorite: false, color: '' }));
         return id;
     }
 
@@ -5125,6 +5221,7 @@ const App = (() => {
             row.dataset.id = item.id;
             row.innerHTML =
                 `<input type="checkbox" class="ctx-row__chk" title="Select for Move selected"${_ctxSel.has(item.id) ? ' checked' : ''}>` +
+                `<button class="btn-ctx-color" title="Set color"><span class="ctx-dot"></span></button>` +
                 `<span class="ctx-row__name">${_escHtml(item.name)}</span>` +
                 `<span class="ctx-row__date">${_escHtml(date)}</span>` +
                 `<div class="ctx-row__btns">` +
@@ -5135,6 +5232,14 @@ const App = (() => {
                     `<button class="btn-ctx-disk" data-id="${_escAttr(item.id)}" data-name="${_escAttr(item.name)}" title="Save to disk">⬇ Save</button>` +
                     `<button class="btn-ctx-delete btn-danger" data-id="${_escAttr(item.id)}">✕</button>` +
                 `</div>`;
+            const _col = _ctxGroups.colors[item.id];
+            if (_col) { row.classList.add('has-color'); row.style.setProperty('--ctx-color', _col); }
+            row.querySelector('.btn-ctx-color').addEventListener('click', e => {
+                e.stopPropagation();
+                _openCtxColorMenu(e.currentTarget, _ctxGroups.colors[item.id] || '', hex => _commitCtxGroups(() => {
+                    if (hex) _ctxGroups.colors[item.id] = hex; else delete _ctxGroups.colors[item.id];
+                }));
+            });
             row.draggable = true;
             row.addEventListener('dragstart', e => {
                 e.dataTransfer.setData('text/plain', item.id);
@@ -5218,16 +5323,22 @@ const App = (() => {
             const members = items.filter(i => groupOf(i.id) === g.id);
             const box = document.createElement('div');
             box.className = 'ctx-group' + (g.collapsed ? ' is-collapsed' : '');
+            box.dataset.gid = g.id;
+            if (g.color) { box.classList.add('has-color'); box.style.setProperty('--grp-color', g.color); }
             box.innerHTML =
                 `<div class="ctx-group__head"${g.favorite ? ' draggable="true" title="Drag to reorder favourites"' : ''}>` +
                     `<input type="checkbox" class="ctx-group__chk" title="Select / deselect all contexts in this group">` +
                     `<button class="btn-ctxg-fav${g.favorite ? ' is-fav' : ''}" title="${g.favorite ? 'Remove from favourites' : 'Add to favourites (shown first)'}">${g.favorite ? '★' : '☆'}</button>` +
+                    `<button class="btn-ctx-color btn-ctxg-color" title="Color the ticked contexts of this group (and the group background)"${g.color ? ` style="--ctx-color:${g.color}"` : ''}><span class="ctx-dot"></span></button>` +
                     `<span class="ctx-group__caret">${g.collapsed ? '▸' : '▾'}</span>` +
                     `<span class="ctx-group__name">${_escHtml(g.name)}</span>` +
                     `<span class="ctx-group__count">${members.length}</span>` +
                     `<div class="ctx-row__btns">` +
+                        `<button class="btn-ctxg-pin" title="Pin: focus on this group (dims everything else)"><svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" aria-hidden="true"><path d="M16 3a1 1 0 0 1 .7 1.7l-.7.7V10l2.4 3.2a1 1 0 0 1-.8 1.6H13v5.2a1 1 0 0 1-2 0v-5.2H6.4a1 1 0 0 1-.8-1.6L8 10V5.4l-.7-.7A1 1 0 0 1 8 3z"/></svg></button>` +
+                        `<button class="btn-ctxg-open" title="Open every context of this group in its own new tab">↗ Open tabs</button>` +
                         (cutItem && groupOf(cutItem.id) !== g.id ? `<button class="btn-ctxg-paste" title="Paste the cut context here">📋 Paste</button>` : '') +
                         `<button class="btn-ctxg-rename" title="Rename group">Rename</button>` +
+                        `<button class="btn-ctxg-export" title="Export all contexts of this group as a .zip">⬇ Export</button>` +
                         `<button class="btn-ctxg-duplicate" title="Duplicate the group with copies of all its contexts">⧉ Duplicate</button>` +
                         `<button class="btn-ctxg-disband" title="Remove the group but keep its contexts">Disband</button>` +
                         `<button class="btn-ctxg-delete btn-danger" title="Delete the group and all its contexts">✕</button>` +
@@ -5307,6 +5418,62 @@ const App = (() => {
                 if (name === null || name.trim() === '') return;
                 _commitCtxGroups(() => { g.name = name.trim(); });
             });
+            head.querySelector('.btn-ctxg-pin').addEventListener('click', () => {
+                _ctxFocusGroupId = _ctxFocusGroupId === g.id ? null : g.id;
+                _applyCtxFocus();
+            });
+            head.querySelector('.btn-ctxg-open').addEventListener('click', async () => {
+                const shell = window.parent !== window ? window.parent.__shell : null;
+                if (!shell?.openContexts) { _notify('Opening in tabs needs the tab shell (open the app through index.php).', 'warn'); return; }
+                if (!members.length) { _notify('This group has no contexts to open.', 'warn'); return; }
+                try {
+                    const list = await Promise.all(members.map(async m => ({
+                        contextId:   m.id,
+                        contextName: m.name,
+                        json:        JSON.stringify(await API.context.load(m.id)),
+                        profileId:   State.activeProfileId ?? null,
+                    })));
+                    const opened = shell.openContexts(list);
+                    _notify(opened < list.length
+                        ? `Opened ${opened} of ${list.length} contexts (tab limit reached).`
+                        : `Opened ${opened} context(s) in new tabs.`, opened < list.length ? 'warn' : 'success');
+                } catch (e) {
+                    _notify('Open failed: ' + e.message, 'error');
+                }
+            });
+            head.querySelector('.btn-ctxg-color').addEventListener('click', e => {
+                const ids = members.filter(m => _ctxSel.has(m.id)).map(m => m.id);
+                _openCtxColorMenu(e.currentTarget, g.color || '', async (hex, applyToCtx) => {
+                    if (!applyToCtx) {
+                        _commitCtxGroups(() => { g.color = hex; });
+                        return;
+                    }
+                    if (!ids.length) { _notify('Tick the contexts of this group you want to color first.', 'warn'); return; }
+                    const what = hex ? `the color ${hex}` : 'no color';
+                    if (!await Dialog.confirm(`Apply ${what} to ${ids.length} selected context(s) in "${g.name}"?\nThe group background will use the same color.`)) return;
+                    _commitCtxGroups(() => {
+                        ids.forEach(id => { if (hex) _ctxGroups.colors[id] = hex; else delete _ctxGroups.colors[id]; });
+                        g.color = hex;
+                    });
+                }, { applyToggle: true });
+            });
+            head.querySelector('.btn-ctxg-export').addEventListener('click', async () => {
+                if (!members.length) { _notify('This group has no contexts to export.', 'warn'); return; }
+                try {
+                    const { filename, data } = await API.context.groups.export(g.id);
+                    const bytes = Uint8Array.from(atob(data), c => c.charCodeAt(0));
+                    const url   = URL.createObjectURL(new Blob([bytes], { type: 'application/zip' }));
+                    const a     = document.createElement('a');
+                    a.href = url; a.download = filename;
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                    URL.revokeObjectURL(url);
+                    _notify(`Exported ${members.length} context(s).`, 'success');
+                } catch (e) {
+                    _notify('Export failed: ' + e.message, 'error');
+                }
+            });
             head.querySelector('.btn-ctxg-duplicate').addEventListener('click', async () => {
                 const newId   = 'g' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
                 const newName = g.name + ' - duplicate';
@@ -5315,9 +5482,12 @@ const App = (() => {
                     for (const m of members) {
                         const context = await API.context.load(m.id);
                         const saved   = await API.context.save({ name: m.name + ' - duplicate', context });
-                        if (saved?.id) newMap[saved.id] = newId;
+                        if (saved?.id) {
+                            newMap[saved.id] = newId;
+                            if (_ctxGroups.colors[m.id]) _ctxGroups.colors[saved.id] = _ctxGroups.colors[m.id];
+                        }
                     }
-                    _ctxGroups.groups.push({ id: newId, name: newName, collapsed: false, favorite: false });
+                    _ctxGroups.groups.push({ id: newId, name: newName, collapsed: false, favorite: false, color: g.color || '' });
                     Object.assign(_ctxGroups.groupMap, newMap);
                     await _saveCtxGroups();
                     _notify(`Duplicated as "${newName}".`, 'success');
@@ -5391,8 +5561,9 @@ const App = (() => {
                 try {
                     await API.context.delete(btn.dataset.id);
                     if (_ctxCutId === btn.dataset.id) _ctxCutId = null;
-                    if (_ctxGroups.groupMap[btn.dataset.id]) {
+                    if (_ctxGroups.groupMap[btn.dataset.id] || _ctxGroups.colors[btn.dataset.id]) {
                         delete _ctxGroups.groupMap[btn.dataset.id];
+                        delete _ctxGroups.colors[btn.dataset.id];
                         _saveCtxGroups().catch(() => {});
                     }
                     if (State.loadedContextId === btn.dataset.id) {
@@ -5415,8 +5586,10 @@ const App = (() => {
                     const context = await API.context.load(btn.dataset.id);
                     const saved = await API.context.save({ name: dupName, context });
                     const gid   = _ctxGroups.groupMap[btn.dataset.id];
-                    if (gid && saved?.id) {
-                        _ctxGroups.groupMap[saved.id] = gid;
+                    const col   = _ctxGroups.colors[btn.dataset.id];
+                    if (saved?.id && (gid || col)) {
+                        if (gid) _ctxGroups.groupMap[saved.id] = gid;
+                        if (col) _ctxGroups.colors[saved.id]   = col;
                         await _saveCtxGroups().catch(() => {});
                     }
                     _loadContextList();
@@ -5452,6 +5625,8 @@ const App = (() => {
         const _liveIds = new Set(items.map(i => i.id));
         [..._ctxSel].forEach(id => { if (!_liveIds.has(id)) _ctxSel.delete(id); });
         _syncCtxSelectionUI();
+        _applyCtxFocus();
+        _syncShellColors();
 
         // Re-apply any active search term after the list is (re-)rendered
         _filterContextList();
@@ -5948,6 +6123,7 @@ const App = (() => {
         hideConfigPanel,
         isConfigUnpinned,
         exportTabState,
+        getLoadedContextId: () => State.loadedContextId ?? null,
         importTabState,
         aiKnowledgeForQueries,
         notify: _notify,   // exposed for use by canvas.js and future phase files
