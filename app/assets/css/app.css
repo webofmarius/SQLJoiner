@@ -6386,7 +6386,7 @@ kbd {
 
 /* Context groups */
 .ctx-group {
-    border: 1px solid var(--border);
+    border: 2px solid var(--border2);
     border-radius: 6px;
     margin-bottom: 8px;
     padding: 5px;
@@ -6413,6 +6413,14 @@ kbd {
     background: color-mix(in srgb, var(--accent, #4a9eff) 12%, transparent);
 }
 .ctx-row.is-dragging { opacity: .45; }
+.ctx-row__chk, .ctx-group__chk { flex-shrink: 0; margin: 0; cursor: pointer; }
+.btn-ctxg-fav { padding: 0 4px; font-size: 14px; line-height: 1; background: transparent; border: none; color: var(--text-muted); }
+.btn-ctxg-fav:hover, .btn-ctxg-fav.is-fav { color: #f5b301; background: transparent; }
+.ctx-group__head[draggable="true"] { cursor: grab; }
+.ctx-group.is-dragging { opacity: .5; }
+.ctx-group.is-drop-before { box-shadow: 0 -3px 0 0 var(--accent, #4a9eff); }
+.ctx-group.is-drop-after  { box-shadow: 0  3px 0 0 var(--accent, #4a9eff); }
+#btn-ctx-move-selected:disabled { opacity: .5; cursor: default; }
 .ctx-row.is-cut { opacity: .5; border-style: dashed; }
 .ctx-cut-bar {
     display: flex;

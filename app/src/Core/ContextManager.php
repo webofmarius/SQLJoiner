@@ -30,7 +30,7 @@ namespace Core;
  *     (deletes the group AND every context in it; disbanding is a client-side groups.save)
  *
  * Groups live in storage/context_groups.json:
- *   { groups: [{ id, name, collapsed }], groupMap: { contextId: groupId } }
+ *   { groups: [{ id, name, collapsed, favorite }], groupMap: { contextId: groupId } }
  *
  * Security:
  *   - File names are derived only from a strict slug + uniqid() — no user input reaches
@@ -248,7 +248,7 @@ class ContextManager
     /**
      * Replace the whole groups document (create / rename / disband / move are all client-side edits).
      *
-     * Request body: { groups: [{ id, name, collapsed }], groupMap: { contextId: groupId } }
+     * Request body: { groups: [{ id, name, collapsed, favorite }], groupMap: { contextId: groupId } }
      */
     public function groupsSave(Request $request): void
     {
@@ -322,7 +322,7 @@ class ContextManager
                 continue;
             }
             $seen[$id] = true;
-            $groups[]  = ['id' => $id, 'name' => $name, 'collapsed' => !empty($g['collapsed'])];
+            $groups[]  = ['id' => $id, 'name' => $name, 'collapsed' => !empty($g['collapsed']), 'favorite' => !empty($g['favorite'])];
         }
 
         $map = [];

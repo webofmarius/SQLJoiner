@@ -4246,6 +4246,14 @@ const App = (() => {
 
         document.getElementById('btn-ctx-new-group')
             .addEventListener('click', () => _createCtxGroup());
+        document.getElementById('btn-ctx-move-selected')
+            .addEventListener('click', e => {
+                // only contexts currently visible (not filtered out by the search box)
+                const ids = [...document.querySelectorAll('#ctx-saved-list .ctx-row')]
+                    .filter(r => !r.classList.contains('hidden') && !r.closest('.ctx-group.hidden') && _ctxSel.has(r.dataset.id))
+                    .map(r => r.dataset.id);
+                if (ids.length) _openCtxMoveMenu(e.currentTarget, ids);
+            });
 
         const _ctxSearchEl = document.getElementById('ctx-search-input');
         _ctxSearchEl.addEventListener('input', _filterContextList);
@@ -4972,6 +4980,33 @@ const App = (() => {
     // ---- Context groups --------------------------------------------------
     let _ctxGroups = { groups: [], groupMap: {} };
     let _ctxCutId  = null;   // context id waiting to be pasted into a group
+    const _ctxSel  = new Set();   // ids ticked for "Move selected"
+    let _ctxDragGroupId = null;   // favourite group currently being dragged (reorder)
+
+    /** Favourites first (in their saved order), then the rest sorted by name. */
+    function _orderedCtxGroups() {
+        const favs = _ctxGroups.groups.filter(g => g.favorite);
+        const rest = _ctxGroups.groups.filter(g => !g.favorite)
+            .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+        return [...favs, ...rest];
+    }
+
+    /** Refresh group checkboxes (checked / partial) and the Move selected button from `_ctxSel`. */
+    function _syncCtxSelectionUI() {
+        document.querySelectorAll('#ctx-saved-list .ctx-row__chk').forEach(c => { c.checked = _ctxSel.has(c.closest('.ctx-row').dataset.id); });
+        document.querySelectorAll('#ctx-saved-list .ctx-group').forEach(group => {
+            const boxes = [...group.querySelectorAll('.ctx-row__chk')];
+            const on    = boxes.filter(c => c.checked).length;
+            const chk   = group.querySelector('.ctx-group__chk');
+            chk.checked       = boxes.length > 0 && on === boxes.length;
+            chk.indeterminate = on > 0 && on < boxes.length;
+        });
+        const btn = document.getElementById('btn-ctx-move-selected');
+        if (btn) {
+            btn.disabled    = _ctxSel.size === 0;
+            btn.textContent = _ctxSel.size ? `Move selected (${_ctxSel.size})` : 'Move selected';
+        }
+    }
 
     function _normCtxGroups(doc) {
         const groups   = Array.isArray(doc?.groups) ? doc.groups : [];
@@ -5002,20 +5037,25 @@ const App = (() => {
         return id;
     }
 
-    function _moveCtxToGroup(ctxId, groupId) {
-        if (ctxId === _ctxCutId) _ctxCutId = null;
+    function _moveCtxToGroup(ctxIds, groupId) {
+        ctxIds = Array.isArray(ctxIds) ? ctxIds : [ctxIds];
+        if (_ctxCutId && ctxIds.includes(_ctxCutId)) _ctxCutId = null;
+        ctxIds.forEach(id => _ctxSel.delete(id));
         return _commitCtxGroups(() => {
-            if (groupId) _ctxGroups.groupMap[ctxId] = groupId;
-            else delete _ctxGroups.groupMap[ctxId];
+            ctxIds.forEach(id => {
+                if (groupId) _ctxGroups.groupMap[id] = groupId;
+                else delete _ctxGroups.groupMap[id];
+            });
         });
     }
 
     /** Small popup listing the groups a context can be moved to. */
-    function _openCtxMoveMenu(anchor, ctxId) {
+    function _openCtxMoveMenu(anchor, ctxIds) {
+        ctxIds = Array.isArray(ctxIds) ? ctxIds : [ctxIds];
         document.querySelector('.ctx-move-menu')?.remove();
         const menu = document.createElement('div');
         menu.className = 'ctx-move-menu';
-        const current = _ctxGroups.groupMap[ctxId] || null;
+        const current = ctxIds.length === 1 ? (_ctxGroups.groupMap[ctxIds[0]] || null) : undefined;
         const add = (label, active, fn) => {
             const it = document.createElement('div');
             it.className = 'ctx-move-menu__item' + (active ? ' is-active' : '');
@@ -5023,16 +5063,16 @@ const App = (() => {
             it.addEventListener('click', () => { close(); fn(); });
             menu.appendChild(it);
         };
-        _ctxGroups.groups.forEach(g => add(g.name, g.id === current, () => _moveCtxToGroup(ctxId, g.id)));
+        _orderedCtxGroups().forEach(g => add((g.favorite ? '★ ' : '') + g.name, g.id === current, () => _moveCtxToGroup(ctxIds, g.id)));
         if (_ctxGroups.groups.length) {
             const sep = document.createElement('div');
             sep.className = 'ctx-move-menu__sep';
             menu.appendChild(sep);
         }
-        add('No group', !current, () => _moveCtxToGroup(ctxId, null));
+        add('No group', current === null, () => _moveCtxToGroup(ctxIds, null));
         add('+ New group…', false, async () => {
             const gid = await _createCtxGroup();
-            if (gid) _moveCtxToGroup(ctxId, gid);
+            if (gid) _moveCtxToGroup(ctxIds, gid);
         });
         document.body.appendChild(menu);
         const r = anchor.getBoundingClientRect();
@@ -5082,7 +5122,9 @@ const App = (() => {
             const date = item.savedAt ? new Date(item.savedAt).toLocaleString() : '';
             const row  = document.createElement('div');
             row.className = 'ctx-row' + (item.id === State.loadedContextId ? ' is-loaded' : '') + (item.id === _ctxCutId ? ' is-cut' : '');
+            row.dataset.id = item.id;
             row.innerHTML =
+                `<input type="checkbox" class="ctx-row__chk" title="Select for Move selected"${_ctxSel.has(item.id) ? ' checked' : ''}>` +
                 `<span class="ctx-row__name">${_escHtml(item.name)}</span>` +
                 `<span class="ctx-row__date">${_escHtml(date)}</span>` +
                 `<div class="ctx-row__btns">` +
@@ -5103,8 +5145,12 @@ const App = (() => {
                 row.classList.remove('is-dragging');
                 document.querySelectorAll('#ctx-saved-list .is-drop-target').forEach(el => el.classList.remove('is-drop-target'));
             });
+            row.querySelector('.ctx-row__chk').addEventListener('change', e => {
+                if (e.target.checked) _ctxSel.add(item.id); else _ctxSel.delete(item.id);
+                _syncCtxSelectionUI();
+            });
             row.addEventListener('click', async e => {
-                if (e.target.closest('button')) return;
+                if (e.target.closest('button, input')) return;
                 if (!await _confirmIfDirty()) return;
                 try {
                     const context = await API.context.load(item.id);
@@ -5127,6 +5173,7 @@ const App = (() => {
         /** Make `el` accept dragged context rows; dropping assigns them to `groupId` (null = no group). */
         const _dropTarget = (el, groupId) => {
             el.addEventListener('dragover', e => {
+                if (_ctxDragGroupId) return;
                 e.preventDefault();
                 e.stopPropagation();
                 e.dataTransfer.dropEffect = 'move';
@@ -5136,6 +5183,7 @@ const App = (() => {
                 if (!el.contains(e.relatedTarget)) el.classList.remove('is-drop-target');
             });
             el.addEventListener('drop', e => {
+                if (_ctxDragGroupId) return;
                 e.preventDefault();
                 e.stopPropagation();
                 el.classList.remove('is-drop-target');
@@ -5166,18 +5214,21 @@ const App = (() => {
             list.appendChild(divider);
         }
 
-        _ctxGroups.groups.forEach(g => {
+        _orderedCtxGroups().forEach(g => {
             const members = items.filter(i => groupOf(i.id) === g.id);
             const box = document.createElement('div');
             box.className = 'ctx-group' + (g.collapsed ? ' is-collapsed' : '');
             box.innerHTML =
-                `<div class="ctx-group__head">` +
+                `<div class="ctx-group__head"${g.favorite ? ' draggable="true" title="Drag to reorder favourites"' : ''}>` +
+                    `<input type="checkbox" class="ctx-group__chk" title="Select / deselect all contexts in this group">` +
+                    `<button class="btn-ctxg-fav${g.favorite ? ' is-fav' : ''}" title="${g.favorite ? 'Remove from favourites' : 'Add to favourites (shown first)'}">${g.favorite ? '★' : '☆'}</button>` +
                     `<span class="ctx-group__caret">${g.collapsed ? '▸' : '▾'}</span>` +
                     `<span class="ctx-group__name">${_escHtml(g.name)}</span>` +
                     `<span class="ctx-group__count">${members.length}</span>` +
                     `<div class="ctx-row__btns">` +
                         (cutItem && groupOf(cutItem.id) !== g.id ? `<button class="btn-ctxg-paste" title="Paste the cut context here">📋 Paste</button>` : '') +
                         `<button class="btn-ctxg-rename" title="Rename group">Rename</button>` +
+                        `<button class="btn-ctxg-duplicate" title="Duplicate the group with copies of all its contexts">⧉ Duplicate</button>` +
                         `<button class="btn-ctxg-disband" title="Remove the group but keep its contexts">Disband</button>` +
                         `<button class="btn-ctxg-delete btn-danger" title="Delete the group and all its contexts">✕</button>` +
                     `</div>` +
@@ -5189,8 +5240,62 @@ const App = (() => {
             box.appendChild(body);
 
             const head = box.querySelector('.ctx-group__head');
+            head.querySelector('.ctx-group__chk').addEventListener('change', e => {
+                members.forEach(m => { if (e.target.checked) _ctxSel.add(m.id); else _ctxSel.delete(m.id); });
+                _syncCtxSelectionUI();
+            });
+            head.querySelector('.btn-ctxg-fav').addEventListener('click', () => {
+                _commitCtxGroups(() => {
+                    g.favorite = !g.favorite;
+                    if (g.favorite) {   // newly favourited group goes to the end of the favourites
+                        const others = _ctxGroups.groups.filter(x => x !== g);
+                        const lastFav = others.reduce((n, x, i) => (x.favorite ? i : n), -1);
+                        others.splice(lastFav + 1, 0, g);
+                        _ctxGroups.groups = others;
+                    }
+                });
+            });
+            if (g.favorite) {
+                head.addEventListener('dragstart', e => {
+                    _ctxDragGroupId = g.id;
+                    e.dataTransfer.setData('text/plain', 'group:' + g.id);
+                    e.dataTransfer.effectAllowed = 'move';
+                    box.classList.add('is-dragging');
+                });
+                head.addEventListener('dragend', () => {
+                    _ctxDragGroupId = null;
+                    list.querySelectorAll('.is-dragging, .is-drop-before, .is-drop-after').forEach(el => el.classList.remove('is-dragging', 'is-drop-before', 'is-drop-after'));
+                });
+                box.addEventListener('dragover', e => {
+                    if (!_ctxDragGroupId || _ctxDragGroupId === g.id) return;
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const r = head.getBoundingClientRect();
+                    const before = e.clientY < r.top + r.height / 2;
+                    box.classList.toggle('is-drop-before', before);
+                    box.classList.toggle('is-drop-after', !before);
+                });
+                box.addEventListener('dragleave', e => {
+                    if (!box.contains(e.relatedTarget)) box.classList.remove('is-drop-before', 'is-drop-after');
+                });
+                box.addEventListener('drop', e => {
+                    if (!_ctxDragGroupId || _ctxDragGroupId === g.id) return;
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const before = box.classList.contains('is-drop-before');
+                    const dragId = _ctxDragGroupId;
+                    _ctxDragGroupId = null;
+                    _commitCtxGroups(() => {
+                        const dragged = _ctxGroups.groups.find(x => x.id === dragId);
+                        if (!dragged) return;
+                        const favs = _ctxGroups.groups.filter(x => x.favorite && x !== dragged);
+                        favs.splice(favs.indexOf(g) + (before ? 0 : 1), 0, dragged);
+                        _ctxGroups.groups = [...favs, ..._ctxGroups.groups.filter(x => !x.favorite)];
+                    });
+                });
+            }
             head.addEventListener('click', e => {
-                if (e.target.closest('button')) return;
+                if (e.target.closest('button, input')) return;
                 g.collapsed = !g.collapsed;
                 box.classList.toggle('is-collapsed', g.collapsed);
                 head.querySelector('.ctx-group__caret').textContent = g.collapsed ? '▸' : '▾';
@@ -5201,6 +5306,25 @@ const App = (() => {
                 const name = await Dialog.prompt('New name for this group:', g.name);
                 if (name === null || name.trim() === '') return;
                 _commitCtxGroups(() => { g.name = name.trim(); });
+            });
+            head.querySelector('.btn-ctxg-duplicate').addEventListener('click', async () => {
+                const newId   = 'g' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+                const newName = g.name + ' - duplicate';
+                try {
+                    const newMap = {};
+                    for (const m of members) {
+                        const context = await API.context.load(m.id);
+                        const saved   = await API.context.save({ name: m.name + ' - duplicate', context });
+                        if (saved?.id) newMap[saved.id] = newId;
+                    }
+                    _ctxGroups.groups.push({ id: newId, name: newName, collapsed: false, favorite: false });
+                    Object.assign(_ctxGroups.groupMap, newMap);
+                    await _saveCtxGroups();
+                    _notify(`Duplicated as "${newName}".`, 'success');
+                } catch (e) {
+                    _notify('Duplicate failed: ' + e.message, 'error');
+                }
+                _loadContextList();
             });
             head.querySelector('.btn-ctxg-disband').addEventListener('click', async () => {
                 if (!await Dialog.confirm(`Disband group "${g.name}"? Its ${members.length} context(s) will be kept.`)) return;
@@ -5323,6 +5447,11 @@ const App = (() => {
                 }
             });
         });
+
+        // Drop selections of contexts that no longer exist, then refresh the checkbox states
+        const _liveIds = new Set(items.map(i => i.id));
+        [..._ctxSel].forEach(id => { if (!_liveIds.has(id)) _ctxSel.delete(id); });
+        _syncCtxSelectionUI();
 
         // Re-apply any active search term after the list is (re-)rendered
         _filterContextList();
