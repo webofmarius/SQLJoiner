@@ -18,8 +18,8 @@ const Joins = (() => {
     // =========================================================================
     // Column drag state — one global object (mirrors pattern in canvas.js)
     // =========================================================================
-    /** Distance from the right window edge (px) that reveals an unpinned config panel mid-drag. */
-    const CONFIG_EDGE_PX = 40;
+    /** Distance from the right window edge (px) that reveals a closed config panel mid-drag. */
+    const CONFIG_EDGE_PX = 50;
 
     const _drag = {
         active:      false,
@@ -146,11 +146,9 @@ const Joins = (() => {
         // reveal the config panel (if hidden) so its drop zones are reachable.
         if (!_drag.moved && Math.hypot(e.clientX - _drag.startX, e.clientY - _drag.startY) > 4) {
             _drag.moved = true;
-            // Pinned panel: reveal right away. Unpinned: only when the pointer
-            // reaches the right edge, so plain table-to-table joins don't pop it up.
-            if (!App.isConfigUnpinned?.()) App.showConfigPanel?.();
         }
-        if (_drag.moved && App.isConfigUnpinned?.() && e.clientX >= window.innerWidth - CONFIG_EDGE_PX) {
+        // Only reveal when the pointer reaches the right edge, so plain table-to-table joins don't pop it up.
+        if (_drag.moved && e.clientX >= window.innerWidth - CONFIG_EDGE_PX) {
             if (App.showConfigPanel?.()) _drag.revealedPanel = true;
         }
 

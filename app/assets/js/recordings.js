@@ -42,6 +42,8 @@ const Recordings = (() => {
             ?.addEventListener('contextmenu', e => { e.preventDefault(); toggleRecord(); });
         document.getElementById('btn-recordings-close')
             ?.addEventListener('click', () => { _visible = true; toggle(); });
+        document.getElementById('btn-rec-maximize')
+            ?.addEventListener('click', _toggleMaximize);
         document.getElementById('btn-rec-record')
             ?.addEventListener('click', toggleRecord);
         document.getElementById('btn-save-view-state')
@@ -56,6 +58,12 @@ const Recordings = (() => {
             ?.addEventListener('click', _createGroup);
         document.getElementById('btn-rec-compare')
             ?.addEventListener('click', _compareSelected);
+        document.getElementById('btn-rec-ai-knowledge')
+            ?.addEventListener('click', _aiKnowledgeSelected);
+        document.getElementById('btn-rec-zip-csv')
+            ?.addEventListener('click', () => _downloadSelectedZip('csv'));
+        document.getElementById('btn-rec-zip-sql')
+            ?.addEventListener('click', () => _downloadSelectedZip('sql'));
         document.getElementById('chk-rec-select-all')
             ?.addEventListener('change', e => _selectAll(e.target.checked));
         document.getElementById('btn-rec-dim')
@@ -997,6 +1005,10 @@ const Recordings = (() => {
 
         document.getElementById('btn-rec-delete-selected').disabled = checkedCount === 0;
         document.getElementById('btn-rec-compare').disabled         = checkedCount !== 2;
+        document.getElementById('btn-rec-ai-knowledge').disabled    = checkedCount === 0;
+        document.getElementById('chk-rec-ai-knowledge-queries').disabled = checkedCount === 0;
+        document.getElementById('btn-rec-zip-csv').disabled         = checkedCount === 0;
+        document.getElementById('btn-rec-zip-sql').disabled         = checkedCount === 0;
 
         const dimShouldDisable       = checkedCount === 0;
         const sameColorShouldDisable = !hasColoredChecked;
@@ -1037,6 +1049,103 @@ const Recordings = (() => {
         _renderList();
     }
 
+    // ---- ZIP export of selected recordings (store-only zip, no compression) ----
+
+    const _crcTable = (() => {
+        const t = new Uint32Array(256);
+        for (let n = 0; n < 256; n++) {
+            let c = n;
+            for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1;
+            t[n] = c >>> 0;
+        }
+        return t;
+    })();
+
+    function _crc32(bytes) {
+        let c = 0xFFFFFFFF;
+        for (let i = 0; i < bytes.length; i++) c = _crcTable[(c ^ bytes[i]) & 0xFF] ^ (c >>> 8);
+        return (c ^ 0xFFFFFFFF) >>> 0;
+    }
+
+    /** files: [{name, text}] → Blob of a .zip archive. */
+    function _buildZip(files) {
+        const enc = new TextEncoder();
+        const parts = [], central = [];
+        let offset = 0;
+        const now = new Date();
+        const dosTime = (now.getHours() << 11) | (now.getMinutes() << 5) | (now.getSeconds() >> 1);
+        const dosDate = ((now.getFullYear() - 1980) << 9) | ((now.getMonth() + 1) << 5) | now.getDate();
+        files.forEach(f => {
+            const nameB = enc.encode(f.name), data = enc.encode(f.text), crc = _crc32(data);
+            const lh = new DataView(new ArrayBuffer(30));
+            lh.setUint32(0, 0x04034b50, true); lh.setUint16(4, 20, true); lh.setUint16(6, 0x0800, true);
+            lh.setUint16(8, 0, true); lh.setUint16(10, dosTime, true); lh.setUint16(12, dosDate, true);
+            lh.setUint32(14, crc, true); lh.setUint32(18, data.length, true); lh.setUint32(22, data.length, true);
+            lh.setUint16(26, nameB.length, true); lh.setUint16(28, 0, true);
+            parts.push(lh.buffer, nameB, data);
+            const ch = new DataView(new ArrayBuffer(46));
+            ch.setUint32(0, 0x02014b50, true); ch.setUint16(4, 20, true); ch.setUint16(6, 20, true);
+            ch.setUint16(8, 0x0800, true); ch.setUint16(10, 0, true); ch.setUint16(12, dosTime, true);
+            ch.setUint16(14, dosDate, true); ch.setUint32(16, crc, true); ch.setUint32(20, data.length, true);
+            ch.setUint32(24, data.length, true); ch.setUint16(28, nameB.length, true);
+            ch.setUint32(42, offset, true);
+            central.push(ch.buffer, nameB);
+            offset += 30 + nameB.length + data.length;
+        });
+        const cdSize = central.reduce((n, b) => n + (b.byteLength ?? b.length), 0);
+        const end = new DataView(new ArrayBuffer(22));
+        end.setUint32(0, 0x06054b50, true); end.setUint16(8, files.length, true); end.setUint16(10, files.length, true);
+        end.setUint32(12, cdSize, true); end.setUint32(16, offset, true);
+        return new Blob([...parts, ...central, end.buffer], { type: 'application/zip' });
+    }
+
+    function _csvEsc(v) {
+        return v === null || v === undefined ? '""' : '"' + String(v).replace(/"/g, '""') + '"';
+    }
+
+    function _downloadSelectedZip(kind) {
+        const ids = [...document.querySelectorAll('.rec-entry-chk:checked')]
+            .map(c => c.closest('.rec-entry')?.dataset.id).filter(Boolean);
+        const used = new Set();
+        const files = [];
+        ids.forEach(id => {
+            const rec = (State.recordings || []).find(r => r.id === id);
+            if (!rec) return;
+            const text = kind === 'csv'
+                ? (rec.results?.cols
+                    ? [rec.results.cols.map(_csvEsc).join(','),
+                       ...(rec.results.rows || []).map(r => rec.results.cols.map((_, i) => _csvEsc(r[i])).join(','))].join('\r\n')
+                    : null)
+                : (rec.sql || null);
+            if (text === null) return;
+            const base = (rec.name || _fmtTs(rec.timestamp)).replace(/[\\/:*?"<>|\x00-\x1f]/g, '_').trim() || 'recording';
+            let name = `${base}.${kind}`, n = 2;
+            while (used.has(name.toLowerCase())) name = `${base} (${n++}).${kind}`;
+            used.add(name.toLowerCase());
+            files.push({ name, text });
+        });
+        if (!files.length) { App.notify?.(`No ${kind === 'csv' ? 'results' : 'queries'} in the selected recordings.`, 'warn'); return; }
+        const d = new Date(), p2 = v => String(v).padStart(2, '0');
+        const dirName = `${kind === 'csv' ? 'recordings-results' : 'recordings-queries'}_${d.getFullYear()}_${p2(d.getMonth() + 1)}_${p2(d.getDate())}_${p2(d.getHours())}_${p2(d.getMinutes())}_${p2(d.getSeconds())}`;
+        files.forEach(f => { f.name = `${dirName}/${f.name}`; });
+        const url = URL.createObjectURL(_buildZip(files));
+        const a = document.createElement('a');
+        a.href = url; a.download = `${dirName}.zip`;
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+
+    function _aiKnowledgeSelected() {
+        const items = [...document.querySelectorAll('.rec-entry-chk:checked')]
+            .map(c => (State.recordings || []).find(r => r.id === c.closest('.rec-entry')?.dataset.id))
+            .filter(Boolean)
+            .map(r => ({ name: r.name || _fmtTs(r.timestamp), sql: r.sql || '' }));
+        if (!items.length) return;
+        App.aiKnowledgeForQueries(items,
+            document.getElementById('btn-rec-ai-knowledge'),
+            document.getElementById('chk-rec-ai-knowledge-queries')?.checked !== false);
+    }
+
     function _compareSelected() {
         const checked = [...document.querySelectorAll('.rec-entry-chk:checked')];
         if (checked.length !== 2) return;
@@ -1044,7 +1153,8 @@ const Recordings = (() => {
         const recs = ids.map(id => (State.recordings || []).find(r => r.id === id));
         if (!recs[0] || !recs[1]) return;
         if (typeof Results === 'undefined') return;
-        // Top entry in the list = "before" (baseline), bottom = "after"
+        // Lower seq number (earlier in time) = "before" (baseline), higher = "after"
+        recs.sort((a, b) => (a.seq ?? a.timestamp ?? 0) - (b.seq ?? b.timestamp ?? 0) || (a.timestamp ?? 0) - (b.timestamp ?? 0));
         Results.compareRecordings(recs[0].results, recs[1].results);
     }
 
@@ -1298,8 +1408,93 @@ const Recordings = (() => {
         };
     }
 
+    // Maximize: dock the panel over the canvas column (above the results strip),
+    // same behaviour as the Calculus toolbox maximize.
+    let _preMaxStyles = null;
+    let _maxResizeObserver = null;
+    let _maxResizeWinListener = null;
+
+    function _syncMaximizedGeometry() {
+        if (!_panel || !_panel.classList.contains('is-maximized')) return;
+        const cwEl = document.getElementById('canvas-wrapper');
+        if (!cwEl) return;
+        const r = cwEl.getBoundingClientRect();
+        let height = r.height;
+        const rp = document.getElementById('results-panel');
+        if (rp && !rp.classList.contains('hidden') && !rp.classList.contains('is-fullscreen')) {
+            const rr = rp.getBoundingClientRect();
+            if (rr.top < r.bottom && rr.bottom > r.top) {
+                const hClip = rr.top - r.top;
+                if (hClip >= 80) height = hClip;
+            }
+        }
+        Object.assign(_panel.style, {
+            top:       `${Math.round(r.top)}px`,
+            left:      `${Math.round(r.left)}px`,
+            width:     `${Math.round(r.width)}px`,
+            height:    `${Math.round(height)}px`,
+            right:     'auto',
+            bottom:    'auto',
+            transform: 'none',
+            maxWidth:  'none',
+            maxHeight: 'none',
+        });
+    }
+
+    function _detachMaximizeWatch() {
+        _maxResizeObserver?.disconnect();
+        _maxResizeObserver = null;
+        if (_maxResizeWinListener) {
+            window.removeEventListener('resize', _maxResizeWinListener);
+            _maxResizeWinListener = null;
+        }
+    }
+
+    function _attachMaximizeWatch() {
+        _detachMaximizeWatch();
+        _maxResizeWinListener = _syncMaximizedGeometry;
+        window.addEventListener('resize', _maxResizeWinListener);
+        _maxResizeObserver = new ResizeObserver(_syncMaximizedGeometry);
+        ['canvas-wrapper', 'results-panel', 'layout'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) _maxResizeObserver.observe(el);
+        });
+        requestAnimationFrame(() => requestAnimationFrame(_syncMaximizedGeometry));
+    }
+
+    function _toggleMaximize() {
+        const btn = document.getElementById('btn-rec-maximize');
+        if (_panel.classList.contains('is-maximized')) {
+            _detachMaximizeWatch();
+            _panel.classList.remove('is-maximized');
+            if (_preMaxStyles) { Object.assign(_panel.style, _preMaxStyles); _preMaxStyles = null; }
+            btn.textContent = '⤢';
+            btn.title       = 'Maximize';
+        } else {
+            _preMaxStyles = {
+                top: _panel.style.top, left: _panel.style.left,
+                right: _panel.style.right, bottom: _panel.style.bottom,
+                width: _panel.style.width, height: _panel.style.height,
+                transform: _panel.style.transform,
+                maxWidth: _panel.style.maxWidth, maxHeight: _panel.style.maxHeight,
+            };
+            _panel.classList.add('is-maximized');
+            _syncMaximizedGeometry();
+            _attachMaximizeWatch();
+            btn.textContent = '⤡';
+            btn.title       = 'Restore';
+        }
+    }
+
     function _applyPanelSize(panel) {
+        if (panel.classList.contains('is-maximized')) { _syncMaximizedGeometry(); return; }
         const s = State.recPanelSize;
+        if (!s?.w) {
+            // Never resized: fit the width to the header so every button is visible
+            panel.style.width = 'max-content';
+            const w = Math.ceil(panel.getBoundingClientRect().width);
+            panel.style.width = Math.min(w, Math.floor(window.innerWidth * 0.96)) + 'px';
+        }
         if (!s) return;
         if (s.w) { panel.style.width    = s.w + 'px'; panel.style.maxWidth  = 'none'; }
         if (s.h) { panel.style.height   = s.h + 'px'; panel.style.maxHeight = 'none'; }
@@ -1370,6 +1565,7 @@ const Recordings = (() => {
         handle.style.cursor = 'move';
         handle.addEventListener('mousedown', e => {
             if (e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT') return;
+            if (panel.classList.contains('is-maximized')) return;
             e.preventDefault();
             const r = panel.getBoundingClientRect();
             // Pin to current rendered position and remove the centering transform

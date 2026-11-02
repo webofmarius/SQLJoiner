@@ -3733,14 +3733,23 @@ tr.calculus-hl > td {
 
 #btn-diff-csv-exit,
 #btn-diff-cols-exit,
+#btn-diff-rows-exit,
 #btn-diff-query-exit {
     background: #e53935;
     color: #fff;
 }
 #btn-diff-csv-exit:hover,
 #btn-diff-cols-exit:hover,
+#btn-diff-rows-exit:hover,
 #btn-diff-query-exit:hover {
     background: #c62828;
+}
+
+#btn-diff-rows {
+    background: rgba(74, 158, 255, 0.12);
+}
+#btn-diff-rows:hover {
+    background: rgba(74, 158, 255, 0.22);
 }
 
 tr.diff-csv-banner-row td {
@@ -3808,6 +3817,8 @@ tr.diff-csv-banner-row--diff td {
     overflow: hidden;
 }
 #calculus-toolbox.hidden { display: none; }
+/* Stay above the maximized results table */
+body:has(#results-panel.is-fullscreen) #calculus-toolbox { z-index: 216; }
 .calculus-expr-row.is-out-of-sync {
     border-color: var(--warning);
     box-shadow: 0 0 0 1px var(--warning);
@@ -7063,6 +7074,8 @@ textarea.sql-bd-active.scope-mode-on {
     overflow: hidden;
 }
 #recordings-panel.hidden { display: none; }
+/* Maximized results sit above the popup so only the data is visible */
+body:has(#results-panel.is-fullscreen) #recordings-panel { z-index: 210; }
 
 /* Resize handles — thin transparent strips along the right / bottom / corner */
 .rec-resize-handle {
@@ -7151,6 +7164,7 @@ textarea.sql-bd-active.scope-mode-on {
     display: inline-flex;
     align-items: center;
 }
+#btn-rec-maximize,
 #btn-recordings-close {
     font-size: 11px;
     padding: 2px 6px;
@@ -7160,14 +7174,26 @@ textarea.sql-bd-active.scope-mode-on {
     color: var(--text-muted);
     cursor: pointer;
 }
+#btn-rec-maximize:hover,
 #btn-recordings-close:hover {
     color: var(--text);
     background: rgba(255,255,255,0.06);
 }
+#btn-rec-maximize,
 #btn-recordings-close {
     font-size: 14px;
     padding: 0 5px;
 }
+#recordings-panel.is-maximized {
+    transform: none !important;
+    max-width: none !important;
+    max-height: none !important;
+    border-radius: 0;
+    box-shadow: inset 0 0 0 1px var(--border2);
+    z-index: 125;
+}
+#recordings-panel.is-maximized .rec-resize-handle { display: none; }
+#recordings-panel.is-maximized #recordings-panel-header { cursor: default; }
 #btn-rec-help {
     font-weight: 700;
     min-width: 22px;
