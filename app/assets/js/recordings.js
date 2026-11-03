@@ -199,6 +199,21 @@ const Recordings = (() => {
         if (_visible) _renderList();
     }
 
+    /** Current scroll offsets of the results table. */
+    function _captureScroll() {
+        const w = document.getElementById('results-table-wrapper');
+        return w ? { top: w.scrollTop, left: w.scrollLeft } : null;
+    }
+
+    /** Restore saved scroll offsets once the freshly rendered table has laid out. */
+    function _applyScroll(scroll) {
+        const w = document.getElementById('results-table-wrapper');
+        if (!w || !scroll) return;
+        const set = () => { w.scrollTop = scroll.top || 0; w.scrollLeft = scroll.left || 0; };
+        set();
+        requestAnimationFrame(set);
+    }
+
     /**
      * Capture the current results-table visual state and attach it to the
      * recording that is currently being displayed (_currentRecId).
@@ -208,11 +223,12 @@ const Recordings = (() => {
         const rec = (State.recordings || []).find(r => r.id === _currentRecId);
         if (!rec) return;
         if (typeof Results === 'undefined') return;
-        if (rec.viewState) {
+        if (rec.viewState || rec.scroll) {
             const ok = await Dialog.confirm('This recording already has a saved visual state. Overwrite it?');
             if (!ok) return;
         }
-        rec.viewState = Results.captureViewState();
+        rec.viewState = Results.captureViewState?.() ?? null;
+        rec.scroll    = _captureScroll();
         App.notify?.('Visual state saved to recording.', 'info');
         if (_visible) _renderList();
     }
@@ -270,6 +286,7 @@ const Recordings = (() => {
             color:  State.islandColors?.[islandKey] ?? null,
         };
         rec.viewState    = Results.captureViewState?.() ?? null;
+        rec.scroll       = _captureScroll();
         rec.fromRunQuery = !!lastResult._fromRunQuery;
 
         App.notify?.(`"${label}" replaced with current result.`, 'success');
@@ -675,14 +692,10 @@ const Recordings = (() => {
             _peekHideTimer = setTimeout(_closePeekPopup, 120);
         });
 
-        // Right-click cycles through colors
+        // Right-click loads the results (same as the "Results" button)
         row.addEventListener('contextmenu', e => {
             e.preventDefault();
-            const colors = (typeof Canvas !== 'undefined' && Canvas.CARD_COLORS) ? Canvas.CARD_COLORS.map(c => c.hex) : [];
-            const currentIdx = colors.indexOf(rec.color ?? null);
-            rec.color = currentIdx === -1 ? colors[0] : currentIdx === colors.length - 1 ? null : colors[currentIdx + 1];
-            _applyEntryColor(row, colorBtn, rec.color);
-            if (_sameColor) _renderList();
+            _loadResults(rec);
         });
 
         // Row count
@@ -1182,6 +1195,7 @@ const Recordings = (() => {
             _replayColumnOrder:  rec.results.columnOrder       ?? [],
         });
         if (rec.viewState) Results.applyViewState?.(rec.viewState);
+        _applyScroll(rec.scroll);
         setCurrentRec(rec.id);
         if (typeof Chain !== 'undefined') Chain.applyHighlight();
     }
