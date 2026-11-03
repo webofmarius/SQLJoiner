@@ -313,12 +313,17 @@ class ContextManager
                 for ($n = 2; isset($used[mb_strtolower($name)]); $n++) { $name = $base . '_' . $n; }
                 $used[mb_strtolower($name)] = true;
 
-                $zip->addFromString($name . '.json', json_encode($payload['context'], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+                $exported = $payload['context'];
+                if (isset($doc['colors'][$ctxId])) { $exported['_color'] = $doc['colors'][$ctxId]; }
+                $zip->addFromString($name . '.json', json_encode($exported, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
                 $count++;
             }
             if ($count === 0) {
                 $zip->close();
                 Response::error('This group has no contexts to export.', 400);
+            }
+            if ($group['color'] !== '') {
+                $zip->addFromString(self::ZIP_META, json_encode(['color' => $group['color']], JSON_PRETTY_PRINT));
             }
             $zip->close();
 
@@ -354,7 +359,7 @@ class ContextManager
         $tmp = tempnam(sys_get_temp_dir(), 'ctxzip');
         try {
             file_put_contents($tmp, $raw);
-            $contexts = $this->readValidatedZip($tmp); // [ [name, context], ... ] or error()
+            [$contexts, $meta] = $this->readValidatedZip($tmp); // contexts: [ [name, context], ... ] or error()
         } finally {
             if (is_file($tmp)) { unlink($tmp); } // uploaded copy is always removed
         }
@@ -366,10 +371,13 @@ class ContextManager
         for ($n = 2; in_array(mb_strtolower($final), $names, true); $n++) { $final = $name . ' (' . $n . ')'; }
 
         $gid = 'g' . substr(md5(uniqid('', true)), 0, 12);
-        $doc['groups'][] = ['id' => $gid, 'name' => $final, 'collapsed' => false, 'favorite' => false, 'color' => ''];
+        $doc['groups'][] = ['id' => $gid, 'name' => $final, 'collapsed' => false, 'favorite' => false, 'color' => $this->cleanColor($meta['color'] ?? '')];
         foreach ($contexts as [$ctxName, $context]) {
+            $color = $this->cleanColor($context['_color'] ?? '');
+            unset($context['_color']);
             $saved = $this->writeContext($ctxName, $context);
             $doc['groupMap'][$saved['id']] = $gid;
+            if ($color !== '') { $doc['colors'][$saved['id']] = $color; }
         }
         $this->writeGroups($doc);
 
@@ -378,6 +386,7 @@ class ContextManager
 
     private const ZIP_MAX_BYTES   = 6 * 1024 * 1024;    // uploaded archive
     private const ZIP_MAX_ENTRIES = 500;
+    private const ZIP_META        = '_group.json';        // group metadata, not a context
     private const ZIP_MAX_ENTRY   = 10 * 1024 * 1024;   // one uncompressed context
     private const ZIP_MAX_TOTAL   = 50 * 1024 * 1024;   // all contexts uncompressed
 
@@ -386,7 +395,7 @@ class ContextManager
      * (a JSON object with a "tables" array). Reads entries in memory only. Emits an error and
      * exits on the first problem.
      *
-     * @return array<int, array{0:string,1:array}>  [contextName, context]
+     * @return array{0: array<int, array{0:string,1:array}>, 1: array}  [[contextName, context], ...], group metadata
      */
     private function readValidatedZip(string $path): array
     {
@@ -430,8 +439,9 @@ class ContextManager
             }
         }
 
-        // Pass 2 — content: every entry must be a valid context.
-        $out = [];
+        // Pass 2 — content: every entry must be a valid context (except the metadata entry).
+        $out  = [];
+        $meta = [];
         for ($i = 0; $i < $count; $i++) {
             $entry = $zip->getNameIndex($i);
             $body  = $zip->getFromIndex($i, self::ZIP_MAX_ENTRY + 1);
@@ -439,13 +449,20 @@ class ContextManager
                 Response::error("Rejected: could not read \"{$entry}\".", 400);
             }
             $ctx = json_decode($body, true);
+            if (strtolower($entry) === self::ZIP_META) {
+                if (is_array($ctx) && !array_is_list($ctx)) { $meta = $ctx; }
+                continue;
+            }
             if (!is_array($ctx) || array_is_list($ctx) || !isset($ctx['tables']) || !is_array($ctx['tables'])) {
                 Response::error("Rejected: \"{$entry}\" is not a valid context (missing tables array).", 400);
             }
             $out[] = [substr($entry, 0, -5), $ctx];
         }
         $zip->close();
-        return $out;
+        if (!$out) {
+            Response::error('The zip contains no contexts.', 400);
+        }
+        return [$out, $meta];
     }
 
     private function groupsPath(): string
