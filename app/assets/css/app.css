@@ -2708,7 +2708,7 @@ body.is-cut-mode * { cursor: crosshair !important; }
     transform: translateY(-50%);
     z-index: 3;
     display: flex;
-    gap: 8px;
+    gap: 4px;
     opacity: 0;
     pointer-events: none;
     transition: opacity 0.12s;
@@ -2724,7 +2724,6 @@ body.is-cut-mode * { cursor: crosshair !important; }
     letter-spacing: 0.3px;
     padding: 2px 5px;
     cursor: pointer;
-    box-shadow: -7px 0 7px 3px var(--surface);
     transition: color 0.12s, border-color 0.12s;
 }
 .select-col-copy-btn {
@@ -2750,7 +2749,7 @@ body.is-cut-mode * { cursor: crosshair !important; }
     z-index: 10000;
     display: flex;
     flex-wrap: wrap;
-    gap: 6px;
+    gap: 4px;
     max-width: 260px;
     padding: 6px;
     background: var(--surface);
@@ -2758,7 +2757,6 @@ body.is-cut-mode * { cursor: crosshair !important; }
     border-radius: 5px;
     box-shadow: 0 4px 14px rgba(0,0,0,0.35);
 }
-.select-col-actions-popup .select-col-fut-btn { box-shadow: none; }
 .select-col-row:hover .select-col-float {
     opacity: 0.95;
     pointer-events: auto;

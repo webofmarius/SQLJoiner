@@ -841,8 +841,8 @@ const QueryPanel = (() => {
                 };
                 const _fnTitle = (fn, a) => `Add custom expression:  ${fn}(${key}) AS ${tblAlias}.${a}${colName}`;
                 const _inlineActions = [
-                    ...['DISTINCT', 'MIN', 'MAX', 'SUM'].map(fn => ({
-                        label: fn === 'DISTINCT' ? 'D.' : fn,
+                    ...['COUNT', 'DISTINCT', 'MIN', 'MAX', 'SUM'].map(fn => ({
+                        label: fn === 'DISTINCT' ? 'D.' : fn === 'COUNT' ? 'C.' : fn,
                         title: _fnTitle(fn, '_' + fn.toLowerCase() + '_'),
                         run:   () => _addFromUnixtimeExpr(key, fn),
                     })),
