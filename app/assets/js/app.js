@@ -4277,6 +4277,17 @@ const App = (() => {
                 if (ids.length) _openCtxMoveMenu(e.currentTarget, ids);
             });
 
+        for (const [k, id] of [['groups', 'ctx-sort-groups'], ['items', 'ctx-sort-items']]) {
+            const sel = document.getElementById(id);
+            sel.value = _ctxSort[k];
+            if (sel.value !== _ctxSort[k]) { _ctxSort[k] = sel.value; }
+            sel.addEventListener('change', () => {
+                _ctxSort[k] = sel.value;
+                try { localStorage.setItem(_CTX_SORT_KEYS[k], sel.value); } catch { /* ignore */ }
+                _loadContextList();
+            });
+        }
+
         const _ctxSearchEl = document.getElementById('ctx-search-input');
         _ctxSearchEl.addEventListener('input', _filterContextList);
         Autocomplete.attach(_ctxSearchEl, {
@@ -5018,11 +5029,34 @@ const App = (() => {
         });
     }
 
-    /** Favourites first (in their saved order), then the rest sorted by name. */
+    const _CTX_SORT_KEYS = { groups: 'ctxSortGroups', items: 'ctxSortItems' };
+    const _ctxSort = { groups: 'name-asc', items: 'date-desc' };
+    try {
+        for (const k of Object.keys(_CTX_SORT_KEYS)) {
+            const v = localStorage.getItem(_CTX_SORT_KEYS[k]);
+            if (v) _ctxSort[k] = v;
+        }
+    } catch { /* storage unavailable */ }
+
+    const _cmpName = (a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+
+    /** Sort contexts by the chosen mode (name or saved date). */
+    function _sortCtxItems(items) {
+        const [by, dir] = _ctxSort.items.split('-');
+        const sign = dir === 'desc' ? -1 : 1;
+        return [...items].sort((a, b) => by === 'name'
+            ? sign * _cmpName(a, b)
+            : sign * String(a.savedAt ?? '').localeCompare(String(b.savedAt ?? '')) || _cmpName(a, b));
+    }
+
+    /** Favourites first (in their saved order), then the rest in the chosen sort. */
     function _orderedCtxGroups() {
         const favs = _ctxGroups.groups.filter(g => g.favorite);
+        const [by, dir] = _ctxSort.groups.split('-');
+        const sign = dir === 'desc' ? -1 : 1;
+        const size = g => Object.values(_ctxGroups.groupMap).filter(id => id === g.id).length;
         const rest = _ctxGroups.groups.filter(g => !g.favorite)
-            .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+            .sort((a, b) => (by === 'size' ? sign * (size(a) - size(b)) : sign * _cmpName(a, b)) || _cmpName(a, b));
         return [...favs, ...rest];
     }
 
@@ -5320,7 +5354,7 @@ const App = (() => {
         }
 
         _orderedCtxGroups().forEach(g => {
-            const members = items.filter(i => groupOf(i.id) === g.id);
+            const members = _sortCtxItems(items.filter(i => groupOf(i.id) === g.id));
             const box = document.createElement('div');
             box.className = 'ctx-group' + (g.collapsed ? ' is-collapsed' : '');
             box.dataset.gid = g.id;
@@ -5523,7 +5557,7 @@ const App = (() => {
             list.appendChild(box);
         });
 
-        rest.filter(i => !groupOf(i.id)).forEach(item => list.appendChild(_buildRow(item)));
+        _sortCtxItems(rest.filter(i => !groupOf(i.id))).forEach(item => list.appendChild(_buildRow(item)));
         if (_ctxGroups.groups.length) _dropTarget(list, null);
 
         list.querySelectorAll('.btn-ctx-cut').forEach(btn => {

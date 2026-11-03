@@ -6291,6 +6291,14 @@ th.calc-nop { opacity: 0.1; font-weight: bold; }
     align-items: center;
     gap: 6px;
 }
+.ctx-sort-select {
+    font-size: 11px;
+    padding: 3px 4px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--surface);
+    color: var(--text);
+}
 #ctx-search-input {
     font-size: 11px;
     padding: 3px 8px;

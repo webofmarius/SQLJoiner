@@ -674,6 +674,18 @@ if (!isset($_GET['tab'])) {
                         <button type="button" id="btn-ctx-move-selected" style="font-size:11px;padding:3px 8px;" title="Move the ticked contexts to a group" disabled>Move selected</button>
                     </div>
                     <div class="ctx-section-actions">
+                        <select id="ctx-sort-groups" class="ctx-sort-select" title="Sort groups (favourites always stay first)">
+                            <option value="name-asc">Groups: A → Z</option>
+                            <option value="name-desc">Groups: Z → A</option>
+                            <option value="size-desc">Groups: most contexts</option>
+                            <option value="size-asc">Groups: fewest contexts</option>
+                        </select>
+                        <select id="ctx-sort-items" class="ctx-sort-select" title="Sort contexts">
+                            <option value="date-desc">Contexts: newest</option>
+                            <option value="date-asc">Contexts: oldest</option>
+                            <option value="name-asc">Contexts: A → Z</option>
+                            <option value="name-desc">Contexts: Z → A</option>
+                        </select>
                         <input type="text" id="ctx-search-input" placeholder="Search…" autocomplete="off">
                         <button type="button" id="btn-ctx-load-file" style="font-size:11px;padding:3px 8px;">📂 Load JSON</button>
                     </div>
