@@ -216,6 +216,8 @@ if (!isset($_GET['tab'])) {
                     <option value="100">100</option>
                     <option value="500">500</option>
                     <option value="1000">1000</option>
+                    <option value="5000">5000 (slow)</option>
+                    <option value="0">Unlimited (slow for >= 1000 rows)</option>
                 </select>
             </div>
 
@@ -775,6 +777,7 @@ if (!isset($_GET['tab'])) {
                     <button type="button" id="btn-sql-preview-scope" class="btn-outline-blue btn-scope-mode">Scope</button>
                     <span class="scope-legend">Alt+click: copy scopes <br /> Alt+right-click: extract subquery</span>
                     <button type="button" id="btn-copy-pretty-sql">Copy SQL</button>
+                    <button type="button" id="btn-pretty-sql-to-custom" title="Copy this query (LIMIT commented out) to Run Custom Query and open it">↳ Custom Query (no LIMIT)</button>
                     <div class="tables-menu">
                         <button type="button" class="btn-tables-trigger">Tables ▾</button>
                         <div class="tables-dropdown hidden">

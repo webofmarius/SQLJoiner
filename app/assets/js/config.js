@@ -695,33 +695,25 @@ const QueryPanel = (() => {
                     e.preventDefault();
                     hdr.classList.remove('drag-over');
 
-                    // Reorder State.columnOrder by moving all columns of fromAlias
-                    const fromCols = State.columnOrder.filter(k => k.split('.')[0] === fromAlias);
-                    const remainingCols = State.columnOrder.filter(k => k.split('.')[0] !== fromAlias);
-                    
-                    // Find where to insert
-                    const targetIdx = remainingCols.findIndex(k => k.split('.')[0] === group.alias);
-                    
-                    // To handle moving down correctly (dropping on a header means inserting AFTER that table's columns)
-                    const targetTableColsCount = remainingCols.filter(k => k.split('.')[0] === group.alias).length;
-                    
-                    // Determine if we are moving down or up
+                    // Reorder State.columnOrder at table level. Columns of one table may be
+                    // scattered in columnOrder (late-added columns, column drags), so group
+                    // by alias first (keeping each table's relative column order) — otherwise
+                    // the splice lands mid-table and '|||' ends up in the wrong place.
                     const allAliases = [];
+                    const byAlias = {};
                     State.columnOrder.forEach(k => {
                         const a = k.split('.')[0];
-                        if (!allAliases.includes(a)) allAliases.push(a);
+                        if (!byAlias[a]) { byAlias[a] = []; allAliases.push(a); }
+                        byAlias[a].push(k);
                     });
                     const fromPos = allAliases.indexOf(fromAlias);
                     const toPos   = allAliases.indexOf(group.alias);
+                    allAliases.splice(fromPos, 1);
+                    const newToPos = allAliases.indexOf(group.alias);
+                    // Moving DOWN: after target table; moving UP: before it
+                    allAliases.splice(fromPos < toPos ? newToPos + 1 : newToPos, 0, fromAlias);
+                    const remainingCols = allAliases.flatMap(a => byAlias[a]);
 
-                    if (fromPos < toPos) {
-                        // Moving DOWN: insert after the target table's columns
-                        remainingCols.splice(targetIdx + targetTableColsCount, 0, ...fromCols);
-                    } else {
-                        // Moving UP: insert before the target table's columns
-                        remainingCols.splice(targetIdx, 0, ...fromCols);
-                    }
-                    
                     State.columnOrder = remainingCols;
 
                     if (State.select.length > 0) {
@@ -3461,7 +3453,7 @@ const QueryPanel = (() => {
         }
 
         // --- LIMIT ---
-        sql += `\nLIMIT ${state.limit}`;
+        if (state.limit !== 0) sql += `\nLIMIT ${state.limit}`; // 0 = Unlimited
 
         return sql;
     }

@@ -3602,7 +3602,7 @@ const App = (() => {
         const limitSel = document.getElementById('limit-select');
         if (limitSel) {
             // Pick the closest available option value
-            const available = [...limitSel.options].map(o => parseInt(o.value, 10));
+            const available = [...limitSel.options].map(o => parseInt(o.value, 10)).filter(n => n > 0);
             const target    = parsed.limit ?? 10;
             const best      = available.reduce((prev, cur) =>
                 Math.abs(cur - target) < Math.abs(prev - target) ? cur : prev
@@ -3765,7 +3765,7 @@ const App = (() => {
         // Sync LIMIT dropdown to the new island's limit
         const limitSel = document.getElementById('limit-select');
         if (limitSel) {
-            const available = [...limitSel.options].map(o => parseInt(o.value, 10));
+            const available = [...limitSel.options].map(o => parseInt(o.value, 10)).filter(n => n > 0);
             const target    = newIslandSnap.limit;
             const best      = available.reduce((prev, cur) =>
                 Math.abs(cur - target) < Math.abs(prev - target) ? cur : prev
@@ -4888,6 +4888,19 @@ const App = (() => {
                     btn.textContent = '✓ Copied!';
                     setTimeout(() => (btn.textContent = orig), 1500);
                 });
+            });
+
+        document.getElementById('btn-pretty-sql-to-custom')
+            .addEventListener('click', () => {
+                const sql = document.getElementById('sql-pretty-input').value;
+                // Comment out the trailing top-level LIMIT line (if any)
+                const commented = sql.replace(/(^|\n)([ \t]*)(LIMIT\b[^\n]*?)\s*$/i, '$1$2-- $3');
+                const cqTa = document.getElementById('custom-query-textarea');
+                cqTa.value = commented;
+                cqTa.dispatchEvent(new Event('input', { bubbles: true }));
+                document.getElementById('modal-sql').classList.add('hidden');
+                document.getElementById('modal-custom-query').classList.remove('hidden');
+                cqTa.focus();
             });
 
         _bindTablesMenu(
