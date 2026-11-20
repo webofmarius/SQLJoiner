@@ -14,6 +14,9 @@
    ============================================================================= */
 const Results = (() => {
     let _lastResult = null;
+    // True after a SELECT-panel drag has changed the displayed column order
+    // without re-running the query. Exports must then read row values from the DOM.
+    let _columnsReordered = false;
     let _colThemes = {};
     let _cmdColHighlights = new Set(); // colIdx values currently cmd/ctrl+right-click highlighted
     let _selectedCell = null;
@@ -909,6 +912,7 @@ const Results = (() => {
      * Always expands the panel so fresh results are immediately visible.
      */
     function render(result) {
+        _columnsReordered = false;
         // Reset all transient button states — new results replace old context
         if (_diffCsvActive) {
             _diffCsvTrs = [];
@@ -1074,6 +1078,7 @@ const Results = (() => {
             document.getElementById('btn-diff-query')?.classList.remove('hidden');
         }
         _lastResult = null;
+        _columnsReordered = false;
         _colThemes = {};
         _cmdColHighlights = new Set();
         _selectedCell = null;
@@ -2024,7 +2029,7 @@ const Results = (() => {
      * Reconstruct the SELECT state key (e.g. "u.age") for a result column.
      * Used to tag <th> elements so the highlight feature can locate them.
      */
-    function _computeColKey(col, colTable, colIdx = 0, allColTables = [], activeIds = null) {
+    function _computeColKey(col, colTable, colIdx = 0, allCols = [], allColTables = [], activeIds = null) {
         // If col is an explicit alias, find the original select key
         const nameLc = String(col).toLowerCase();
         const aliasEntry = Object.entries(State.selectAliases || {})
@@ -2034,34 +2039,50 @@ const Results = (() => {
         const bare     = col.includes('.') ? col.split('.').pop() : col;
         const bareNameLc = bare.toLowerCase();
 
-        // Reconstruct from table alias + bare column name.
-        // Use occurrence-index so self-joins resolve to the correct alias.
-        // Restrict to active island to avoid picking up the same table from another island.
-        if (colTable) {
-            const colTableLc   = colTable.toLowerCase();
-            const matchingTbls = Array.isArray(State.tables)
-                ? State.tables.filter(t =>
-                    (t.name.toLowerCase() === colTableLc || (t.alias || '').toLowerCase() === colTableLc) &&
-                    (!activeIds || activeIds.has(t.id))
-                )
-                : [];
-            if (matchingTbls.length > 0) {
-                const occurrenceBefore = allColTables
-                    .slice(0, colIdx)
-                    .filter(ct => (ct || '').toLowerCase() === colTableLc)
-                    .length;
-                const tbl = matchingTbls[occurrenceBefore] ?? matchingTbls[matchingTbls.length - 1];
-                if (tbl?.alias) return `${tbl.alias}.${bare}`;
-            }
-        }
-
-        // Fallback A: infer from columnOrder (active island only).
-        const occurrenceBefore = allColTables.slice(0, colIdx).filter(ct => !ct).length;
-        const colOrder = (State.columnOrder || []).filter(k => {
+        // Only selected columns can be represented in an explicit SELECT result. Using
+        // all of columnOrder here can assign an unselected same-named column to a result.
+        const sourceOrder = (State.select || []).length > 0
+            ? State.select
+            : (State.columnOrder || []);
+        const colOrder = sourceOrder.filter(k => {
             if (!activeIds) return true;
-            const alias = k.split('.')[0];
+            const alias = String(k).split('.')[0];
             return (State.tables || []).some(t => t.alias === alias && activeIds.has(t.id));
         });
+
+        const precedingSameName = allCols.slice(0, colIdx).filter(c => {
+            const priorBare = String(c).includes('.') ? String(c).split('.').pop() : String(c);
+            return priorBare.toLowerCase() === bareNameLc;
+        });
+
+        // Reconstruct from table alias + bare column name. Restrict candidates by
+        // the table metadata first. For a self-join, use the occurrence of this same
+        // column name from that real table (not the number of all preceding columns).
+        if (colTable) {
+            const colTableLc   = colTable.toLowerCase();
+            const candidateKeys = colOrder.filter(key => {
+                const [alias, name] = String(key).split('.');
+                if (name?.toLowerCase() !== bareNameLc) return false;
+                const table = (State.tables || []).find(t => t.alias === alias);
+                return table && (
+                    table.name?.toLowerCase() === colTableLc ||
+                    table.alias?.toLowerCase() === colTableLc
+                );
+            });
+            const occurrenceBefore = allCols.slice(0, colIdx).filter((c, i) => {
+                const priorBare = String(c).includes('.') ? String(c).split('.').pop() : String(c);
+                return priorBare.toLowerCase() === bareNameLc &&
+                    (allColTables[i] || '').toLowerCase() === colTableLc;
+            }).length;
+            if (candidateKeys[occurrenceBefore]) return candidateKeys[occurrenceBefore];
+            if (candidateKeys.length === 1) return candidateKeys[0];
+        }
+
+        // Fallback A: infer from the selected column order. Some PDO drivers (most
+        // notably SQLite) don't provide col_tables. Count only preceding result
+        // columns with this same name; counting every anonymous column caused all
+        // but the first column of a table to lose their identity during live reorder.
+        const occurrenceBefore = precedingSameName.length;
         let matchCount = 0;
         for (const key of colOrder) {
             const parts = String(key).split('.');
@@ -2176,7 +2197,13 @@ const Results = (() => {
 
     /** Returns true when the column is the '|||' table-delimiter sentinel. */
     function _isDelimiterColumn(colName) {
-        return String(colName ?? '').trim() === '|||';
+        const name = String(colName ?? '').trim();
+        if (name === '|||') return true;
+        // SQLite commonly reports an unaliased string-literal expression using
+        // the expression text itself as the result-column name, including its
+        // quotes: SELECT '|||' -> column name "'|||'". Other drivers may retain
+        // double quotes or backticks, so accept any matching balanced wrapper.
+        return /^(['"`])\|\|\|\1$/.test(name);
     }
 
     /** Effective color of a custom expression: FROM_UNIXTIME ones (src) follow their table's color. */
@@ -2284,6 +2311,49 @@ const Results = (() => {
     }
 
     /**
+     * Build the data-column permutation for a SELECT-panel reorder. Delimiter
+     * result columns participate in the permutation when enabled: each one is
+     * placed between consecutive table-alias groups instead of being treated as
+     * an unrelated result column whose old slot must remain fixed.
+     */
+    function _columnPermutationForOrder(keys, delimiterFlags, order, moveDelimiters) {
+        const rankOf = new Map(order.map((k, i) => [k, i]));
+        const matched = keys
+            .map((k, idx) => ({ idx, key: k, rank: rankOf.has(k) ? rankOf.get(k) : null }))
+            .filter(e => e.rank !== null)
+            .sort((a, b) => a.rank - b.rank);
+
+        if (!moveDelimiters || !delimiterFlags.some(Boolean)) {
+            const matchedQueue = matched.map(e => e.idx);
+            let qi = 0;
+            return keys.map((k, i) => rankOf.has(k) ? matchedQueue[qi++] : i);
+        }
+
+        const delimiterQueue = delimiterFlags
+            .map((isDelimiter, idx) => isDelimiter ? idx : null)
+            .filter(idx => idx !== null);
+        const desiredQueue = [];
+        let previousAlias = null;
+        matched.forEach(entry => {
+            const alias = String(entry.key).split('.')[0];
+            if (previousAlias !== null && alias !== previousAlias && delimiterQueue.length) {
+                desiredQueue.push(delimiterQueue.shift());
+            }
+            desiredQueue.push(entry.idx);
+            previousAlias = alias;
+        });
+        // Defensive fallback for stale results with more delimiters than current
+        // table boundaries: retain every existing cell in the permutation.
+        desiredQueue.push(...delimiterQueue);
+
+        let qi = 0;
+        return keys.map((k, i) => {
+            const isReorderable = rankOf.has(k) || delimiterFlags[i];
+            return isReorderable ? desiredQueue[qi++] : i;
+        });
+    }
+
+    /**
      * Called after a Select-box drag-reorder (table header or column row) changes
      * State.columnOrder — reorders the already-rendered results table's columns to
      * match, live, without re-running the query. Columns not present in `order`
@@ -2300,20 +2370,23 @@ const Results = (() => {
         if (ths.length < 2) return;
         const keys = ths.map(th => th.dataset.colKey || '');
 
-        const rankOf = new Map(order.map((k, i) => [k, i]));
-        const matchedQueue = keys
-            .map((k, idx) => ({ idx, rank: rankOf.has(k) ? rankOf.get(k) : null }))
-            .filter(e => e.rank !== null)
-            .sort((a, b) => a.rank - b.rank)
-            .map(e => e.idx);
-
-        let qi = 0;
-        const newOrder = keys.map(k => (rankOf.has(k) ? matchedQueue[qi++] : null));
-        // Unmatched columns keep their current slot
-        newOrder.forEach((v, i) => { if (v === null) newOrder[i] = i; });
+        const delimiterFlags = ths.map(th =>
+            th.classList.contains('th-delimiter') || _isDelimiterColumn(th.dataset.raw)
+        );
+        const newOrder = _columnPermutationForOrder(
+            keys,
+            delimiterFlags,
+            order,
+            // The current result may still contain a delimiter after the option is
+            // unchecked (the toggle changes the next query, not the already-fetched
+            // rows). While a rendered delimiter exists, keep it attached to the
+            // table boundary during live reordering regardless of the toggle state.
+            delimiterFlags.some(Boolean)
+        );
 
         if (newOrder.every((v, i) => v === i)) return; // already in the right order
         _applyColumnPermutation(thead, tbody, newOrder);
+        _columnsReordered = true;
     }
 
     // Re-injects a <style> block sizing every th/td in a manually-resized column
@@ -2484,7 +2557,14 @@ const Results = (() => {
                 th.appendChild(badge);
             }
             // Tag with the select-state key so the highlight feature can find it
-            th.dataset.colKey = _computeColKey(col, colTables[colIdx] || '', colIdx, colTables, _activeResultIds);
+            th.dataset.colKey = _computeColKey(
+                col,
+                colTables[colIdx] || '',
+                colIdx,
+                cols,
+                colTables,
+                _activeResultIds
+            );
             // Store raw column name so Ctrl+C copies only the name, not badge/origin text
             th.dataset.raw = col;
 
@@ -3143,7 +3223,7 @@ const Results = (() => {
                                         : colTableVal,
                         isAlias:      _isColumnAlias(col),
                         isCustomExpr: _isCustomExprColumn(col),
-                        colKey:       _computeColKey(col, colTableVal, colIdx, colTables),
+                        colKey:       _computeColKey(col, colTableVal, colIdx, cols, colTables),
                     };
 
                     const value = td.dataset.raw ?? td.textContent;
@@ -5820,7 +5900,8 @@ async function _copyAsSqlSelect() {
             return;
         }
 
-        const cols = _lastResult.cols;
+        const rendered = _getRenderedHeaders();
+        const cols = rendered.length === _lastResult.cols.length ? rendered : _lastResult.cols;
         const rows = _exportRows();
         const { visibleRowIndices, visibleColIndices } = _getVisibleIndices();
 
@@ -5898,7 +5979,9 @@ async function _copyAsSqlSelect() {
      */
     function _exportRows() {
         const tbody = document.querySelector('#results-table tbody');
-        if (!_diffQuery || !tbody?.querySelector('tr.tr-diff-added, tr.tr-diff-removed')) return _lastResult.rows;
+        if (!_columnsReordered && (!_diffQuery || !tbody?.querySelector('tr.tr-diff-added, tr.tr-diff-removed'))) {
+            return _lastResult.rows;
+        }
         return Array.from(tbody.querySelectorAll('tr'))
             .filter(tr => !tr.classList.contains('diff-banner-tr') && !tr.querySelector('.results-empty'))
             .map(tr => Array.from(tr.querySelectorAll('td:not(.td-row-num)'))

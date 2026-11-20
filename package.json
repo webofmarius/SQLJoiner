@@ -4,6 +4,7 @@
   "description": "SQL visual query builder",
   "main": "electron/main.js",
   "scripts": {
+    "test": "node --test app/tests/*.test.js",
     "start": "electron .",
     "build:mac": "electron-builder --mac",
     "build:win": "electron-builder --win",
