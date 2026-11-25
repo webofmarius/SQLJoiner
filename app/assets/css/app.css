@@ -2425,7 +2425,7 @@ body.is-cut-mode * { cursor: crosshair !important; }
     pointer-events: none;
 }
 
-/* Condition rows in WHERE / ORDER BY */
+/* Visual clause rows */
 .condition-row {
     display: flex;
     align-items: center;
@@ -2444,6 +2444,9 @@ body.is-cut-mode * { cursor: crosshair !important; }
 .condition-row.drag-over {
     border-top: 2px solid var(--accent);
 }
+
+.condition-row.clause-drop-before { box-shadow: 0 -2px 0 var(--accent); }
+.condition-row.clause-drop-after  { box-shadow: 0 2px 0 var(--accent); }
 
 .drag-handle {
     cursor: grab;

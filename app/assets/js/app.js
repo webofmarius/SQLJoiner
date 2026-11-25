@@ -524,6 +524,17 @@ const App = (() => {
             // F1 — Focus canvas table search (same as Alt+F; prevents browser help)
             if (e.code === 'F1' && !isMod) {
                 e.preventDefault();
+                if (e.shiftKey && !isAlt) {
+                    if (e.repeat) return;
+                    const searchFilter = document.getElementById('canvas-search-filter');
+                    searchFilter?.focus();
+                    try {
+                        searchFilter?.showPicker?.();
+                    } catch {
+                        // Keep focus if the browser blocks opening the native picker.
+                    }
+                    return;
+                }
                 const searchInput = document.getElementById('canvas-search-input');
                 if (searchInput) { searchInput.focus(); searchInput.select(); }
                 return;
@@ -1650,6 +1661,11 @@ const App = (() => {
             orderByMode:        snap.orderByMode        ?? 'visual',
             limit:              snap.limit              ?? 10,
         });
+        // LIMIT is the one right-pane field backed by a native select outside
+        // QueryPanel.refresh(). Keep it in lockstep with the active island's
+        // flat state when switching islands.
+        const limitSelect = document.getElementById('limit-select');
+        if (limitSelect) limitSelect.value = String(State.limit);
         if (_prevWhereMode === 'raw') {
             State.whereRaw  = _prevWhereRaw;
             State.whereMode = 'raw';
@@ -2126,6 +2142,13 @@ const App = (() => {
             _notify('No connection profile selected.', 'error');
             return;
         }
+
+        // Treat the visible LIMIT control as authoritative at execution time.
+        // This also protects against any programmatic island restore leaving
+        // the DOM and the flat state briefly out of sync.
+        const visibleLimit = parseInt(document.getElementById('limit-select')?.value ?? '', 10);
+        if (!Number.isNaN(visibleLimit)) State.limit = visibleLimit;
+
         if (State.tables.length === 0) {
             _notify('Add at least one table to the canvas first.', 'warn');
             return;

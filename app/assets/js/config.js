@@ -2415,6 +2415,62 @@ const QueryPanel = (() => {
         return row;
     }
 
+    let _draggedClauseRow = null;
+
+    function _bindClauseRowReorder(row, idx, items, refresh) {
+        const handle = document.createElement('span');
+        handle.className = 'drag-handle';
+        handle.textContent = '⋮⋮';
+        handle.title = 'Drag to reorder';
+        handle.draggable = true;
+        row.appendChild(handle);
+
+        handle.addEventListener('dragstart', e => {
+            e.dataTransfer.setData('application/x-sql-joiner-clause-row', '');
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setDragImage(row, e.clientX - row.getBoundingClientRect().left, row.offsetHeight / 2);
+            _draggedClauseRow = row;
+            row.classList.add('is-dragging');
+        });
+
+        handle.addEventListener('dragend', () => {
+            _draggedClauseRow = null;
+            row.classList.remove('is-dragging');
+            row.parentElement?.querySelector('.clause-drop-before, .clause-drop-after')
+                ?.classList.remove('clause-drop-before', 'clause-drop-after');
+        });
+
+        function sourceIndex() {
+            const list = row.parentElement;
+            if (!list || _draggedClauseRow?.parentElement !== list) return -1;
+            return Array.from(list.children).indexOf(_draggedClauseRow);
+        }
+
+        row.addEventListener('dragover', e => {
+            const from = sourceIndex();
+            if (from < 0 || from === idx) return;
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            row.classList.add(from < idx ? 'clause-drop-after' : 'clause-drop-before');
+        });
+
+        row.addEventListener('dragleave', e => {
+            if (!row.contains(e.relatedTarget)) row.classList.remove('clause-drop-before', 'clause-drop-after');
+        });
+
+        row.addEventListener('drop', e => {
+            const from = sourceIndex();
+            if (from < 0 || from === idx) return;
+            e.preventDefault();
+            _draggedClauseRow = null;
+            if (typeof UndoRedo !== 'undefined') UndoRedo.snapshot();
+            const [moved] = items.splice(from, 1);
+            items.splice(idx, 0, moved);
+            refresh();
+            App.updateSQLPreview();
+        });
+    }
+
     // =========================================================================
     // GROUP BY section
     // =========================================================================
@@ -2435,6 +2491,7 @@ const QueryPanel = (() => {
     function _buildGroupRow(col, idx) {
         const row = document.createElement('div');
         row.className = 'condition-row';
+        _bindClauseRowReorder(row, idx, State.groupBy, _refreshGroupBy);
 
         const colSpan = document.createElement('span');
         colSpan.className = 'col-name';
@@ -2485,6 +2542,7 @@ const QueryPanel = (() => {
     function _buildHavingRow(cond, idx) {
         const row = document.createElement('div');
         row.className = 'condition-row';
+        _bindClauseRowReorder(row, idx, State.having, _refreshHaving);
 
         const colSpan = document.createElement('span');
         colSpan.className = 'col-name';
@@ -2576,6 +2634,7 @@ const QueryPanel = (() => {
     function _buildOrderRow(item, idx) {
         const row = document.createElement('div');
         row.className = 'condition-row';
+        _bindClauseRowReorder(row, idx, State.orderBy, _refreshOrderBy);
 
         const colSpan = document.createElement('span');
         colSpan.className = 'col-name';

@@ -58,7 +58,7 @@ if (!isset($_GET['tab'])) {
             </div>
             <div id="canvas-search-bar">
                 <input type="search" id="canvas-search-input" placeholder="Find…" autocomplete="off" spellcheck="false">
-                <select id="canvas-search-filter" title="Search scope">
+                <select id="canvas-search-filter" title="Search scope (Shift+F1)" aria-keyshortcuts="Shift+F1">
                     <option value="all">All</option>
                     <option value="tables">Tables</option>
                     <option value="aliases">Aliases</option>
@@ -1096,6 +1096,7 @@ if (!isset($_GET['tab'])) {
                     <li><kbd>Cmd/Ctrl</kbd> + <kbd>P</kbd> <span>Plot current query results as a bar chart</span></li>
                     <li><kbd>Cmd/Ctrl</kbd> + <kbd>K</kbd> <span>AI Knowledge — build final SELECT query + CREATE TABLE definitions for all tables used (copy to clipboard or save to file)</span></li>
                     <li><kbd>F1</kbd> <span>Focus canvas table search (same as Alt+F)</span></li>
+                    <li><kbd>Shift</kbd> + <kbd>F1</kbd> <span>Open the canvas search scope menu</span></li>
                     <li><kbd>F3</kbd> <span>Toggle Timestamp Converter</span></li>
                     <li><kbd>F4</kbd> <span>Toggle Overview Zoom</span></li>
                     <li><kbd>F5</kbd> / <kbd>Alt</kbd> + <kbd>`</kbd> <span>Focus mode — hide all panels / press again to restore</span></li>
